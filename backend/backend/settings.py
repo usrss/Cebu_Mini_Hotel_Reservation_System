@@ -27,6 +27,20 @@ DEBUG = True
 
 ALLOWED_HOSTS = []
 
+AUTH_USER_MODEL = 'users.CustomUser'
+
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_USE_TLS = False
+EMAIL_USE_SSL = True
+EMAIL_PORT = 465
+EMAIL_HOST_USER = 'bradicarcasona20@gmail.com'          # replace with your email
+EMAIL_HOST_PASSWORD = 'izstsnyseexrmwkv'   # use App Password if Gmail
+DEFAULT_FROM_EMAIL = 'bradicarcasona20@gmail.com'
+
+
+CORS_ALLOW_ALL_ORIGINS = True
+
 
 # Application definition
 
@@ -39,9 +53,11 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'hotel_reservation',
     'corsheaders',
+    'users'
 ]
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -109,7 +125,11 @@ REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.IsAuthenticated',
+    )
 }
+
 
 # CORS settings for React
 CORS_ALLOWED_ORIGINS = [

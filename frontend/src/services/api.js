@@ -1,7 +1,11 @@
-import axios from "axios";
+import axios from 'axios';
 
-const api = axios.create({
-  baseURL: "/api",
-});
+const API_URL = 'http://127.0.0.1:8000/api/users';
 
-export default api;
+export const registerUser = async (userData) => {
+  return axios.post(`${API_URL}/register/request/`, userData);
+};
+
+export const verifyCode = async (codeData) => {
+  return axios.post(`${API_URL}/register/verify/`, codeData);
+};
