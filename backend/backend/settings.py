@@ -28,6 +28,7 @@ DEBUG = True
 ALLOWED_HOSTS = []
 
 AUTH_USER_MODEL = 'users.CustomUser'
+CORS_ALLOW_CREDENTIALS = True
 
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
@@ -53,7 +54,10 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'hotel_reservation',
     'corsheaders',
-    'users'
+    'users',
+    'rest_framework',
+    'rest_framework_simplejwt',
+    'rest_framework_simplejwt.token_blacklist',
 ]
 
 MIDDLEWARE = [
@@ -134,6 +138,7 @@ REST_FRAMEWORK = {
 # CORS settings for React
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5174",
+    "http://127.0.0.1:5173",
 ]
 
 

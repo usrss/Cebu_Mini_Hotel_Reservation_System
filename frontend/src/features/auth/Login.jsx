@@ -1,26 +1,23 @@
-// src/features/auth/Register.jsx
+// src/features/auth/Login.jsx
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { registerUser } from '../../services/api';
-import VerifyCode from './VerifyCode';
+import { loginUser } from '../../services/api';
 import './Auth.css';
 
-export default function Register() {
+export default function Login() {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
     email: '',
     password: '',
-    first_name: '',
-    last_name: '',
     auth_provider: 'email',
   });
-  const [showVerify, setShowVerify] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
-    setError(''); // Clear error when user types
+    setError('');
   };
 
   const handleSubmit = async (e) => {
@@ -29,16 +26,16 @@ export default function Register() {
     setLoading(true);
 
     try {
-      const response = await registerUser(formData);
-      setShowVerify(true);
+      const response = await loginUser(formData);
+
+      // Successful login - redirect to dashboard
+      navigate('/dashboard');
     } catch (err) {
-      console.error('Registration error:', err);
-      
-      // Handle different error formats
+      console.error('Login error:', err);
+
       if (err.response?.data) {
         const errorData = err.response.data;
-        
-        // Check for field-specific errors
+
         if (errorData.email) {
           setError(Array.isArray(errorData.email) ? errorData.email[0] : errorData.email);
         } else if (errorData.password) {
@@ -48,7 +45,7 @@ export default function Register() {
         } else if (errorData.detail) {
           setError(errorData.detail);
         } else {
-          setError('Registration failed. Please try again.');
+          setError('Invalid email or password');
         }
       } else {
         setError('Network error. Please check your connection.');
@@ -58,17 +55,12 @@ export default function Register() {
     }
   };
 
-  // If verification code sent, show verification component
-  if (showVerify) {
-    return <VerifyCode email={formData.email} />;
-  }
-
   return (
     <div className="auth-container">
       <div className="auth-card">
         <div className="auth-header">
-          <h2>Create Account</h2>
-          <p>Join Cebu Mini Hotel</p>
+          <h2>Welcome Back</h2>
+          <p>Sign in to your account</p>
         </div>
 
         {error && (
@@ -78,36 +70,8 @@ export default function Register() {
         )}
 
         <form onSubmit={handleSubmit} className="auth-form">
-          <div className="form-row">
-            <div className="form-group">
-              <label htmlFor="first_name">First Name</label>
-              <input
-                type="text"
-                id="first_name"
-                name="first_name"
-                placeholder="John"
-                value={formData.first_name}
-                onChange={handleChange}
-                className="form-input"
-              />
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="last_name">Last Name</label>
-              <input
-                type="text"
-                id="last_name"
-                name="last_name"
-                placeholder="Doe"
-                value={formData.last_name}
-                onChange={handleChange}
-                className="form-input"
-              />
-            </div>
-          </div>
-
           <div className="form-group">
-            <label htmlFor="email">Email Address *</label>
+            <label htmlFor="email">Email Address</label>
             <input
               type="email"
               id="email"
@@ -116,27 +80,43 @@ export default function Register() {
               value={formData.email}
               onChange={handleChange}
               className="form-input"
+              autoComplete="email"
               required
             />
           </div>
 
           <div className="form-group">
-            <label htmlFor="password">Password *</label>
+            <label htmlFor="password">Password</label>
             <input
               type="password"
               id="password"
               name="password"
-              placeholder="Minimum 8 characters"
+              placeholder="Enter your password"
               value={formData.password}
               onChange={handleChange}
               className="form-input"
-              autoComplete="new-password"
-              minLength="8"
+              autoComplete="current-password"
               required
             />
-            <small className="form-hint">
-              Must be at least 8 characters long
-            </small>
+          </div>
+
+          <div className="form-row form-options">
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+              />
+              <span>Remember me</span>
+            </label>
+
+            <button
+              type="button"
+              onClick={() => navigate('/forgot-password')}
+              className="link-button"
+            >
+              Forgot password?
+            </button>
           </div>
 
           <button
@@ -147,22 +127,22 @@ export default function Register() {
             {loading ? (
               <>
                 <span className="spinner"></span>
-                Sending Code...
+                Signing In...
               </>
             ) : (
-              'Continue'
+              'Sign In'
             )}
           </button>
         </form>
 
         <div className="auth-footer">
           <p>
-            Already have an account?{' '}
+            Don't have an account?{' '}
             <button
-              onClick={() => navigate('/login')}
+              onClick={() => navigate('/register')}
               className="link-button"
             >
-              Sign In
+              Create Account
             </button>
           </p>
         </div>
@@ -172,23 +152,23 @@ export default function Register() {
           <div className="divider">
             <span>OR</span>
           </div>
-          
-          <button 
+
+          <button
             type="button"
             className="btn btn-social btn-google"
             onClick={handleGoogleSignIn}
           >
             <img src="/google-icon.svg" alt="Google" />
-            Continue with Google
+            Sign in with Google
           </button>
-          
-          <button 
+
+          <button
             type="button"
             className="btn btn-social btn-facebook"
             onClick={handleFacebookSignIn}
           >
             <img src="/facebook-icon.svg" alt="Facebook" />
-            Continue with Facebook
+            Sign in with Facebook
           </button>
         </div> */}
       </div>
