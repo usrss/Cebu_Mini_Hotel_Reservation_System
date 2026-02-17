@@ -147,21 +147,15 @@ export default function Dashboard() {
             </div>
             <div className="card-body">
               <div className="quick-actions">
-                <button className="action-button">
-                  <span className="action-icon"></span>
-                  <div>
-                    <h4>Book a Room</h4>
-                    <p>Find and reserve your perfect stay</p>
-                  </div>
+                <button className="action-button" onClick={() => navigate('/rooms')}>
+                  <h4>Book a Room</h4>
+                  <p>Find and reserve your perfect stay</p>
                 </button>
 
-                <button className="action-button">
-                  <span className="action-icon"></span>
-                  <div>
+                  <button className="action-button" onClick={() => navigate('/rooms')}>
                     <h4>My Reservations</h4>
                     <p>View your upcoming bookings</p>
-                  </div>
-                </button>
+                  </button>
 
                 <button className="action-button">
                   <span className="action-icon"></span>
