@@ -25,7 +25,8 @@ SECRET_KEY = 'django-insecure-m087qh%5$v&^*5a0&7o7=0i!@b@=(&y(v$4@_x3eo*kp#h)01s
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ["*"]
+
 
 AUTH_USER_MODEL = 'users.CustomUser'
 CORS_ALLOW_CREDENTIALS = True
@@ -52,9 +53,9 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'hotel_reservation',
     'corsheaders',
     'users',
+    'rooms'
     'rest_framework',
     'rest_framework_simplejwt',
     'rest_framework_simplejwt.token_blacklist',

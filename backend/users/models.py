@@ -22,7 +22,6 @@ class CustomUserManager(BaseUserManager):
         if password:
             user.set_password(password)
         else:
-            # For social auth users without password
             user.set_unusable_password()
 
         user.save(using=self._db)
@@ -58,6 +57,7 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     email = models.EmailField(unique=True, db_index=True)
     first_name = models.CharField(max_length=150, blank=True)
     last_name = models.CharField(max_length=150, blank=True)
+    phone = models.CharField(max_length=20, blank=True, default='')
 
     # Authentication provider tracking
     auth_provider = models.CharField(
@@ -94,35 +94,35 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
         return self.email
 
     def get_full_name(self):
-        """Return full name"""
         return f"{self.first_name} {self.last_name}".strip() or self.email
 
     def get_short_name(self):
-        """Return short name"""
         return self.first_name or self.email
 
 
 class VerificationCode(models.Model):
     """
     Temporary verification codes for 2FA
-    Used for both registration and login verification
+    Used for registration, login, password reset, and email change
     """
 
     PURPOSE_REGISTRATION = 'registration'
     PURPOSE_LOGIN = 'login'
     PURPOSE_PASSWORD_RESET = 'password_reset'
+    PURPOSE_EMAIL_CHANGE = 'email_change'
 
     PURPOSE_CHOICES = [
         (PURPOSE_REGISTRATION, 'Registration'),
         (PURPOSE_LOGIN, 'Login'),
         (PURPOSE_PASSWORD_RESET, 'Password Reset'),
+        (PURPOSE_EMAIL_CHANGE, 'Email Change'),
     ]
 
     email = models.EmailField(db_index=True)
     code = models.CharField(max_length=6)
     purpose = models.CharField(max_length=20, choices=PURPOSE_CHOICES)
 
-    # Optional fields for registration
+    # Optional fields for registration / email change
     password = models.CharField(max_length=128, blank=True)
     first_name = models.CharField(max_length=150, blank=True)
     last_name = models.CharField(max_length=150, blank=True)
@@ -147,21 +147,17 @@ class VerificationCode(models.Model):
         return f"{self.email} - {self.purpose} - {self.code}"
 
     def save(self, *args, **kwargs):
-        """Set expiration time if not set"""
         if not self.expires_at:
             self.expires_at = timezone.now() + timedelta(minutes=5)
         super().save(*args, **kwargs)
 
     def is_expired(self):
-        """Check if code has expired"""
         return timezone.now() > self.expires_at
 
     def is_valid(self):
-        """Check if code is valid (not expired, not used, not too many attempts)"""
         return not self.is_expired() and not self.is_used and self.attempts < 5
 
     def increment_attempts(self):
-        """Increment verification attempts"""
         self.attempts += 1
         self.save(update_fields=['attempts'])
 
@@ -189,7 +185,6 @@ class SocialAuthToken(models.Model):
         return f"{self.user.email} - {self.provider}"
 
     def is_expired(self):
-        """Check if token has expired"""
         if not self.expires_at:
             return False
         return timezone.now() > self.expires_at

@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { verifyCode, resendCode } from '../../services/api';
-import './Auth.css';
+import './AuthModern.css';
 
 export default function VerifyCode({ email }) {
   const navigate = useNavigate();

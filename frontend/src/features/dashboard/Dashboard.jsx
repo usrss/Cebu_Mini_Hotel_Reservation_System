@@ -52,7 +52,7 @@ export default function Dashboard() {
   };
 
   const handleEditProfile = () => {
-    navigate('/profile');
+    navigate('/settings');
   };
 
   if (loading) {
@@ -72,7 +72,7 @@ export default function Dashboard() {
       {showWelcome && (
         <div className="welcome-banner">
           <div className="welcome-content">
-            <h1>🎉 Welcome to Cebu Mini Hotel!</h1>
+            <h1>ðŸŽ‰ Welcome to Cebu Mini Hotel!</h1>
             <p>Your account has been successfully created. We're excited to have you!</p>
           </div>
           <button
@@ -82,7 +82,7 @@ export default function Dashboard() {
             }}
             className="close-button"
           >
-            ×
+            Ã—
           </button>
         </div>
       )}
@@ -121,10 +121,10 @@ export default function Dashboard() {
                 <p className="user-email">{user?.email}</p>
                 <div className="user-meta">
                   <span className={`badge ${user?.is_verified ? 'badge-success' : 'badge-warning'}`}>
-                    {user?.is_verified ? '✓ Verified' : 'Pending Verification'}
+                    {user?.is_verified ? 'âœ“ Verified' : 'Pending Verification'}
                   </span>
                   <span className="badge badge-info">
-                    {user?.auth_provider === 'email' ? '📧 Email' :
+                    {user?.auth_provider === 'email' ? 'ðŸ“§ Email' :
                      user?.auth_provider === 'google' ? 'Google' :
                      'Facebook'}
                   </span>
@@ -148,7 +148,7 @@ export default function Dashboard() {
             <div className="card-body">
               <div className="quick-actions">
                 <button className="action-button">
-                  <span className="action-icon">🏨</span>
+                  <span className="action-icon"></span>
                   <div>
                     <h4>Book a Room</h4>
                     <p>Find and reserve your perfect stay</p>
@@ -156,7 +156,7 @@ export default function Dashboard() {
                 </button>
 
                 <button className="action-button">
-                  <span className="action-icon">📅</span>
+                  <span className="action-icon"></span>
                   <div>
                     <h4>My Reservations</h4>
                     <p>View your upcoming bookings</p>
@@ -164,7 +164,7 @@ export default function Dashboard() {
                 </button>
 
                 <button className="action-button">
-                  <span className="action-icon">💳</span>
+                  <span className="action-icon"></span>
                   <div>
                     <h4>Payment Methods</h4>
                     <p>Manage your payment options</p>
@@ -172,7 +172,7 @@ export default function Dashboard() {
                 </button>
 
                 <button className="action-button">
-                  <span className="action-icon">⭐</span>
+                  <span className="action-icon"></span>
                   <div>
                     <h4>Reviews</h4>
                     <p>See your reviews and ratings</p>
@@ -190,7 +190,7 @@ export default function Dashboard() {
             <div className="card-body">
               <div className="activity-list">
                 <div className="activity-item">
-                  <span className="activity-icon">✓</span>
+                  <span className="activity-icon">âœ“</span>
                   <div>
                     <p><strong>Account Created</strong></p>
                     <p className="text-muted">
@@ -201,7 +201,7 @@ export default function Dashboard() {
 
                 {user?.last_login && user.last_login !== user.date_joined && (
                   <div className="activity-item">
-                    <span className="activity-icon">🔐</span>
+                    <span className="activity-icon">ðŸ”</span>
                     <div>
                       <p><strong>Last Login</strong></p>
                       <p className="text-muted">

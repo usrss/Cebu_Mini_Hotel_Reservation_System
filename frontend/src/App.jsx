@@ -6,6 +6,8 @@ import Dashboard from './features/dashboard/Dashboard';
 import ProtectedRoute from './components/ProtectedRoute';
 import { isAuthenticated } from './services/api';
 import './App.css';
+import ForgotPassword from "./features/auth/ForgotPassword.jsx";
+import AccountSettings from "./features/auth/Accountsettings.jsx";
 
 function App() {
   return (
@@ -43,9 +45,15 @@ function App() {
           } 
         />
 
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+
+          <Route path="/settings" element={<AccountSettings />} />
+
+
         {/* 404 Route */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+
     </Router>
   );
 }

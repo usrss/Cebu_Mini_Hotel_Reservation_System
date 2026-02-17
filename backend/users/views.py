@@ -1,39 +1,39 @@
 """
 Views for user authentication
 Handles registration, verification, login with JWT tokens
+Includes forgot password and account settings
 """
 from rest_framework import generics, status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
-from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from rest_framework_simplejwt.views import TokenRefreshView
 from django.utils import timezone
-from django.contrib.auth import authenticate
 
 from .serializers import (
     RegisterRequestSerializer,
     RegisterVerifySerializer,
     LoginSerializer,
     UserSerializer,
-    ResendCodeSerializer
+    ResendCodeSerializer,
+    ForgotPasswordRequestSerializer,
+    ForgotPasswordVerifySerializer,
+    ForgotPasswordResetSerializer,
+    UpdateProfileSerializer,
+    ChangePasswordSerializer,
+    UpdateEmailRequestSerializer,
+    UpdateEmailVerifySerializer,
 )
 from .models import CustomUser
 
 
+# ─── Registration ──────────────────────────────────────────────────────────────
+
 class RegisterRequestView(generics.CreateAPIView):
     """
     Request verification code for registration
-
     POST /api/auth/register/request/
-    Body: {
-        "email": "user@example.com",
-        "password": "securepassword123",  // optional for social auth
-        "first_name": "John",  // optional
-        "last_name": "Doe",  // optional
-        "auth_provider": "email",  // email, google, facebook
-        "access_token": "..."  // required for social auth
-    }
     """
     serializer_class = RegisterRequestSerializer
     permission_classes = [AllowAny]
@@ -53,14 +53,7 @@ class RegisterRequestView(generics.CreateAPIView):
 class RegisterVerifyView(generics.CreateAPIView):
     """
     Verify code and complete registration
-
     POST /api/auth/register/verify/
-    Body: {
-        "email": "user@example.com",
-        "code": "123456"
-    }
-
-    Returns: User data + JWT tokens
     """
     serializer_class = RegisterVerifySerializer
     permission_classes = [AllowAny]
@@ -70,11 +63,9 @@ class RegisterVerifyView(generics.CreateAPIView):
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
 
-        # Update last login
         user.last_login = timezone.now()
         user.save(update_fields=['last_login'])
 
-        # Generate JWT tokens
         refresh = RefreshToken.for_user(user)
 
         return Response({
@@ -88,18 +79,12 @@ class RegisterVerifyView(generics.CreateAPIView):
         }, status=status.HTTP_201_CREATED)
 
 
+# ─── Login / Logout ────────────────────────────────────────────────────────────
+
 class LoginView(APIView):
     """
     Login with email/password or social auth
-
     POST /api/auth/login/
-    Body: {
-        "email": "user@example.com",
-        "password": "securepassword123",
-        "auth_provider": "email"  // email, google, facebook
-    }
-
-    Returns: User data + JWT tokens
     """
     permission_classes = [AllowAny]
 
@@ -108,12 +93,9 @@ class LoginView(APIView):
         serializer.is_valid(raise_exception=True)
 
         user = serializer.validated_data['user']
-
-        # Update last login
         user.last_login = timezone.now()
         user.save(update_fields=['last_login'])
 
-        # Generate JWT tokens
         refresh = RefreshToken.for_user(user)
 
         return Response({
@@ -126,15 +108,43 @@ class LoginView(APIView):
         }, status=status.HTTP_200_OK)
 
 
+class LogoutView(APIView):
+    """
+    Logout (blacklist refresh token)
+    POST /api/auth/logout/
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        try:
+            refresh_token = request.data.get('refresh')
+            if not refresh_token:
+                return Response({'message': 'Logout successful'}, status=status.HTTP_200_OK)
+
+            token = RefreshToken(refresh_token)
+            token.blacklist()
+
+            return Response({'message': 'Logout successful'}, status=status.HTTP_200_OK)
+        except Exception:
+            return Response({'message': 'Logout successful'}, status=status.HTTP_200_OK)
+
+
+# ─── Token ─────────────────────────────────────────────────────────────────────
+
+class CustomTokenRefreshView(TokenRefreshView):
+    """
+    Refresh access token
+    POST /api/auth/token/refresh/
+    """
+    pass
+
+
+# ─── Utilities ─────────────────────────────────────────────────────────────────
+
 class ResendCodeView(generics.CreateAPIView):
     """
     Resend verification code
-
     POST /api/auth/resend-code/
-    Body: {
-        "email": "user@example.com",
-        "purpose": "registration"  // registration, login, password_reset
-    }
     """
     serializer_class = ResendCodeSerializer
     permission_classes = [AllowAny]
@@ -149,47 +159,12 @@ class ResendCodeView(generics.CreateAPIView):
         }, status=status.HTTP_200_OK)
 
 
-# backend/users/views.py
-
-class LogoutView(APIView):
-    """
-    Logout (blacklist refresh token)
-
-    POST /api/auth/logout/
-    Body: {
-        "refresh": "refresh_token_here"
-    }
-    """
-    permission_classes = [AllowAny]  # Change from IsAuthenticated to AllowAny
-
-    def post(self, request):
-        try:
-            refresh_token = request.data.get('refresh')
-            if not refresh_token:
-                # Even if no token, return success (user is logging out anyway)
-                return Response({
-                    'message': 'Logout successful'
-                }, status=status.HTTP_200_OK)
-
-            token = RefreshToken(refresh_token)
-            token.blacklist()
-
-            return Response({
-                'message': 'Logout successful'
-            }, status=status.HTTP_200_OK)
-        except Exception as e:
-            # Even on error, return success (user wants to logout)
-            return Response({
-                'message': 'Logout successful'
-            }, status=status.HTTP_200_OK)
-
+# ─── User Profile ──────────────────────────────────────────────────────────────
 
 class CurrentUserView(APIView):
     """
     Get current authenticated user
-
     GET /api/auth/me/
-    Headers: Authorization: Bearer <access_token>
     """
     permission_classes = [IsAuthenticated]
 
@@ -198,43 +173,186 @@ class CurrentUserView(APIView):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
-class UpdateProfileView(generics.UpdateAPIView):
+# ─── Forgot Password ───────────────────────────────────────────────────────────
+
+class ForgotPasswordRequestView(generics.CreateAPIView):
     """
-    Update user profile
-
-    PATCH /api/auth/profile/
-    Headers: Authorization: Bearer <access_token>
-    Body: {
-        "first_name": "John",
-        "last_name": "Doe"
-    }
+    Step 1: Send 6-digit reset code to email
+    POST /api/auth/forgot-password/
+    Body: { "email": "user@example.com" }
     """
-    serializer_class = UserSerializer
-    permission_classes = [IsAuthenticated]
+    serializer_class = ForgotPasswordRequestSerializer
+    permission_classes = [AllowAny]
 
-    def get_object(self):
-        return self.request.user
-
-    def update(self, request, *args, **kwargs):
-        partial = kwargs.pop('partial', True)
-        instance = self.get_object()
-        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        self.perform_update(serializer)
+        serializer.save()
 
         return Response({
-            'message': 'Profile updated successfully',
-            'user': serializer.data
+            'message': 'If this email is registered, a reset code has been sent.',
+            'expires_in_seconds': 300
         }, status=status.HTTP_200_OK)
 
 
-class CustomTokenRefreshView(TokenRefreshView):
+class ForgotPasswordVerifyView(generics.CreateAPIView):
     """
-    Refresh access token
+    Step 2: Verify the 6-digit reset code
+    POST /api/auth/forgot-password/verify/
+    Body: { "email": "user@example.com", "code": "123456" }
+    """
+    serializer_class = ForgotPasswordVerifySerializer
+    permission_classes = [AllowAny]
 
-    POST /api/auth/token/refresh/
-    Body: {
-        "refresh": "refresh_token_here"
-    }
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        return Response({
+            'message': 'Code verified. You may now reset your password.'
+        }, status=status.HTTP_200_OK)
+
+
+class ForgotPasswordResetView(generics.CreateAPIView):
     """
-    pass
+    Step 3: Set new password
+    POST /api/auth/forgot-password/reset/
+    Body: { "email": "user@example.com", "code": "123456", "new_password": "newpass123" }
+    """
+    serializer_class = ForgotPasswordResetSerializer
+    permission_classes = [AllowAny]
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        return Response({
+            'message': 'Password reset successful. You can now sign in with your new password.'
+        }, status=status.HTTP_200_OK)
+
+
+# ─── Account Settings ──────────────────────────────────────────────────────────
+
+class UpdateProfileView(APIView):
+    """
+    Edit name and phone.
+    PATCH /api/auth/profile/
+    Body: { "first_name": "...", "last_name": "...", "phone": "..." }
+    """
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request):
+        serializer = UpdateProfileSerializer(
+            request.user,
+            data=request.data,
+            partial=True,
+            context={'request': request}
+        )
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
+
+        return Response({
+            'message': 'Profile updated successfully.',
+            'user': UserSerializer(user).data
+        }, status=status.HTTP_200_OK)
+
+
+class ChangePasswordView(APIView):
+    """
+    Change password (email accounts only).
+    POST /api/auth/change-password/
+    Body: { "current_password": "...", "new_password": "...", "confirm_password": "..." }
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = ChangePasswordSerializer(
+            data=request.data,
+            context={'request': request}
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        # Blacklist all existing tokens to force re-login
+        try:
+            from rest_framework_simplejwt.token_blacklist.models import OutstandingToken, BlacklistedToken
+            tokens = OutstandingToken.objects.filter(user=request.user)
+            for token in tokens:
+                BlacklistedToken.objects.get_or_create(token=token)
+        except Exception:
+            pass
+
+        return Response({
+            'message': 'Password changed successfully. Please log in again.'
+        }, status=status.HTTP_200_OK)
+
+
+class UpdateEmailRequestView(APIView):
+    """
+    Step 1: Request email change.
+    POST /api/auth/change-email/request/
+    Body: { "new_email": "...", "password": "..." }
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = UpdateEmailRequestSerializer(
+            data=request.data,
+            context={'request': request}
+        )
+        serializer.is_valid(raise_exception=True)
+        verification = serializer.save()
+
+        return Response({
+            'message': f'Verification code sent to {verification.email}.',
+            'expires_in_seconds': 300
+        }, status=status.HTTP_200_OK)
+
+
+class UpdateEmailVerifyView(APIView):
+    """
+    Step 2: Verify code and update email.
+    POST /api/auth/change-email/verify/
+    Body: { "new_email": "...", "code": "..." }
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = UpdateEmailVerifySerializer(
+            data=request.data,
+            context={'request': request}
+        )
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
+
+        return Response({
+            'message': 'Email updated successfully.',
+            'user': UserSerializer(user).data
+        }, status=status.HTTP_200_OK)
+
+
+class LogoutAllSessionsView(APIView):
+    """
+    Logout from all devices by blacklisting all tokens.
+    POST /api/auth/logout-all/
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            from rest_framework_simplejwt.token_blacklist.models import OutstandingToken, BlacklistedToken
+            tokens = OutstandingToken.objects.filter(user=request.user)
+            count = 0
+            for token in tokens:
+                _, created = BlacklistedToken.objects.get_or_create(token=token)
+                if created:
+                    count += 1
+
+            return Response({
+                'message': f'Logged out from all {count} active session(s).'
+            }, status=status.HTTP_200_OK)
+        except Exception:
+            return Response({
+                'message': 'Logged out from all sessions.'
+            }, status=status.HTTP_200_OK)
