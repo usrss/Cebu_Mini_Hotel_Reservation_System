@@ -1,0 +1,214 @@
+/* Room Card Component Styles */
+
+.room-card {
+  position: relative;
+  background: white;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid #f3f4f6;
+  transition: all 0.3s ease;
+}
+
+.room-card:hover {
+  border-color: #e5e7eb;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  transform: translateY(-2px);
+}
+
+/* Image Section */
+.room-card-image-wrapper {
+  position: relative;
+  display: block;
+  height: 260px;
+  overflow: hidden;
+  background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
+}
+
+.room-card-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.7s ease;
+}
+
+.room-card:hover .room-card-image {
+  transform: scale(1.1);
+}
+
+.room-card-image-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #d1d5db;
+}
+
+.room-card-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.2), transparent);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.room-card:hover .room-card-overlay {
+  opacity: 1;
+}
+
+/* Badges */
+.room-card-number {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(8px);
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.room-card-status {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.room-card-status.status-available {
+  background: rgba(16, 185, 129, 0.1);
+  color: #059669;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.room-card-status.status-maintenance {
+  background: rgba(245, 158, 11, 0.1);
+  color: #d97706;
+  border: 1px solid rgba(245, 158, 11, 0.2);
+}
+
+.room-card-status.status-disabled {
+  background: rgba(107, 114, 128, 0.1);
+  color: #6b7280;
+  border: 1px solid rgba(107, 114, 128, 0.2);
+}
+
+/* Content Section */
+.room-card-content {
+  padding: 24px;
+}
+
+.room-card-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: #111827;
+  margin-bottom: 12px;
+  transition: color 0.2s ease;
+}
+
+.room-card:hover .room-card-title {
+  color: #4f46e5;
+}
+
+/* Specs */
+.room-card-specs {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+  font-size: 14px;
+  color: #6b7280;
+}
+
+.room-spec {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.room-spec svg {
+  color: #9ca3af;
+  flex-shrink: 0;
+}
+
+/* Footer */
+.room-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 16px;
+  border-top: 1px solid #f3f4f6;
+}
+
+.room-card-price {
+  display: flex;
+  flex-direction: column;
+}
+
+.price-amount {
+  font-size: 28px;
+  font-weight: 700;
+  color: #111827;
+  line-height: 1;
+}
+
+.price-label {
+  font-size: 14px;
+  color: #6b7280;
+  margin-top: 4px;
+}
+
+/* Button */
+.room-card .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 12px;
+  transition: all 0.2s ease;
+  text-decoration: none;
+}
+
+.room-card .btn-primary {
+  background: #4f46e5;
+  color: white;
+}
+
+.room-card .btn-primary:hover {
+  background: #4338ca;
+  transform: translateX(2px);
+}
+
+.room-card .btn-primary svg {
+  transition: transform 0.2s ease;
+}
+
+.room-card .btn-primary:hover svg {
+  transform: translateX(4px);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .room-card-image-wrapper {
+    height: 220px;
+  }
+
+  .room-card-content {
+    padding: 20px;
+  }
+
+  .room-card-title {
+    font-size: 18px;
+  }
+
+  .price-amount {
+    font-size: 24px;
+  }
+}

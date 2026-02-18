@@ -4,124 +4,61 @@ import { Building2, SearchX } from "lucide-react";
 import RoomCard from "../rooms/RoomCard";
 import RoomFilters from "../rooms/RoomFilters";
 import { useRooms, useAvailability } from "../hooks/useRooms";
+import './RoomListPage.css';
 
 export default function RoomListPage() {
-  const [searchParams] = useSearchParams();
+  const [filters, setFilters] = useState({});
+  const { rooms, loading, error } = useRooms(filters);
 
-  const [filters, setFilters] = useState({
-    check_in:  searchParams.get("check_in")  || "",
-    check_out: searchParams.get("check_out") || "",
-  });
-
-  const [isAvailabilityMode, setIsAvailabilityMode] = useState(
-    !!(searchParams.get("check_in") && searchParams.get("check_out"))
-  );
-
-  const { rooms, loading: roomsLoading, error: roomsError } = useRooms(
-    isAvailabilityMode ? {} : filters
-  );
-  const { results, loading: availLoading, error: availError, search, reset } = useAvailability();
-
-  // Auto-trigger availability search when both dates are set
-  useEffect(() => {
-    if (filters.check_in && filters.check_out) {
-      setIsAvailabilityMode(true);
-      const { check_in, check_out, ...rest } = filters;
-      search({ check_in, check_out, ...stripEmpty(rest) });
-    } else {
-      setIsAvailabilityMode(false);
-      reset();
-    }
-  }, [filters.check_in, filters.check_out]);
-
-  const displayRooms = isAvailabilityMode
-    ? (results?.available_rooms || [])
-    : rooms;
-
-  const isLoading = isAvailabilityMode ? availLoading : roomsLoading;
-  const error     = isAvailabilityMode ? availError  : roomsError;
-
-  const handleReset = () => {
-    setFilters({});
-    setIsAvailabilityMode(false);
-    reset();
-  };
+  const handleResetFilters = () => setFilters({});
 
   return (
-    <div className="min-h-screen bg-gray-50">
-
-      {/* Banner */}
-      <div className="bg-gradient-to-br from-indigo-700 to-indigo-900 text-white py-12 px-4">
-        <div className="max-w-5xl mx-auto text-center">
-          <div className="flex justify-center mb-3">
-            <Building2 size={36} className="opacity-80" />
+    <div className="room-list-page">
+      {/* Hero Header */}
+      <div className="room-list-hero">
+        <div className="hero-background" />
+        <div className="hero-content">
+          <div className="hero-icon">
+            <Building2 size={32} />
           </div>
-          <h1 className="text-3xl font-bold mb-2">Find Your Perfect Room</h1>
-          <p className="text-indigo-200">
-            Browse our rooms or enter dates to check availability.
+          <h1 className="hero-title">Find Your Perfect Room</h1>
+          <p className="hero-subtitle">
+            Explore our collection of beautifully designed rooms for your stay
           </p>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 py-8">
-
-        {/* Availability result banner */}
-        {isAvailabilityMode && results && (
-          <div className="mb-6 bg-white border border-emerald-200 rounded-2xl px-5 py-4 flex items-center justify-between flex-wrap gap-3">
-            <div>
-              <p className="font-semibold text-gray-900 text-sm">
-                {results.total_found} room{results.total_found !== 1 ? "s" : ""} available
-              </p>
-              <p className="text-xs text-gray-500 mt-0.5">
-                {results.check_in} → {results.check_out} · {results.nights} night{results.nights !== 1 ? "s" : ""}
-              </p>
-            </div>
-            <button onClick={handleReset} className="text-sm text-indigo-600 hover:underline">
-              Clear dates
-            </button>
-          </div>
-        )}
-
-        <div className="flex gap-6">
-
-          {/* Filters */}
+      {/* Main Content */}
+      <div className="room-list-container">
+        <div className="room-list-layout">
+          {/* Filters Sidebar */}
           <RoomFilters
             filters={filters}
             onChange={setFilters}
-            onReset={handleReset}
+            onReset={handleResetFilters}
           />
 
           {/* Room Grid */}
-          <div className="flex-1 min-w-0">
-            {/* Mobile filters */}
-            <div className="lg:hidden mb-4">
-              <RoomFilters
-                filters={filters}
-                onChange={setFilters}
-                onReset={handleReset}
-              />
-            </div>
-
-            {isLoading ? (
-              <GridSkeleton />
+          <div className="room-list-content">
+            {loading ? (
+              <LoadingGrid />
             ) : error ? (
               <ErrorState message={error} />
-            ) : displayRooms.length === 0 ? (
-              <EmptyState onReset={handleReset} isSearch={isAvailabilityMode} />
+            ) : rooms.length === 0 ? (
+              <EmptyState onReset={handleResetFilters} />
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
-                {displayRooms.map((room) => (
-                  <RoomCard
-                    key={room.id}
-                    room={room}
-                    dateRange={
-                      filters.check_in && filters.check_out
-                        ? { check_in: filters.check_in, check_out: filters.check_out }
-                        : null
-                    }
-                  />
-                ))}
-              </div>
+              <>
+                <div className="room-list-header">
+                  <p className="room-count">
+                    <span className="count-number">{rooms.length}</span> room{rooms.length !== 1 ? 's' : ''} available
+                  </p>
+                </div>
+                <div className="room-grid">
+                  {rooms.map((room) => (
+                    <RoomCard key={room.id} room={room} />
+                  ))}
+                </div>
+              </>
             )}
           </div>
         </div>
@@ -130,38 +67,42 @@ export default function RoomListPage() {
   );
 }
 
-// ─── Helper components ────────────────────────────────────────────────────────
-
-function GridSkeleton() {
+function LoadingGrid() {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
-      {Array.from({ length: 6 }).map((_, i) => (
-        <div key={i} className="bg-white rounded-2xl overflow-hidden border border-gray-100 animate-pulse">
-          <div className="h-48 bg-gray-200" />
-          <div className="p-4 space-y-3">
-            <div className="h-4 bg-gray-200 rounded w-3/4" />
-            <div className="h-3 bg-gray-100 rounded w-1/2" />
-            <div className="h-8 bg-gray-200 rounded-xl mt-4" />
+    <div className="loading-state">
+      <div className="loading-header" />
+      <div className="room-grid">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="room-card-skeleton">
+            <div className="skeleton-image" />
+            <div className="skeleton-content">
+              <div className="skeleton-title" />
+              <div className="skeleton-text" />
+              <div className="skeleton-specs">
+                <div className="skeleton-spec" />
+                <div className="skeleton-spec" />
+              </div>
+              <div className="skeleton-footer" />
+            </div>
           </div>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   );
 }
 
-function EmptyState({ onReset, isSearch }) {
+function EmptyState({ onReset }) {
   return (
-    <div className="text-center py-20">
-      <SearchX size={48} className="mx-auto text-gray-300 mb-4" />
-      <h3 className="font-semibold text-gray-700 mb-1">
-        {isSearch ? "No rooms available for these dates" : "No rooms found"}
-      </h3>
-      <p className="text-sm text-gray-400 mb-5">Try adjusting your filters or dates.</p>
-      <button
-        onClick={onReset}
-        className="px-5 py-2 bg-indigo-600 text-white rounded-xl text-sm font-medium hover:bg-indigo-700"
-      >
-        Clear all filters
+    <div className="empty-state">
+      <div className="empty-icon">
+        <SearchX size={40} />
+      </div>
+      <h3 className="empty-title">No rooms found</h3>
+      <p className="empty-text">
+        We couldn't find any rooms matching your criteria. Try adjusting your filters.
+      </p>
+      <button onClick={onReset} className="btn btn-primary">
+        Clear All Filters
       </button>
     </div>
   );
@@ -169,15 +110,14 @@ function EmptyState({ onReset, isSearch }) {
 
 function ErrorState({ message }) {
   return (
-    <div className="text-center py-20">
-      <p className="text-red-500 text-sm">{message}</p>
+    <div className="error-state">
+      <div className="error-icon">
+        <SearchX size={40} />
+      </div>
+      <h3 className="error-title">Something went wrong</h3>
+      <p className="error-text">
+        {message || 'Failed to load rooms. Please try again later.'}
+      </p>
     </div>
-  );
-}
-
-// Remove empty/undefined filter values before sending to API
-function stripEmpty(obj) {
-  return Object.fromEntries(
-    Object.entries(obj).filter(([, v]) => v !== undefined && v !== "" && v !== null)
   );
 }
