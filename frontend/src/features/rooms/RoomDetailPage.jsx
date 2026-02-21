@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft,
   Users,
@@ -10,16 +10,18 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { useRoomDetail } from '../hooks/useRooms';
+import BookingForm from '../bookings/BookingForm';
 import './RoomDetailPage.css';
 
 const STATUS_CONFIG = {
-  available: { label: 'Available', className: 'status-available' },
+  available:   { label: 'Available',         className: 'status-available' },
   maintenance: { label: 'Under Maintenance', className: 'status-maintenance' },
-  disabled: { label: 'Not Available', className: 'status-disabled' },
+  disabled:    { label: 'Not Available',     className: 'status-disabled' },
 };
 
 export default function RoomDetailPage() {
-  const { id } = useParams();
+  const { id }           = useParams();
+  const [searchParams]   = useSearchParams();
   const { room, loading, error } = useRoomDetail(id);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
 
@@ -43,8 +45,9 @@ export default function RoomDetailPage() {
     );
   }
 
-  const images = room.images || [];
+  const images      = room.images || [];
   const statusConfig = STATUS_CONFIG[room.status] || STATUS_CONFIG.disabled;
+  const isAvailable  = room.status === 'available';
 
   // Group amenities by category
   const amenitiesByCategory = (room.amenities || []).reduce((acc, amenity) => {
@@ -54,13 +57,15 @@ export default function RoomDetailPage() {
     return acc;
   }, {});
 
-  const prevImage = () => {
+  const prevImage = () =>
     setActiveImageIndex((prev) => (prev === 0 ? images.length - 1 : prev - 1));
-  };
 
-  const nextImage = () => {
+  const nextImage = () =>
     setActiveImageIndex((prev) => (prev === images.length - 1 ? 0 : prev + 1));
-  };
+
+  // Pre-fill dates from room list if user came from availability search
+  const prefillCheckIn  = searchParams.get('check_in')  || '';
+  const prefillCheckOut = searchParams.get('check_out') || '';
 
   return (
     <div className="room-detail-page">
@@ -104,13 +109,11 @@ export default function RoomDetailPage() {
                     <Bed size={64} />
                   </div>
                 )}
-
                 <div className={`room-status-badge ${statusConfig.className}`}>
                   {statusConfig.label}
                 </div>
               </div>
 
-              {/* Thumbnails */}
               {images.length > 1 && (
                 <div className="gallery-thumbnails">
                   {images.map((img, i) => (
@@ -136,21 +139,19 @@ export default function RoomDetailPage() {
                   </p>
                 </div>
                 <div className="room-price-section">
-                  <div className="price-large">${room.price_per_night}</div>
+                  <div className="price-large">₱{room.price_per_night}</div>
                   <div className="price-period">per night</div>
                 </div>
               </div>
 
-              {/* Features */}
               <div className="room-features">
-                <FeatureCard icon={<Users size={24} />} label="Capacity" value={`${room.capacity} ${room.capacity === 1 ? 'Guest' : 'Guests'}`} />
-                <FeatureCard icon={<Bed size={24} />} label="Bed Type" value={room.bed_type_display} />
+                <FeatureCard icon={<Users size={24} />} label="Capacity"  value={`${room.capacity} ${room.capacity === 1 ? 'Guest' : 'Guests'}`} />
+                <FeatureCard icon={<Bed size={24} />}   label="Bed Type"  value={room.bed_type_display} />
                 {room.size_sqm && (
                   <FeatureCard icon={<Maximize2 size={24} />} label="Room Size" value={`${room.size_sqm}m²`} />
                 )}
               </div>
 
-              {/* Description */}
               {room.description && (
                 <div className="room-description">
                   <h3 className="description-title">About This Room</h3>
@@ -182,29 +183,40 @@ export default function RoomDetailPage() {
             )}
           </div>
 
-          {/* Right Column - Sticky Info */}
+          {/* Right Column - Sticky Sidebar */}
           <div className="room-detail-sidebar">
             <div className="sidebar-card">
               <h3 className="sidebar-title">Room Information</h3>
-
               <div className="info-rows">
                 <InfoRow label="Room Number" value={`#${room.room_number}`} />
-                <InfoRow label="Floor" value={room.floor} />
-                <InfoRow label="Room Type" value={room.room_type_display} />
-                <InfoRow label="Bed Type" value={room.bed_type_display} />
-                <InfoRow label="Max Guests" value={room.capacity} />
+                <InfoRow label="Floor"       value={room.floor} />
+                <InfoRow label="Room Type"   value={room.room_type_display} />
+                <InfoRow label="Bed Type"    value={room.bed_type_display} />
+                <InfoRow label="Max Guests"  value={room.capacity} />
                 {room.size_sqm && <InfoRow label="Room Size" value={`${room.size_sqm}m²`} />}
-                <InfoRow label="Status" value={statusConfig.label} />
+                <InfoRow label="Status"      value={statusConfig.label} />
               </div>
 
               <div className="sidebar-price">
                 <div className="sidebar-price-label">Price per night</div>
-                <div className="sidebar-price-amount">${room.price_per_night}</div>
+                <div className="sidebar-price-amount">₱{room.price_per_night}</div>
               </div>
 
-              <p className="sidebar-note">
-                * Booking functionality will be available once the booking module is integrated
-              </p>
+              {/* Booking Form — only when room is available */}
+              {isAvailable ? (
+                <div className="sidebar-booking-form">
+                  <div className="sidebar-divider" />
+                  <BookingForm
+                    room={room}
+                    prefillCheckIn={prefillCheckIn}
+                    prefillCheckOut={prefillCheckOut}
+                  />
+                </div>
+              ) : (
+                <p className="sidebar-note">
+                  This room is currently {statusConfig.label.toLowerCase()} and cannot be booked.
+                </p>
+              )}
             </div>
           </div>
         </div>

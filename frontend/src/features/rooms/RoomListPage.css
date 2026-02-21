@@ -52,6 +52,7 @@
 .hero-icon {
   display: inline-flex;
   align-items: center;
+
   width: 64px;
   height: 64px;
   background: rgba(255, 255, 255, 0.1);
@@ -116,6 +117,61 @@
   display: grid;
   grid-template-columns: repeat(1, 1fr);
   gap: 24px;
+}
+
+/* Availability Banner */
+.availability-banner {
+  background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+  border: 1px solid #6ee7b7;
+  border-radius: 16px;
+  padding: 16px 20px;
+  margin-bottom: 24px;
+}
+
+.banner-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.banner-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: #065f46;
+  font-size: 14px;
+}
+
+.banner-info strong {
+  font-size: 16px;
+  font-weight: 700;
+  color: #047857;
+}
+
+.date-range {
+  display: block;
+  font-size: 13px;
+  color: #059669;
+  margin-top: 2px;
+}
+
+.banner-clear {
+  padding: 8px 16px;
+  background: white;
+  border: 1px solid #6ee7b7;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #047857;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.banner-clear:hover {
+  background: #f0fdf4;
+  border-color: #34d399;
 }
 
 /* Loading State */

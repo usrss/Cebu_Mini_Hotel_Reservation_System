@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { SlidersHorizontal, X } from 'lucide-react';
+import { SlidersHorizontal, X, Calendar, Users } from 'lucide-react';
 import './RoomFilters.css';
 
 const ROOM_TYPES = [
@@ -19,6 +19,9 @@ const BED_TYPES = [
   { value: 'king', label: 'King' },
   { value: 'twin', label: 'Twin' },
 ];
+
+// Get today's date in YYYY-MM-DD format
+const getTodayDate = () => new Date().toISOString().split('T')[0];
 
 export default function RoomFilters({ filters, onChange, onReset }) {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -84,6 +87,8 @@ export default function RoomFilters({ filters, onChange, onReset }) {
 }
 
 function FilterPanel({ filters, updateFilter, onReset, hasActiveFilters }) {
+  const minCheckOutDate = filters.check_in || getTodayDate();
+
   return (
     <div className="filter-panel">
       {/* Header */}
@@ -98,6 +103,38 @@ function FilterPanel({ filters, updateFilter, onReset, hasActiveFilters }) {
           </button>
         )}
       </div>
+
+      {/* Check-in & Check-out Dates */}
+      <FilterSection title="Check-in & Check-out" icon={<Calendar size={16} />}>
+        <div className="date-inputs">
+          <div className="date-input-wrapper">
+            <label>Check-in</label>
+            <input
+              type="date"
+              min={getTodayDate()}
+              value={filters.check_in || ''}
+              onChange={(e) => updateFilter('check_in', e.target.value)}
+              className="date-input"
+            />
+          </div>
+          <div className="date-input-wrapper">
+            <label>Check-out</label>
+            <input
+              type="date"
+              min={minCheckOutDate}
+              value={filters.check_out || ''}
+              onChange={(e) => updateFilter('check_out', e.target.value)}
+              className="date-input"
+              disabled={!filters.check_in}
+            />
+          </div>
+        </div>
+        {filters.check_in && filters.check_out && (
+          <p className="date-helper-text">
+            {calculateNights(filters.check_in, filters.check_out)} night(s)
+          </p>
+        )}
+      </FilterSection>
 
       {/* Room Type */}
       <FilterSection title="Room Type">
@@ -129,16 +166,17 @@ function FilterPanel({ filters, updateFilter, onReset, hasActiveFilters }) {
         </div>
       </FilterSection>
 
-      {/* Price Range */}
-      <FilterSection title="Price Range">
+      {/* Price Range - PHP Currency */}
+      <FilterSection title="Price Range (per night)">
         <div className="price-range-inputs">
           <div className="price-input-wrapper">
             <label>Min</label>
             <div className="price-input-group">
-              <span className="currency-symbol">$</span>
+              <span className="currency-symbol">₱</span>
               <input
                 type="number"
                 min="0"
+                step="100"
                 placeholder="0"
                 value={filters.min_price || ''}
                 onChange={(e) => updateFilter('min_price', e.target.value)}
@@ -149,10 +187,11 @@ function FilterPanel({ filters, updateFilter, onReset, hasActiveFilters }) {
           <div className="price-input-wrapper">
             <label>Max</label>
             <div className="price-input-group">
-              <span className="currency-symbol">$</span>
+              <span className="currency-symbol">₱</span>
               <input
                 type="number"
                 min="0"
+                step="100"
                 placeholder="Any"
                 value={filters.max_price || ''}
                 onChange={(e) => updateFilter('max_price', e.target.value)}
@@ -162,29 +201,53 @@ function FilterPanel({ filters, updateFilter, onReset, hasActiveFilters }) {
         </div>
       </FilterSection>
 
-      {/* Capacity */}
-      <FilterSection title="Number of Guests">
-        <div className="filter-button-group grid capacity">
-          {[1, 2, 3, 4].map((n) => (
-            <button
-              key={n}
-              onClick={() => updateFilter('min_capacity', n === filters.min_capacity ? undefined : n)}
-              className={`filter-btn ${filters.min_capacity === n ? 'active' : ''}`}
-            >
-              {n}+
-            </button>
-          ))}
+      {/* Number of Guests - Number Input */}
+      <FilterSection title="Number of Guests" icon={<Users size={16} />}>
+        <div className="guest-input-wrapper">
+          <input
+            type="number"
+            min="1"
+            max="20"
+            placeholder="Enter number of guests"
+            value={filters.min_capacity || ''}
+            onChange={(e) => updateFilter('min_capacity', e.target.value ? parseInt(e.target.value) : undefined)}
+            className="guest-input"
+          />
+          <div className="guest-quick-buttons">
+            {[1, 2, 3, 4].map((n) => (
+              <button
+                key={n}
+                onClick={() => updateFilter('min_capacity', n === filters.min_capacity ? undefined : n)}
+                className={`guest-quick-btn ${filters.min_capacity === n ? 'active' : ''}`}
+                type="button"
+              >
+                {n}
+              </button>
+            ))}
+          </div>
         </div>
       </FilterSection>
     </div>
   );
 }
 
-function FilterSection({ title, children }) {
+function FilterSection({ title, icon, children }) {
   return (
     <div className="filter-section">
-      <h5 className="filter-section-title">{title}</h5>
+      <h5 className="filter-section-title">
+        {icon && <span className="section-icon">{icon}</span>}
+        {title}
+      </h5>
       {children}
     </div>
   );
+}
+
+// Helper function to calculate nights between dates
+function calculateNights(checkIn, checkOut) {
+  if (!checkIn || !checkOut) return 0;
+  const start = new Date(checkIn);
+  const end = new Date(checkOut);
+  const diff = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
+  return Math.max(0, diff);
 }

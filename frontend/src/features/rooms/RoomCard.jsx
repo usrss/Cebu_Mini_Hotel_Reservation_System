@@ -74,7 +74,7 @@ export default function RoomCard({ room }) {
         {/* Price & CTA */}
         <div className="room-card-footer">
           <div className="room-card-price">
-            <div className="price-amount">${price_per_night}</div>
+            <div className="price-amount">₱{price_per_night}</div>
             <div className="price-label">per night</div>
           </div>
           <Link to={`/rooms/${id}`} className="btn btn-primary">

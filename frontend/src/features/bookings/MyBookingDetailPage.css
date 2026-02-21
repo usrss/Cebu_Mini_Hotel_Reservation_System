@@ -1,0 +1,565 @@
+/* MyBookingDetailPage.css */
+/* Mirrors RoomDetailPage.css: same nav, same two-column grid, same sidebar-card gradient */
+
+.booking-detail-page {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #f9fafb 0%, rgba(249, 250, 251, 0.5) 100%);
+}
+
+/* ── Nav — identical to .room-detail-nav ────────────────────────────────────── */
+
+.booking-detail-nav {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid #e5e7eb;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+}
+
+.booking-detail-nav .nav-container {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #6b7280;
+  font-weight: 500;
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.back-link:hover { color: #111827; }
+
+.back-link svg {
+  transition: transform 0.2s ease;
+}
+
+.back-link:hover svg {
+  transform: translateX(-4px);
+}
+
+/* ── Container — identical to .room-detail-container ───────────────────────── */
+
+.booking-detail-container {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 32px 16px;
+}
+
+.booking-detail-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 32px;
+}
+
+/* ── Main column ────────────────────────────────────────────────────────────── */
+
+.booking-detail-main {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* ── Cards — mirrors .info-card / .amenities-card from RoomDetailPage.css ────── */
+
+.detail-card {
+  background: white;
+  border-radius: 16px;
+  border: 1px solid #f3f4f6;
+  padding: 32px;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+}
+
+.card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #6b7280;
+  margin: 0 0 20px 0;
+}
+
+/* ── Reference card ─────────────────────────────────────────────────────────── */
+
+.reference-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.reference-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #9ca3af;
+  margin: 0 0 6px 0;
+}
+
+.reference-number {
+  font-size: 28px;
+  font-weight: 700;
+  color: #111827;
+  font-family: 'Courier New', monospace;
+  letter-spacing: 0.04em;
+  margin: 0;
+  line-height: 1.1;
+}
+
+/* ── Status badges — mirror .room-card-status style ─────────────────────────── */
+
+.booking-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.status-awaiting  { background: rgba(245, 158, 11, 0.1);  color: #d97706; border: 1px solid rgba(245, 158, 11, 0.2); }
+.status-confirmed { background: rgba(16, 185, 129, 0.1);  color: #059669; border: 1px solid rgba(16, 185, 129, 0.2); }
+.status-checkedin { background: rgba(79, 70, 229, 0.1);   color: #4f46e5; border: 1px solid rgba(79, 70, 229, 0.2); }
+.status-checkedout { background: rgba(107, 114, 128, 0.1); color: #6b7280; border: 1px solid rgba(107, 114, 128, 0.2); }
+.status-cancelled { background: rgba(239, 68, 68, 0.1);   color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.2); }
+.status-noshow    { background: rgba(107, 114, 128, 0.1); color: #6b7280; border: 1px solid rgba(107, 114, 128, 0.2); }
+
+/* ── Notices ─────────────────────────────────────────────────────────────────── */
+
+.payment-notice,
+.expired-notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 20px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.payment-notice {
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  color: #92400e;
+}
+
+.expired-notice {
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  color: #991b1b;
+}
+
+/* ── PIN card ────────────────────────────────────────────────────────────────── */
+
+.pin-display {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.pin-digit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 64px;
+  background: #eef2ff;
+  border: 2px solid #4f46e5;
+  border-radius: 12px;
+  font-size: 28px;
+  font-weight: 700;
+  color: #4f46e5;
+}
+
+.pin-note {
+  font-size: 14px;
+  color: #6b7280;
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* ── Info rows — identical to RoomDetailPage.css .info-rows ─────────────────── */
+
+.info-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.info-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.info-label {
+  color: #6b7280;
+  font-size: 15px;
+}
+
+.info-value {
+  font-weight: 600;
+  font-size: 15px;
+  color: #111827;
+  text-align: right;
+}
+
+/* ── Cancelled card ──────────────────────────────────────────────────────────── */
+
+.cancelled-card {
+  border-color: rgba(239, 68, 68, 0.2);
+  background: rgba(239, 68, 68, 0.02);
+}
+
+/* ── Status history ──────────────────────────────────────────────────────────── */
+
+.history-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: #6b7280;
+  transition: color 0.2s ease;
+}
+
+.history-toggle:hover {
+  color: #111827;
+}
+
+.history-list {
+  margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-left: 12px;
+  border-left: 2px solid #e5e7eb;
+}
+
+.history-item {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.history-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #4f46e5;
+  flex-shrink: 0;
+  margin-top: 3px;
+  margin-left: -7px;
+}
+
+.history-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.history-transition {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+  text-transform: capitalize;
+}
+
+.history-note {
+  font-size: 13px;
+  color: #374151;
+}
+
+.history-time {
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+/* ── Sidebar — identical to RoomDetailPage.css sidebar-card ────────────────── */
+
+.booking-detail-sidebar {
+  display: none;
+}
+
+.sidebar-card {
+  position: sticky;
+  top: 96px;
+  background: linear-gradient(135deg, #4338ca 0%, #4f46e5 100%);
+  border-radius: 16px;
+  padding: 32px;
+  color: white;
+  box-shadow: 0 20px 25px -5px rgba(79, 70, 229, 0.2);
+}
+
+.sidebar-title {
+  font-size: 20px;
+  font-weight: 700;
+  margin: 0 0 24px 0;
+  color: white;
+}
+
+/* ── Price rows ──────────────────────────────────────────────────────────────── */
+
+.price-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.price-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.price-total-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-weight: 700;
+  font-size: 20px;
+  color: white;
+}
+
+.price-total-amount {
+  color: white;
+}
+
+.payment-status-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 16px;
+  margin-top: 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+/* ── Payment badges ──────────────────────────────────────────────────────────── */
+
+.payment-badge {
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.payment-unpaid              { background: rgba(239, 68, 68, 0.2);  color: #fca5a5; }
+.payment-paid                { background: rgba(16, 185, 129, 0.2); color: #6ee7b7; }
+.payment-refunded            { background: rgba(167, 139, 250, 0.2); color: #c4b5fd; }
+.payment-partially_refunded  { background: rgba(245, 158, 11, 0.2); color: #fcd34d; }
+.payment-failed              { background: rgba(239, 68, 68, 0.2);  color: #fca5a5; }
+
+/* ── Cancel confirm card ─────────────────────────────────────────────────────── */
+
+.cancel-confirm-card {
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  border-radius: 16px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.cancel-confirm-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 700;
+  color: #ef4444;
+  margin: 0;
+}
+
+.cancel-refund-info {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.85);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.cancel-no-refund {
+  color: #fca5a5;
+}
+
+.cancel-reason-input {
+  width: 100%;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  font-size: 14px;
+  color: white;
+  resize: vertical;
+  outline: none;
+  font-family: inherit;
+  box-sizing: border-box;
+  transition: all 0.2s ease;
+}
+
+.cancel-reason-input::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.cancel-reason-input:focus {
+  border-color: rgba(255, 255, 255, 0.5);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.1);
+}
+
+.cancel-confirm-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.booking-api-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #fca5a5;
+}
+
+/* ── Buttons — match .btn / .btn-primary from RoomDetailPage.css ─────────────── */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 24px;
+  font-size: 15px;
+  font-weight: 600;
+  border-radius: 12px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-decoration: none;
+}
+
+.btn-full { width: 100%; }
+
+.btn-primary {
+  background: white;
+  color: #4f46e5;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.15);
+}
+
+.btn-primary:hover {
+  background: #f5f3ff;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.15);
+  transform: translateY(-1px);
+}
+
+.btn-danger {
+  background: rgba(239, 68, 68, 0.15);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.btn-danger:hover {
+  background: rgba(239, 68, 68, 0.25);
+}
+
+.btn-danger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-outline {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.btn-outline:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* ── Error page ──────────────────────────────────────────────────────────────── */
+
+.booking-detail-error-container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f9fafb;
+  padding: 32px 16px;
+}
+
+.error-content { text-align: center; max-width: 480px; }
+
+.error-heading {
+  font-size: 24px;
+  font-weight: 700;
+  color: #111827;
+  margin: 0 0 8px 0;
+}
+
+.error-message {
+  color: #6b7280;
+  margin: 0 0 24px 0;
+  font-size: 16px;
+}
+
+/* ── Skeleton — identical animation and classes to RoomDetailPage.css ────────── */
+
+.skeleton {
+  background: #e5e7eb;
+  border-radius: 8px;
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.5; }
+}
+
+.skeleton-back        { height: 24px; width: 128px; }
+.skeleton-card-lg     { height: 200px; border-radius: 16px; }
+.skeleton-card-md     { height: 140px; border-radius: 16px; }
+.skeleton-sidebar-card { height: 400px; border-radius: 16px; }
+
+/* ── Responsive — mirrors RoomDetailPage.css breakpoints ────────────────────── */
+
+@media (min-width: 1024px) {
+  .booking-detail-layout {
+    grid-template-columns: 1fr 384px;
+  }
+
+  .booking-detail-sidebar {
+    display: block;
+  }
+}
+
+@media (max-width: 768px) {
+  .reference-number { font-size: 22px; }
+  .pin-digit { width: 48px; height: 56px; font-size: 24px; }
+  .detail-card { padding: 24px; }
+}

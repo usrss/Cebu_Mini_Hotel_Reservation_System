@@ -11,6 +11,7 @@ import AccountSettings from './features/auth/Accountsettings.jsx';
 import RoomListPage from './features/rooms/RoomListPage';
 import RoomDetailPage from './features/rooms/RoomDetailPage';
 import AdminRoomsPage from './features/rooms/AdminRoomsPage';
+import { bookingRoutes } from './features/bookings/BookingRoutes';
 
 function App() {
   return (
@@ -29,6 +30,12 @@ function App() {
             isAuthenticated() ? <Navigate to="/dashboard" replace /> : <Login />
           }
         />
+
+
+             <Route path="/rooms"    element={<RoomListPage />} />
+      <Route path="/rooms/:id" element={<RoomDetailPage />} />   ← updated version
+      {bookingRoutes}
+
 
         {/* Forgot Password & Settings */}
         <Route path="/forgot-password" element={<ForgotPassword />} />

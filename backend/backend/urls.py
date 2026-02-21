@@ -25,6 +25,10 @@ urlpatterns = [
     path('api/users/', include('users.urls')),
     path('api/auth/', include('users.urls')),
     path('api/rooms/', include('rooms.urls')),
+    path("api/bookings/", include("bookings.urls")),
+
+    # Future modules
+    # path("api/payments/", include("payments.urls")),
 
 ]
 
