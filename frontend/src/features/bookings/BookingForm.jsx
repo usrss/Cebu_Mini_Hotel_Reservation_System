@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Calendar, Users, User, Mail, Phone, CreditCard, AlertCircle, CheckCircle2 } from 'lucide-react';
-import { useCreateBooking } from '../hooks/useBookings';
+import { useCreateBooking, useCurrentUser } from '../hooks/useBookings';
 import './BookingForm.css';
 
 const getTodayDate = () => new Date().toISOString().split('T')[0];
@@ -16,19 +16,35 @@ function formatPrice(amount) {
   return Number(amount).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-export default function BookingForm({ room, prefillCheckIn, prefillCheckOut, user }) {
+export default function BookingForm({ room, prefillCheckIn, prefillCheckOut }) {
   const navigate = useNavigate();
   const { createBooking, loading, error } = useCreateBooking();
 
+  // ✅ Fetch logged-in user internally — no need to pass as prop
+  const { user, loading: userLoading } = useCurrentUser();
+
   const [form, setForm] = useState({
-    check_in:    prefillCheckIn  || '',
-    check_out:   prefillCheckOut || '',
+    check_in:     prefillCheckIn  || '',
+    check_out:    prefillCheckOut || '',
     guests_count: 1,
-    full_name:   user?.full_name || '',
-    email:       user?.email     || '',
-    phone:       user?.phone     || '',
+    full_name:    '',
+    email:        '',
+    phone:        '',
   });
   const [fieldErrors, setFieldErrors] = useState({});
+
+  // ✅ Auto-fill guest fields once user data loads
+  // Field names match what api.js stores: { full_name, email, phone_number, ... }
+  useEffect(() => {
+    if (user) {
+      setForm((prev) => ({
+        ...prev,
+        full_name: user.full_name || `${user.first_name || ''} ${user.last_name || ''}`.trim() || '',
+        email:     user.email        || '',
+        phone:     user.phone_number || user.phone || '',
+      }));
+    }
+  }, [user]);
 
   const nights   = calculateNights(form.check_in, form.check_out);
   const subtotal = nights * Number(room.price_per_night);
@@ -39,7 +55,6 @@ export default function BookingForm({ room, prefillCheckIn, prefillCheckOut, use
   const update = (key, value) => {
     setForm((prev) => {
       const next = { ...prev, [key]: value };
-      // Reset check_out if it's before new check_in
       if (key === 'check_in' && next.check_out && next.check_out <= value) {
         next.check_out = '';
       }
@@ -50,15 +65,14 @@ export default function BookingForm({ room, prefillCheckIn, prefillCheckOut, use
 
   const validate = () => {
     const errs = {};
-    if (!form.check_in)   errs.check_in    = 'Check-in date is required.';
-    if (!form.check_out)  errs.check_out   = 'Check-out date is required.';
+    if (!form.check_in)  errs.check_in    = 'Check-in date is required.';
+    if (!form.check_out) errs.check_out   = 'Check-out date is required.';
     if (!form.guests_count || form.guests_count < 1) errs.guests_count = 'At least 1 guest required.';
     if (form.guests_count > room.capacity) errs.guests_count = `Max capacity is ${room.capacity}.`;
-    if (!user) {
-      if (!form.full_name.trim()) errs.full_name = 'Full name is required.';
-      if (!form.email.trim())     errs.email     = 'Email is required.';
-      if (!form.phone.trim())     errs.phone     = 'Phone number is required.';
-    }
+    // Always validate guest fields — they're always visible
+    if (!form.full_name.trim()) errs.full_name = 'Full name is required.';
+    if (!form.email.trim())     errs.email     = 'Email is required.';
+    if (!form.phone.trim())     errs.phone     = 'Phone number is required.';
     return errs;
   };
 
@@ -71,11 +85,10 @@ export default function BookingForm({ room, prefillCheckIn, prefillCheckOut, use
       check_in:     form.check_in,
       check_out:    form.check_out,
       guests_count: Number(form.guests_count),
-      ...(!user && {
-        full_name: form.full_name,
-        email:     form.email,
-        phone:     form.phone,
-      }),
+      // ✅ Always send guest info — backend uses it for the booking snapshot
+      full_name:    form.full_name,
+      email:        form.email,
+      phone:        form.phone,
     };
 
     const booking = await createBooking(payload);
@@ -85,10 +98,12 @@ export default function BookingForm({ room, prefillCheckIn, prefillCheckOut, use
   };
 
   const minCheckOut = form.check_in || getTodayDate();
+  const isLoggedIn  = !!user;
 
   return (
     <div className="booking-form">
-      {/* Dates */}
+
+      {/* Stay Dates */}
       <FormSection title="Stay Dates" icon={<Calendar size={16} />}>
         <div className="booking-date-inputs">
           <div className="booking-date-wrapper">
@@ -120,7 +135,7 @@ export default function BookingForm({ room, prefillCheckIn, prefillCheckOut, use
         )}
       </FormSection>
 
-      {/* Guests */}
+      {/* Number of Guests */}
       <FormSection title="Guests" icon={<Users size={16} />}>
         <div className="booking-guest-wrapper">
           <input
@@ -148,9 +163,18 @@ export default function BookingForm({ room, prefillCheckIn, prefillCheckOut, use
         <p className="booking-capacity-hint">Max capacity: {room.capacity} guest{room.capacity !== 1 ? 's' : ''}</p>
       </FormSection>
 
-      {/* Guest Info — only shown for anonymous users */}
-      {!user && (
-        <FormSection title="Guest Information" icon={<User size={16} />}>
+      {/* ✅ Guest Info — ALWAYS shown, pre-filled when logged in, editable either way */}
+      <FormSection
+        title="Guest Information"
+        icon={<User size={16} />}
+        badge={isLoggedIn ? 'Auto-filled from your account' : null}
+      >
+        {userLoading ? (
+          <div className="booking-user-loading">
+            <span className="spinner spinner-sm" />
+            Loading your details…
+          </div>
+        ) : (
           <div className="booking-guest-info">
             <div className="booking-field">
               <label>
@@ -166,6 +190,7 @@ export default function BookingForm({ room, prefillCheckIn, prefillCheckOut, use
               />
               {fieldErrors.full_name && <span className="field-error">{fieldErrors.full_name}</span>}
             </div>
+
             <div className="booking-field">
               <label>
                 <Mail size={14} />
@@ -180,6 +205,7 @@ export default function BookingForm({ room, prefillCheckIn, prefillCheckOut, use
               />
               {fieldErrors.email && <span className="field-error">{fieldErrors.email}</span>}
             </div>
+
             <div className="booking-field">
               <label>
                 <Phone size={14} />
@@ -195,8 +221,8 @@ export default function BookingForm({ room, prefillCheckIn, prefillCheckOut, use
               {fieldErrors.phone && <span className="field-error">{fieldErrors.phone}</span>}
             </div>
           </div>
-        </FormSection>
-      )}
+        )}
+      </FormSection>
 
       {/* Price Breakdown */}
       {nights > 0 && (
@@ -238,7 +264,7 @@ export default function BookingForm({ room, prefillCheckIn, prefillCheckOut, use
       <button
         type="button"
         onClick={handleSubmit}
-        disabled={loading}
+        disabled={loading || userLoading}
         className="booking-submit-btn"
       >
         {loading ? (
@@ -261,13 +287,16 @@ export default function BookingForm({ room, prefillCheckIn, prefillCheckOut, use
   );
 }
 
-function FormSection({ title, icon, children }) {
+function FormSection({ title, icon, badge, children }) {
   return (
     <div className="booking-form-section">
-      <h5 className="booking-section-title">
-        {icon && <span className="section-icon">{icon}</span>}
-        {title}
-      </h5>
+      <div className="booking-section-header">
+        <h5 className="booking-section-title">
+          {icon && <span className="section-icon">{icon}</span>}
+          {title}
+        </h5>
+        {badge && <span className="booking-autofill-badge">{badge}</span>}
+      </div>
       {children}
     </div>
   );

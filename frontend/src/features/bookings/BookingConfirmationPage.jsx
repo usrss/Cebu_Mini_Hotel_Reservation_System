@@ -1,7 +1,10 @@
+import { useEffect, useRef, useState } from 'react';
+import { ..., CreditCard } from 'lucide-react';
 import { useLocation, useParams, Link } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, Calendar, Users, Hash, Key, Clock, CreditCard } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Calendar, Users, Hash, Key, Clock, CreditCard, QrCode } from 'lucide-react';
 import { useBookingDetail } from '../hooks/useBookings';
 import './BookingConfirmationPage.css';
+
 
 const STATUS_CONFIG = {
   awaiting_payment: { label: 'Awaiting Payment', className: 'status-awaiting',  icon: <Clock size={14} /> },
@@ -16,15 +19,117 @@ function formatPrice(amount) {
   return Number(amount).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-export default function BookingConfirmationPage() {
-  const { id }       = useParams();
-  const { state }    = useLocation();
+// ── Inline QR component ───────────────────────────────────────────────────────
+// No extra file or npm package. Lazy-loads qrcode-generator from CDN once.
+// Add this ONE line to your index.html <head> for best performance:
+// <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+// (If you skip it, the component loads it automatically on first render.)
 
-  // Use state from navigation if available, else fetch
-  const { booking: fetched, loading, error } = useBookingDetail(state?.booking ? null : id);
+function BookingQR({ reference }) {
+  const canvasRef = useRef(null);
+  const [dataUrl, setDataUrl] = useState(null);
+  const SIZE = 160;
+
+  useEffect(() => {
+    if (!reference) return;
+
+    const draw = () => {
+      try {
+        const qr      = window.qrcode(0, 'M');
+        qr.addData(reference);
+        qr.make();
+
+        const canvas  = canvasRef.current;
+        if (!canvas) return;
+        const ctx     = canvas.getContext('2d');
+        const modules = qr.getModuleCount();
+        const cell    = Math.floor((SIZE - 16) / modules);
+        const offset  = Math.floor((SIZE - cell * modules) / 2);
+
+        canvas.width  = SIZE;
+        canvas.height = SIZE;
+
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, SIZE, SIZE);
+
+        ctx.fillStyle = '#0f172a';
+        for (let row = 0; row < modules; row++) {
+          for (let col = 0; col < modules; col++) {
+            if (qr.isDark(row, col)) {
+              ctx.fillRect(offset + col * cell, offset + row * cell, cell, cell);
+            }
+          }
+        }
+
+        setDataUrl(canvas.toDataURL('image/png'));
+      } catch (e) {
+        console.warn('QR generation failed:', e);
+      }
+    };
+
+    if (window.qrcode) {
+      draw();
+      return;
+    }
+
+    // Lazy-load CDN script only once
+    const existing = document.getElementById('qrcode-gen-script');
+    if (existing) {
+      existing.addEventListener('load', draw);
+      return () => existing.removeEventListener('load', draw);
+    }
+    const script  = document.createElement('script');
+    script.id     = 'qrcode-gen-script';
+    script.src    = 'https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js';
+    script.onload = draw;
+    document.head.appendChild(script);
+  }, [reference]);
+
+  return (
+    <div className="booking-qr-wrapper">
+      <canvas ref={canvasRef} style={{ display: 'none' }} />
+
+      <div className="booking-qr-frame">
+        {dataUrl ? (
+          <img
+            src={dataUrl}
+            alt={`QR for ${reference}`}
+            className="booking-qr-img"
+            width={SIZE}
+            height={SIZE}
+          />
+        ) : (
+          <div className="booking-qr-placeholder" style={{ width: SIZE, height: SIZE }}>
+            <QrCode size={32} color="#d1d5db" />
+          </div>
+        )}
+        {/* Scanner corner marks */}
+        <span className="qr-corner qr-tl" />
+        <span className="qr-corner qr-tr" />
+        <span className="qr-corner qr-bl" />
+        <span className="qr-corner qr-br" />
+      </div>
+
+      <p className="booking-qr-hint">
+        Show this to the receptionist<br />or share your reference number
+      </p>
+    </div>
+  );
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────────
+
+export default function BookingConfirmationPage() {
+  const { id }    = useParams();
+  const { state } = useLocation();
+
+  const hasStateBooking = Boolean(state?.booking);
+  const { booking: fetched, loading, error } = useBookingDetail(
+    hasStateBooking ? null : id
+  );
   const booking = state?.booking || fetched;
 
-  if (loading) return <LoadingSkeleton />;
+  if (!hasStateBooking && loading) return <LoadingSkeleton />;
 
   if (error || !booking) {
     return (
@@ -41,11 +146,12 @@ export default function BookingConfirmationPage() {
     );
   }
 
-  const statusCfg = STATUS_CONFIG[booking.status] || STATUS_CONFIG.awaiting_payment;
+  const statusCfg         = STATUS_CONFIG[booking.status] || STATUS_CONFIG.awaiting_payment;
   const isAwaitingPayment = booking.status === 'awaiting_payment';
 
   return (
     <div className="confirmation-page">
+
       {/* Nav */}
       <div className="confirmation-nav">
         <div className="nav-container">
@@ -56,35 +162,41 @@ export default function BookingConfirmationPage() {
         </div>
       </div>
 
-      <div className="confirmation-container">
-        {/* Success hero */}
-        <div className="confirmation-hero">
-          <div className="confirmation-hero-icon">
-            <CheckCircle2 size={40} />
-          </div>
-          <h1 className="confirmation-hero-title">Booking Received!</h1>
-          <p className="confirmation-hero-subtitle">
-            Your booking is {isAwaitingPayment ? 'pending payment' : 'confirmed'}. Check your details below.
-          </p>
+      {/* Hero */}
+      <div className="confirmation-hero">
+        <div className="confirmation-hero-icon">
+          <CheckCircle2 size={40} />
         </div>
+        <h1 className="confirmation-hero-title">Booking Received!</h1>
+        <p className="confirmation-hero-subtitle">
+          Your booking is {isAwaitingPayment ? 'pending payment' : 'confirmed'}. Check your details below.
+        </p>
+      </div>
 
+      <div className="confirmation-container">
         <div className="confirmation-layout">
-          {/* Left: main info */}
+
+          {/* Left column */}
           <div className="confirmation-main">
-            {/* Reference card */}
+
+            {/* ── Reference card with QR ── */}
             <div className="confirmation-card reference-card">
-              <div className="reference-row">
-                <div className="reference-block">
-                  <label>
+
+              {/* Top row: text left, QR right */}
+              <div className="reference-qr-row">
+                <div className="reference-text-block">
+                  <p className="reference-eyebrow">
                     <Hash size={13} />
                     Reference Number
-                  </label>
-                  <span className="reference-number">{booking.reference_number}</span>
+                  </p>
+                  <p className="reference-number">{booking.reference_number}</p>
+                  <div className={`booking-status-badge ${statusCfg.className}`}>
+                    {statusCfg.icon}
+                    {statusCfg.label}
+                  </div>
                 </div>
-                <div className={`booking-status-badge ${statusCfg.className}`}>
-                  {statusCfg.icon}
-                  {statusCfg.label}
-                </div>
+
+                <BookingQR reference={booking.reference_number} />
               </div>
 
               {isAwaitingPayment && (
@@ -95,7 +207,7 @@ export default function BookingConfirmationPage() {
               )}
             </div>
 
-            {/* Check-in PIN */}
+            {/* PIN card */}
             {booking.checkin_pin && (
               <div className="confirmation-card pin-card">
                 <h3 className="card-section-title">
@@ -118,11 +230,11 @@ export default function BookingConfirmationPage() {
                 Stay Details
               </h3>
               <div className="detail-rows">
-                <DetailRow label="Room"        value={`#${booking.room_number} — ${booking.room_type}`} />
-                <DetailRow label="Check-in"    value={booking.check_in} />
-                <DetailRow label="Check-out"   value={booking.check_out} />
-                <DetailRow label="Nights"      value={`${booking.nights} night${booking.nights !== 1 ? 's' : ''}`} />
-                <DetailRow label="Guests"      value={`${booking.guests_count} guest${booking.guests_count !== 1 ? 's' : ''}`} />
+                <DetailRow label="Room"      value={`#${booking.room_number} — ${booking.room_type}`} />
+                <DetailRow label="Check-in"  value={booking.check_in} />
+                <DetailRow label="Check-out" value={booking.check_out} />
+                <DetailRow label="Nights"    value={`${booking.nights} night${booking.nights !== 1 ? 's' : ''}`} />
+                <DetailRow label="Guests"    value={`${booking.guests_count} guest${booking.guests_count !== 1 ? 's' : ''}`} />
               </div>
             </div>
 
@@ -138,9 +250,10 @@ export default function BookingConfirmationPage() {
                 <DetailRow label="Phone" value={booking.phone} />
               </div>
             </div>
+
           </div>
 
-          {/* Right: price summary sidebar */}
+          {/* Right sidebar */}
           <div className="confirmation-sidebar">
             <div className="confirmation-card price-card">
               <h3 className="card-section-title">
@@ -152,14 +265,13 @@ export default function BookingConfirmationPage() {
                   label={`₱${formatPrice(booking.room_price_snapshot)} × ${booking.nights} night${booking.nights !== 1 ? 's' : ''}`}
                   value={`₱${formatPrice(booking.subtotal)}`}
                 />
-                <PriceRow label="Tax (12%)"         value={`₱${formatPrice(booking.tax)}`} />
-                <PriceRow label="Service fee (5%)"  value={`₱${formatPrice(booking.service_fee)}`} />
+                <PriceRow label="Tax (12%)"        value={`₱${formatPrice(booking.tax)}`} />
+                <PriceRow label="Service fee (5%)" value={`₱${formatPrice(booking.service_fee)}`} />
                 <div className="price-total-row">
                   <span>Total</span>
                   <span className="price-total-amount">₱{formatPrice(booking.total_price)}</span>
                 </div>
               </div>
-
               <div className="payment-status-row">
                 <span>Payment</span>
                 <span className={`payment-badge payment-${booking.payment_status}`}>
@@ -168,15 +280,23 @@ export default function BookingConfirmationPage() {
               </div>
             </div>
 
-            <div className="confirmation-actions">
-              <Link to="/bookings/my" className="btn btn-primary btn-full">
-                View My Bookings
-              </Link>
-              <Link to="/rooms" className="btn btn-outline btn-full">
-                Browse More Rooms
-              </Link>
-            </div>
+              <div className="confirmation-actions">
+                   {booking.payment_status !== 'paid' && booking.status !== 'cancelled' && (
+                     <Link to={`/payments/${booking.id}`} className="btn btn-primary btn-full">
+                       <CreditCard size={16} />
+                       Pay Now
+                     </Link>
+                   )}
+                   <Link to="/bookings/my" className="btn btn-outline btn-full">
+                     View My Bookings
+                   </Link>
+                   <Link to="/rooms" className="btn btn-outline btn-full">
+                     Browse More Rooms
+                   </Link>
+              </div>
+
           </div>
+
         </div>
       </div>
     </div>
@@ -187,7 +307,7 @@ function DetailRow({ label, value }) {
   return (
     <div className="detail-row">
       <span className="detail-label">{label}</span>
-      <span className="detail-value">{value}</span>
+      <span className="detail-value">{value ?? '—'}</span>
     </div>
   );
 }
@@ -205,15 +325,14 @@ function LoadingSkeleton() {
   return (
     <div className="confirmation-page">
       <div className="confirmation-nav">
-        <div className="nav-container">
-          <div className="skeleton skeleton-back" />
-        </div>
+        <div className="nav-container"><div className="skeleton skeleton-back" /></div>
       </div>
       <div className="confirmation-container">
         <div className="skeleton skeleton-hero" />
         <div className="confirmation-layout">
           <div className="confirmation-main">
             <div className="skeleton skeleton-card-lg" />
+            <div className="skeleton skeleton-card-md" />
             <div className="skeleton skeleton-card-md" />
           </div>
           <div className="skeleton skeleton-sidebar" />

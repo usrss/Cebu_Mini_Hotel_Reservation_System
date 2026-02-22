@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 
 from pathlib import Path
 from datetime import timedelta
+from decouple import config
 import os
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -21,23 +22,23 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-m087qh%5$v&^*5a0&7o7=0i!@b@=(&y(v$4@_x3eo*kp#h)01s'
-
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+# ── Core ──────────────────────────────────────────────────────────────────────
+SECRET_KEY = config('SECRET_KEY')
+DEBUG      = config('DEBUG', cast=bool, default=False)
 
 ALLOWED_HOSTS = ["*"]
 AUTH_USER_MODEL = 'users.CustomUser'
 CORS_ALLOW_CREDENTIALS = True
 
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'smtp.gmail.com'
-EMAIL_USE_TLS = False
-EMAIL_USE_SSL = True
-EMAIL_PORT = 465
-EMAIL_HOST_USER = 'bradicarcasona20@gmail.com'          # replace with your email
-EMAIL_HOST_PASSWORD = 'izstsnyseexrmwkv'   # use App Password if Gmail
-DEFAULT_FROM_EMAIL = 'bradicarcasona20@gmail.com'
+# ── Email ─────────────────────────────────────────────────────────────────────
+EMAIL_BACKEND       = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST          = 'smtp.gmail.com'
+EMAIL_USE_TLS       = False
+EMAIL_USE_SSL       = True
+EMAIL_PORT          = 465
+EMAIL_HOST_USER     = config('EMAIL_HOST_USER')
+EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD')
+DEFAULT_FROM_EMAIL  = config('EMAIL_HOST_USER')
 
 
 CORS_ALLOW_ALL_ORIGINS = True
@@ -55,6 +56,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'users',
     'rooms',
+    'payments',
     'bookings.apps.BookingsConfig',
     'rest_framework',
     'rest_framework_simplejwt',
@@ -92,19 +94,34 @@ TEMPLATES = [
 WSGI_APPLICATION = 'backend.wsgi.application'
 
 
+# ── Payments ──────────────────────────────────────────────────────────────────
+PAYMONGO_SECRET_KEY     = config('PAYMONGO_SECRET_KEY')
+PAYMONGO_PUBLIC_KEY     = config('PAYMONGO_PUBLIC_KEY')
+PAYMONGO_WEBHOOK_SECRET = config('PAYMONGO_WEBHOOK_SECRET')
+
+PAYPAL_CLIENT_ID        = config('PAYPAL_CLIENT_ID')
+PAYPAL_CLIENT_SECRET    = config('PAYPAL_CLIENT_SECRET')
+PAYPAL_MODE             = config('PAYPAL_MODE', default='sandbox')
+
+FRONTEND_URL            = config('FRONTEND_URL', default='http://localhost:5173')
+HOTEL_NAME              = config('HOTEL_NAME',   default='CBM_Hotel')
+
+
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
+# ── Database ──────────────────────────────────────────────────────────────────
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'HotelReservation_db',
-        'USER': 'postgres',
-        'PASSWORD': 'bradi8314',
-        'HOST': 'localhost',
-        'PORT': '5432',
+        'ENGINE':   'django.db.backends.postgresql',
+        'NAME':     config('DB_NAME'),
+        'USER':     config('DB_USER'),
+        'PASSWORD': config('DB_PASSWORD'),
+        'HOST':     config('DB_HOST', default='localhost'),
+        'PORT':     config('DB_PORT', default='5432'),
     }
 }
+
 
 
 

@@ -26,9 +26,9 @@ urlpatterns = [
     path('api/auth/', include('users.urls')),
     path('api/rooms/', include('rooms.urls')),
     path("api/bookings/", include("bookings.urls")),
+    path('api/payments/', include('payments.urls', namespace='payments')),
 
-    # Future modules
-    # path("api/payments/", include("payments.urls")),
+
 
 ]
 

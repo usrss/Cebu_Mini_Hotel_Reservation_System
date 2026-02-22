@@ -151,15 +151,23 @@
 
 /* ── Reference card ─────────────────────────────────────────────────────────── */
 
-.reference-row {
+/* New layout: text left, QR right */
+.reference-qr-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
+  gap: 24px;
   flex-wrap: wrap;
-  gap: 16px;
 }
 
-.reference-block label {
+.reference-text-block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.reference-eyebrow {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -168,16 +176,71 @@
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: #9ca3af;
-  margin-bottom: 6px;
+  margin: 0;
 }
 
 .reference-number {
-  font-size: 28px;
+  font-size: 26px;
   font-weight: 700;
   color: #111827;
   font-family: 'Courier New', monospace;
   letter-spacing: 0.04em;
   line-height: 1.1;
+  margin: 0;
+}
+
+/* ── QR code block ───────────────────────────────────────────────────────────── */
+
+.booking-qr-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.booking-qr-frame {
+  position: relative;
+  padding: 10px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.booking-qr-img {
+  display: block;
+  border-radius: 4px;
+}
+
+.booking-qr-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f9fafb;
+  border-radius: 4px;
+}
+
+/* Scanner corner marks */
+.qr-corner {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border-style: solid;
+  border-color: #4f46e5;
+}
+
+.qr-tl { top: 3px;    left: 3px;    border-width: 2px 0 0 2px; border-radius: 4px 0 0 0; }
+.qr-tr { top: 3px;    right: 3px;   border-width: 2px 2px 0 0; border-radius: 0 4px 0 0; }
+.qr-bl { bottom: 3px; left: 3px;    border-width: 0 0 2px 2px; border-radius: 0 0 0 4px; }
+.qr-br { bottom: 3px; right: 3px;   border-width: 0 2px 2px 0; border-radius: 0 0 4px 0; }
+
+.booking-qr-hint {
+  font-size: 11px;
+  color: #9ca3af;
+  text-align: center;
+  line-height: 1.5;
+  margin: 0;
 }
 
 /* ── Status badges — same as .room-card-status ───────────────────────────────── */

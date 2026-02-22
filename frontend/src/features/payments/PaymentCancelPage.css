@@ -1,0 +1,48 @@
+/* ── PaymentCancelPage.css ───────────────────────────────────────────────── */
+
+.cancel-page { min-height: 100vh; background: #f8fafc; }
+
+.cancel-nav {
+  background: #fff;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 12px 0;
+}
+.cancel-nav .nav-container {
+  max-width: 640px; margin: 0 auto; padding: 0 24px;
+}
+.cancel-nav .back-link {
+  display: inline-flex; align-items: center; gap: 6px;
+  color: #64748b; text-decoration: none; font-size: 14px; font-weight: 500;
+}
+.cancel-nav .back-link:hover { color: #0f172a; }
+
+.cancel-container {
+  max-width: 500px; margin: 0 auto; padding: 64px 24px 80px; text-align: center;
+}
+
+.cancel-card {
+  background: #fff; border: 1px solid #e2e8f0; border-radius: 20px; padding: 48px 36px;
+}
+
+.cancel-icon {
+  width: 80px; height: 80px;
+  background: #fff7ed; color: #ea580c;
+  border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  margin: 0 auto 24px;
+}
+
+.cancel-title    { font-size: 24px; font-weight: 700; color: #0f172a; margin: 0 0 12px; }
+.cancel-subtitle { font-size: 15px; color: #475569; line-height: 1.6; margin: 0 0 32px; }
+
+.cancel-actions { display: flex; flex-direction: column; gap: 12px; }
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  gap: 8px; padding: 12px 24px; border-radius: 10px;
+  font-size: 15px; font-weight: 600; text-decoration: none;
+  border: none; cursor: pointer; transition: all 0.2s;
+}
+.btn-primary  { background: #2563eb; color: #fff; }
+.btn-primary:hover { background: #1d4ed8; }
+.btn-outline  { background: #fff; color: #374151; border: 1.5px solid #d1d5db; }
+.btn-outline:hover { background: #f9fafb; }

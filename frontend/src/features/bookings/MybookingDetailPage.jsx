@@ -237,6 +237,14 @@ export default function MyBookingDetailPage() {
             </div>
 
             {/* Actions */}
+
+            {/* Pay Now — show if not yet paid and not cancelled */}
+             {booking.payment_status !== 'paid' && booking.status !== 'cancelled' && (
+               <Link to={`/payments/${booking.id}`} className="btn btn-primary btn-full">
+                 <CreditCard size={16} />
+                 Pay Now
+               </Link>
+             )}
             {canCancel && !showCancelConfirm && (
               <button
                 onClick={() => setShowCancelConfirm(true)}

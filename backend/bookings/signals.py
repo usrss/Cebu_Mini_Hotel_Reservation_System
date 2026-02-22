@@ -12,7 +12,7 @@ def release_room_lock_on_confirm_or_cancel(sender, instance, created, **kwargs):
     if created:
         return
 
-    if instance.booking_status in [BookingStatus.CONFIRMED, BookingStatus.CANCELLED]:
+    if instance.status in [BookingStatus.CONFIRMED, BookingStatus.CANCELLED]:
         try:
             from rooms.models import RoomTemporaryLock
             RoomTemporaryLock.objects.filter(

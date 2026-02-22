@@ -17,6 +17,15 @@
   padding-bottom: 0;
 }
 
+/* ✅ Section header row — title + optional badge side by side */
+.booking-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
 .booking-section-title {
   display: flex;
   align-items: center;
@@ -24,7 +33,7 @@
   font-size: 12px;
   font-weight: 600;
   color: rgba(255, 255, 255, 0.75);
-  margin: 0 0 12px 0;
+  margin: 0;
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
@@ -34,6 +43,38 @@
   align-items: center;
   color: rgba(255, 255, 255, 0.6);
 }
+
+/* ✅ Auto-filled badge shown when user is logged in */
+.booking-autofill-badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: #6ee7b7;
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  padding: 2px 8px;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+
+/* ✅ Shown while user profile is loading */
+.booking-user-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.6);
+  padding: 8px 0;
+}
+
+.spinner-sm {
+  width: 13px;
+  height: 13px;
+  border-width: 2px;
+  border-color: rgba(255, 255, 255, 0.2);
+  border-top-color: white;
+}
+
+/* ── Date inputs ─────────────────────────────────────────────────────────────── */
 
 .booking-date-inputs {
   display: grid;
@@ -96,6 +137,8 @@
   font-weight: 500;
 }
 
+/* ── Guests ──────────────────────────────────────────────────────────────────── */
+
 .booking-guest-wrapper {
   display: flex;
   flex-direction: column;
@@ -125,7 +168,6 @@
   border-color: #fca5a5;
 }
 
-/* Mirrors guest-quick-buttons from RoomFilters.css, inverted for glass bg */
 .booking-guest-quick {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -161,6 +203,8 @@
   color: rgba(255, 255, 255, 0.55);
   margin: 0;
 }
+
+/* ── Guest info fields ───────────────────────────────────────────────────────── */
 
 .booking-guest-info {
   display: flex;
@@ -210,6 +254,8 @@
   border-color: #fca5a5;
 }
 
+/* ── Price breakdown ─────────────────────────────────────────────────────────── */
+
 .booking-price-breakdown {
   background: rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.15);
@@ -253,6 +299,8 @@
   color: white;
 }
 
+/* ── Errors ──────────────────────────────────────────────────────────────────── */
+
 .field-error {
   font-size: 12px;
   color: #fca5a5;
@@ -271,7 +319,8 @@
   font-size: 14px;
 }
 
-/* White pill on indigo — inverse of .btn-primary */
+/* ── Submit button ───────────────────────────────────────────────────────────── */
+
 .booking-submit-btn {
   display: flex;
   align-items: center;
@@ -313,12 +362,21 @@
 }
 
 .spinner {
+  display: inline-block;
   width: 16px;
   height: 16px;
   border: 2px solid rgba(79, 70, 229, 0.25);
   border-top-color: #4f46e5;
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
+}
+
+/* Small variant used in user-loading row */
+.spinner.spinner-sm {
+  width: 13px;
+  height: 13px;
+  border-color: rgba(255, 255, 255, 0.2);
+  border-top-color: white;
 }
 
 @keyframes spin {
@@ -333,7 +391,6 @@
   line-height: 1.5;
 }
 
-/* Matches sidebar-price border-top */
 .sidebar-divider {
   height: 1px;
   background: rgba(255, 255, 255, 0.2);
