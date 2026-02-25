@@ -68,10 +68,12 @@ class Payment(models.Model):
     Booking ← Payment (one-to-many, supports deposit + balance)
     """
 
-    # Reference / receipt
+    # Reference / receipt — NULL until paid, then auto-generated.
+    # null=True is required so multiple pending payments can coexist —
+    # PostgreSQL unique constraints never conflict on NULL values.
     receipt_number = models.CharField(
-        max_length=20, unique=True, blank=True,
-        help_text="Auto-generated on payment success.",
+        max_length=20, unique=True, blank=True, null=True, default=None,
+        help_text="Auto-generated on payment success. NULL while pending.",
     )
 
     # Relations

@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { ..., CreditCard } from 'lucide-react';
 import { useLocation, useParams, Link } from 'react-router-dom';
 import { ArrowLeft, CheckCircle2, Calendar, Users, Hash, Key, Clock, CreditCard, QrCode } from 'lucide-react';
 import { useBookingDetail } from '../hooks/useBookings';

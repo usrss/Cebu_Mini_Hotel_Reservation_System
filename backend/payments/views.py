@@ -31,6 +31,9 @@ logger = logging.getLogger(__name__)
 CHECKOUT_EXPIRES_MINUTES = 30
 
 
+
+
+
 # ─── User: initiate payment ───────────────────────────────────────────────────
 
 class InitiatePaymentView(APIView):
@@ -166,12 +169,6 @@ class MyPaymentDetailView(generics.RetrieveAPIView):
 
 
 class PaymentVerifyView(APIView):
-    """
-    GET /api/payments/<id>/verify/
-    Frontend calls this after returning from the provider redirect.
-    Returns current payment status — does NOT confirm payment itself.
-    (Confirmation happens via webhook only.)
-    """
     permission_classes = [IsAuthenticated]
 
     def get(self, request, pk):
@@ -182,24 +179,38 @@ class PaymentVerifyView(APIView):
         except Payment.DoesNotExist:
             return Response({"error": "Payment not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        # If still pending and not expired, poll provider status
-        if payment.status == PaymentStatus.PENDING and not payment.is_expired:
+        # Already resolved — just return current state
+        if payment.status in (
+            PaymentStatus.PAID, PaymentStatus.FAILED,
+            PaymentStatus.EXPIRED, PaymentStatus.CANCELLED
+        ):
+            return Response(PaymentSerializer(payment).data)
+
+        # Poll provider for latest status
+        if payment.status == PaymentStatus.PENDING and payment.checkout_session_id:
             try:
                 if payment.provider == PaymentProvider.PAYMONGO:
-                    provider_status = PayMongoService.get_session_status(payment.checkout_session_id)
-                    if provider_status == "paid":
-                        payment.mark_paid(transaction_id=payment.checkout_session_id)
-                    elif provider_status in ("expired", "cancelled"):
+                    session = PayMongoService.get_full_session(payment.checkout_session_id)
+                    payments_list = session.get("payments") or []
+                    is_paid = any(
+                        p.get("attributes", {}).get("status") == "paid"
+                        for p in payments_list
+                    )
+                    if is_paid:
+                        transaction_id = payments_list[0].get("id") if payments_list else None
+                        payment.mark_paid(transaction_id=transaction_id)
+                    elif session.get("status") == "expired":
                         payment.mark_failed()
+
                 elif payment.provider == PaymentProvider.PAYPAL:
                     provider_status = PayPalService.get_order_status(payment.checkout_session_id)
                     if provider_status == "COMPLETED":
                         payment.mark_paid(transaction_id=payment.checkout_session_id)
+
             except Exception as exc:
                 logger.warning("Could not poll provider for payment %s: %s", pk, exc)
 
-        serializer = PaymentSerializer(payment)
-        return Response(serializer.data)
+        return Response(PaymentSerializer(payment).data)
 
 
 # ─── Webhooks ─────────────────────────────────────────────────────────────────

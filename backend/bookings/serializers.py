@@ -3,7 +3,8 @@ from django.utils import timezone
 from django.db import transaction
 from rest_framework import serializers
 
-from rooms.models import Room, RoomStatus
+from rooms.models import Room, RoomStatus # noqa
+
 from .models import (
     Booking, BookingStatus, BookingStatusHistory,
     RefundStatus, BLOCKING_STATUSES,
@@ -17,11 +18,6 @@ SERVICE_FEE_PCT = Decimal("0.05")   # 5 % service fee
 # ─── Overlap check ────────────────────────────────────────────────────────────
 
 def check_overlapping_bookings(room, check_in, check_out, exclude_id=None):
-    """
-    Returns True if an active booking overlaps the requested dates.
-    Field names match rooms.Room.is_available_for_dates() exactly:
-      check_in__lt=check_out, check_out__gt=check_in
-    """
     qs = Booking.objects.filter(
         room=room,
         status__in=BLOCKING_STATUSES,
@@ -49,9 +45,9 @@ class BookingStatusHistorySerializer(serializers.ModelSerializer):
 
 
 class BookingListSerializer(serializers.ModelSerializer):
-    room_number           = serializers.CharField(source="room.room_number", read_only=True)
-    room_type             = serializers.CharField(source="room.get_room_type_display", read_only=True)
-    status_display        = serializers.CharField(source="get_status_display", read_only=True)
+    room_number            = serializers.CharField(source="room.room_number", read_only=True)
+    room_type              = serializers.CharField(source="room.get_room_type_display", read_only=True)
+    status_display         = serializers.CharField(source="get_status_display", read_only=True)
     payment_status_display = serializers.CharField(source="get_payment_status_display", read_only=True)
 
     class Meta:
@@ -85,25 +81,14 @@ class BookingDetailSerializer(serializers.ModelSerializer):
             "id", "reference_number", "checkin_pin",
             "user",
             "room", "room_number", "room_type", "room_floor", "room_bed_type",
-
-            # Guest
             "full_name", "email", "phone",
-
-            # Stay
             "check_in", "check_out", "nights", "guests_count",
-
-            # Pricing
             "room_price_snapshot", "subtotal", "tax", "service_fee", "total_price",
-
-            # Status
             "status", "status_display",
             "payment_status", "payment_status_display",
-
-            # Cancellation / refund
             "cancelled_at", "cancellation_reason",
             "refund_percentage", "refund_amount",
             "refund_status", "refund_status_display",
-
             "is_expired",
             "created_at", "updated_at",
             "status_history",
@@ -113,12 +98,6 @@ class BookingDetailSerializer(serializers.ModelSerializer):
 # ─── Booking creation ─────────────────────────────────────────────────────────
 
 class BookingCreateSerializer(serializers.Serializer):
-    """
-    Validates and creates a booking inside a DB transaction.
-    - Price is always calculated server-side (never trusted from frontend).
-    - Uses SELECT FOR UPDATE on the room row (PostgreSQL row-level lock)
-      to prevent race conditions under concurrent requests.
-    """
     room_id      = serializers.IntegerField()
     check_in     = serializers.DateField()
     check_out    = serializers.DateField()
@@ -130,7 +109,6 @@ class BookingCreateSerializer(serializers.Serializer):
     def validate(self, data):
         today = timezone.now().date()
 
-        # Date validation
         if data["check_in"] < today:
             raise serializers.ValidationError({"check_in": "Check-in cannot be in the past."})
         if data["check_out"] <= data["check_in"]:
@@ -138,7 +116,6 @@ class BookingCreateSerializer(serializers.Serializer):
         if (data["check_out"] - data["check_in"]).days > 90:
             raise serializers.ValidationError("Booking cannot exceed 90 nights.")
 
-        # Room existence and active check
         try:
             room = Room.objects.get(pk=data["room_id"], is_active=True)
         except Room.DoesNotExist:
@@ -149,7 +126,6 @@ class BookingCreateSerializer(serializers.Serializer):
                 {"room_id": f"Room is not available (current status: {room.status})."}
             )
 
-        # Capacity check
         if data["guests_count"] > room.capacity:
             raise serializers.ValidationError(
                 {"guests_count": f"Room capacity is {room.capacity} guest(s)."}
@@ -157,7 +133,6 @@ class BookingCreateSerializer(serializers.Serializer):
 
         data["room"] = room
 
-        # Guest info — auto-fill from user or require explicitly for anonymous
         request = self.context.get("request")
         user    = request.user if request and request.user.is_authenticated else None
 
@@ -183,17 +158,13 @@ class BookingCreateSerializer(serializers.Serializer):
         request = self.context.get("request")
         user    = request.user if request and request.user.is_authenticated else None
 
-        # PostgreSQL row-level lock — prevents two concurrent requests from
-        # both passing the overlap check for the same room.
         room = Room.objects.select_for_update().get(pk=room.pk)
 
-        # Re-check availability inside the lock
         if check_overlapping_bookings(room, check_in, check_out):
             raise serializers.ValidationError(
                 "This room is no longer available for the selected dates."
             )
 
-        # Server-side price calculation
         nights              = (check_out - check_in).days
         room_price_snapshot = room.price_per_night
         subtotal            = room_price_snapshot * nights
@@ -235,7 +206,6 @@ class BookingCreateSerializer(serializers.Serializer):
 # ─── Status transition ────────────────────────────────────────────────────────
 
 class BookingStatusUpdateSerializer(serializers.Serializer):
-    """Staff-only: manually transition a booking's status."""
     status = serializers.ChoiceField(choices=BookingStatus.choices)
     note   = serializers.CharField(required=False, allow_blank=True)
 
@@ -250,9 +220,9 @@ class BookingStatusUpdateSerializer(serializers.Serializer):
 
     @transaction.atomic
     def save(self, **kwargs):
-        booking    = self.context["booking"]
-        request    = self.context.get("request")
-        user       = request.user if request else None
+        booking = self.context["booking"]
+        request = self.context.get("request")
+        user    = request.user if request else None
         return booking.transition_to(
             self.validated_data["status"],
             changed_by = user,
@@ -263,10 +233,6 @@ class BookingStatusUpdateSerializer(serializers.Serializer):
 # ─── Check-in verification ────────────────────────────────────────────────────
 
 class CheckInVerifySerializer(serializers.Serializer):
-    """
-    Reception desk: verify reference + PIN before marking CHECKED_IN.
-    Validates: booking exists, PIN matches, status is CONFIRMED, date is today.
-    """
     reference_number = serializers.CharField()
     checkin_pin      = serializers.CharField(max_length=4, min_length=4)
 
@@ -316,7 +282,11 @@ class BookingCancelSerializer(serializers.Serializer):
         user       = request.user if request else None
         old_status = booking.status
 
+        # ── Compute refund based on cancellation policy ────────────────────
         pct, amount = booking.compute_refund()
+
+        # ── Update booking ─────────────────────────────────────────────────
+        from .models import PaymentStatus as BPaymentStatus
 
         booking.status              = BookingStatus.CANCELLED
         booking.cancelled_at        = timezone.now()
@@ -324,9 +294,17 @@ class BookingCancelSerializer(serializers.Serializer):
         booking.refund_percentage   = pct
         booking.refund_amount       = amount
         booking.refund_status       = RefundStatus.PENDING if amount > 0 else RefundStatus.NONE
+
+        # Update payment_status on the booking to reflect refund
+        if amount > 0:
+            booking.payment_status = BPaymentStatus.PARTIALLY_REFUNDED
+        # If fully refunded (100%) mark as refunded — 90% is still partial
+        # since fees are non-refundable in most policies, keep PARTIALLY_REFUNDED
+
         booking.save(update_fields=[
             "status", "cancelled_at", "cancellation_reason",
-            "refund_percentage", "refund_amount", "refund_status", "updated_at",
+            "refund_percentage", "refund_amount", "refund_status",
+            "payment_status", "updated_at",
         ])
 
         BookingStatusHistory.objects.create(
@@ -336,4 +314,41 @@ class BookingCancelSerializer(serializers.Serializer):
             changed_by = user,
             note       = self.validated_data.get("reason", "Cancelled."),
         )
+
+        # ── Sync Payment record and create Refund entry ────────────────────
+        if amount > 0:
+            try:
+                from payments.models import ( # noqa
+
+                    Payment,
+                    PaymentStatus as PStatus,
+                    Refund,
+                )
+                paid_payment = (
+                    booking.payments
+                    .filter(status=PStatus.PAID)
+                    .order_by("-paid_at")
+                    .first()
+                )
+                if paid_payment:
+                    # Create a Refund record for tracking
+                    Refund.objects.create(
+                        payment      = paid_payment,
+                        amount       = amount,
+                        reason       = self.validated_data.get("reason", "Booking cancelled."),
+                        initiated_by = user,
+                        status       = Refund.RefundStatus.PENDING,
+                    )
+                    # Mark the payment as refunded
+                    paid_payment.status = PStatus.REFUNDED
+                    paid_payment.save(update_fields=["status", "updated_at"])
+
+            except Exception as exc:
+                # Don't block cancellation if payment sync fails — log it
+                import logging
+                logging.getLogger(__name__).warning(
+                    "Could not sync payment refund for booking %s: %s",
+                    booking.reference_number, exc,
+                )
+
         return booking

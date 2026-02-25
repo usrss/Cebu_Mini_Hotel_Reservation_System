@@ -23,11 +23,12 @@ from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
-PAYMONGO_BASE = "https://api.paymongo.com/v1"
+PAYMONGO_BASE       = "https://api.paymongo.com/v1"
 PAYPAL_SANDBOX_BASE = "https://api-m.sandbox.paypal.com"
 PAYPAL_LIVE_BASE    = "https://api-m.paypal.com"
 
 # ── PayMongo method map ────────────────────────────────────────────────────────
+# Maps our internal method keys to PayMongo payment_method_types values
 PAYMONGO_METHOD_MAP = {
     "card":          "card",
     "gcash":         "gcash",
@@ -36,7 +37,7 @@ PAYMONGO_METHOD_MAP = {
 
 
 def _paymongo_headers():
-    secret = getattr(settings, "PAYMONGO_SECRET_KEY", "")
+    secret  = getattr(settings, "PAYMONGO_SECRET_KEY", "")
     encoded = base64.b64encode(f"{secret}:".encode()).decode()
     return {
         "Authorization": f"Basic {encoded}",
@@ -74,20 +75,42 @@ class PayMongoService:
         Creates a PayMongo Checkout Session and returns:
             { "checkout_url": str, "session_id": str }
 
-        PayMongo amounts are in CENTS (PHP × 100).
+        PayMongo amounts are in CENTS (PHP x 100).
+        Minimum amount is PHP 100.00 (10000 cents).
         """
         amount_cents = int(payment.amount * 100)
         method_type  = PAYMONGO_METHOD_MAP.get(payment.payment_method, "card")
 
+        # PayMongo minimum is PHP 100
+        if amount_cents < 10000:
+            raise ValueError(
+                f"Amount too small: PHP {payment.amount}. "
+                f"PayMongo minimum is PHP 100.00 (got {amount_cents} cents)."
+            )
+
         payload = {
             "data": {
                 "attributes": {
-                    "amount":        amount_cents,
-                    "currency":      "PHP",
-                    "description":   f"Booking {booking.reference_number} — Room #{booking.room.room_number}",
+                    "amount":               amount_cents,
+                    "currency":             "PHP",
+                    "description":          (
+                        f"Booking {booking.reference_number} "
+                        f"- Room {booking.room.room_number}"
+                    ),
                     "payment_method_types": [method_type],
-                    "success_url":   success_url,
-                    "cancel_url":    cancel_url,
+                    "success_url":          success_url,
+                    "cancel_url":           cancel_url,
+                    "send_email_receipt":   False,
+                    "show_description":     True,
+                    "show_line_items":      True,
+                    "line_items": [
+                        {
+                            "currency":  "PHP",
+                            "amount":    amount_cents,
+                            "name":      f"Room {booking.room.room_number} - {booking.room.get_room_type_display()}",
+                            "quantity":  1,
+                        }
+                    ],
                     "metadata": {
                         "payment_id":        str(payment.pk),
                         "booking_reference": booking.reference_number,
@@ -96,14 +119,31 @@ class PayMongoService:
             }
         }
 
+        logger.info(
+            "PayMongo checkout_sessions request — payment_id=%s amount_cents=%s method=%s",
+            payment.pk, amount_cents, method_type,
+        )
+
         resp = requests.post(
             f"{PAYMONGO_BASE}/checkout_sessions",
             json=payload,
             headers=_paymongo_headers(),
             timeout=20,
         )
-        resp.raise_for_status()
+
+        # Log full response on error so we can see exactly what PayMongo rejected
+        if not resp.ok:
+            logger.error(
+                "PayMongo checkout_sessions FAILED %s — response: %s",
+                resp.status_code,
+                resp.text,
+            )
+            resp.raise_for_status()
+
         data = resp.json()["data"]
+        logger.info(
+            "PayMongo checkout_sessions SUCCESS — session_id=%s", data["id"]
+        )
         return {
             "session_id":   data["id"],
             "checkout_url": data["attributes"]["checkout_url"],
@@ -120,7 +160,14 @@ class PayMongoService:
             headers=_paymongo_headers(),
             timeout=15,
         )
-        resp.raise_for_status()
+
+        if not resp.ok:
+            logger.error(
+                "PayMongo get_session_status FAILED %s — session_id=%s response: %s",
+                resp.status_code, session_id, resp.text,
+            )
+            resp.raise_for_status()
+
         return resp.json()["data"]["attributes"]["status"]
 
     @staticmethod
@@ -140,14 +187,50 @@ class PayMongoService:
                 }
             }
         }
+
         resp = requests.post(
             f"{PAYMONGO_BASE}/refunds",
             json=payload,
             headers=_paymongo_headers(),
             timeout=20,
         )
-        resp.raise_for_status()
+
+        if not resp.ok:
+            logger.error(
+                "PayMongo create_refund FAILED %s — payment_id=%s response: %s",
+                resp.status_code, payment.pk, resp.text,
+            )
+            resp.raise_for_status()
+
         return {"refund_id": resp.json()["data"]["id"]}
+
+    @staticmethod
+    def get_full_session(session_id: str) -> dict:
+        """
+        Returns full checkout session data including payments list.
+        Used by verify endpoint to poll payment status directly from PayMongo.
+
+        Returns dict with:
+          - status:   'active' or 'expired'
+          - payments: list of payment objects (each has attributes.status = 'paid'/'unpaid')
+        """
+        resp = requests.get(
+            f"{PAYMONGO_BASE}/checkout_sessions/{session_id}",
+            headers=_paymongo_headers(),
+            timeout=15,
+        )
+        if not resp.ok:
+            logger.error(
+                "PayMongo get_full_session FAILED %s — session_id=%s response: %s",
+                resp.status_code, session_id, resp.text,
+            )
+            resp.raise_for_status()
+
+        attrs = resp.json()["data"]["attributes"]
+        return {
+            "status": attrs.get("status"),  # 'active' or 'expired'
+            "payments": attrs.get("payments", []),  # list of payment objects
+        }
 
 
 # ── PayPal ────────────────────────────────────────────────────────────────────
@@ -176,8 +259,11 @@ class PayPalService:
                         "currency_code": "PHP",
                         "value":         str(payment.amount),
                     },
-                    "description": f"Booking {booking.reference_number} — Room #{booking.room.room_number}",
-                    "custom_id":   str(payment.pk),
+                    "description": (
+                        f"Booking {booking.reference_number} "
+                        f"- Room {booking.room.room_number}"
+                    ),
+                    "custom_id": str(payment.pk),
                 }
             ],
             "application_context": {
@@ -187,13 +273,21 @@ class PayPalService:
                 "user_action": "PAY_NOW",
             },
         }
+
         resp = requests.post(
             f"{_paypal_base()}/v2/checkout/orders",
             json=payload,
             headers=PayPalService._headers(),
             timeout=20,
         )
-        resp.raise_for_status()
+
+        if not resp.ok:
+            logger.error(
+                "PayPal create_order FAILED %s — payment_id=%s response: %s",
+                resp.status_code, payment.pk, resp.text,
+            )
+            resp.raise_for_status()
+
         data = resp.json()
 
         # Find the approval link
@@ -211,7 +305,14 @@ class PayPalService:
             headers=PayPalService._headers(),
             timeout=15,
         )
-        resp.raise_for_status()
+
+        if not resp.ok:
+            logger.error(
+                "PayPal get_order_status FAILED %s — order_id=%s response: %s",
+                resp.status_code, order_id, resp.text,
+            )
+            resp.raise_for_status()
+
         return resp.json().get("status", "")
 
     @staticmethod
@@ -223,7 +324,14 @@ class PayPalService:
             json={},
             timeout=20,
         )
-        resp.raise_for_status()
+
+        if not resp.ok:
+            logger.error(
+                "PayPal capture_order FAILED %s — order_id=%s response: %s",
+                resp.status_code, order_id, resp.text,
+            )
+            resp.raise_for_status()
+
         return resp.json()
 
     @staticmethod
@@ -239,11 +347,19 @@ class PayPalService:
             },
             "note_to_payer": reason or "Refund issued by hotel.",
         }
+
         resp = requests.post(
             f"{_paypal_base()}/v2/payments/captures/{payment.transaction_id}/refund",
             json=payload,
             headers=PayPalService._headers(),
             timeout=20,
         )
-        resp.raise_for_status()
+
+        if not resp.ok:
+            logger.error(
+                "PayPal create_refund FAILED %s — payment_id=%s response: %s",
+                resp.status_code, payment.pk, resp.text,
+            )
+            resp.raise_for_status()
+
         return {"refund_id": resp.json()["id"]}

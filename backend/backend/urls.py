@@ -18,7 +18,7 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
-
+from payments.views import PayMongoWebhookView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -27,6 +27,7 @@ urlpatterns = [
     path('api/rooms/', include('rooms.urls')),
     path("api/bookings/", include("bookings.urls")),
     path('api/payments/', include('payments.urls', namespace='payments')),
+    path('api/payments/webhooks/paymongo/', PayMongoWebhookView.as_view(), name='paymongo-webhook'),
 
 
 
