@@ -8,15 +8,16 @@ import { useBookingDetail, useCancelBooking } from '../hooks/useBookings';
 import './MyBookingDetailPage.css';
 
 const STATUS_CONFIG = {
-  awaiting_payment: { label: 'Awaiting Payment', className: 'status-awaiting' },
-  confirmed:        { label: 'Confirmed',         className: 'status-confirmed' },
-  checked_in:       { label: 'Checked In',        className: 'status-checkedin' },
-  checked_out:      { label: 'Checked Out',       className: 'status-checkedout' },
-  cancelled:        { label: 'Cancelled',         className: 'status-cancelled' },
-  no_show:          { label: 'No Show',           className: 'status-noshow' },
+  pending_payment: { label: 'Pending Payment', className: 'status-awaiting' },
+  confirmed:       { label: 'Confirmed',        className: 'status-confirmed' },
+  checked_in:      { label: 'Checked In',       className: 'status-checkedin' },
+  checked_out:     { label: 'Checked Out',      className: 'status-checkedout' },
+  cancelled:       { label: 'Cancelled',        className: 'status-cancelled' },
+  expired:         { label: 'Expired',          className: 'status-cancelled' },
+  no_show:         { label: 'No Show',          className: 'status-noshow' },
 };
 
-const CANCELLABLE_STATUSES = ['awaiting_payment', 'confirmed'];
+const CANCELLABLE_STATUSES = ['pending_payment', 'confirmed'];
 
 function formatPrice(amount) {
   return Number(amount).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -49,7 +50,9 @@ export default function MyBookingDetailPage() {
     );
   }
 
-  const statusCfg  = STATUS_CONFIG[booking.status] || STATUS_CONFIG.awaiting_payment;
+  const statusCfg  = STATUS_CONFIG[booking.status] || STATUS_CONFIG.pending_payment;
+  const isPendingPayment = booking.status === 'pending_payment';
+  const hasCredentials   = booking.has_credentials;
   const canCancel  = CANCELLABLE_STATUSES.includes(booking.status);
   const refundPct  = parseFloat(booking.refund_percentage || 0);
 
@@ -84,32 +87,41 @@ export default function MyBookingDetailPage() {
                 <div>
                   <p className="reference-eyebrow">
                     <Hash size={12} />
-                    Booking Reference
+                    {hasCredentials ? 'Booking Reference' : 'Booking ID (Internal)'}
                   </p>
-                  <h1 className="reference-number">{booking.reference_number}</h1>
+                  {hasCredentials ? (
+                    <h1 className="reference-number">{booking.reference_number}</h1>
+                  ) : (
+                    <h1 className="reference-number" style={{ color: '#9ca3af', fontSize: 20 }}>
+                      #{booking.id} — Reference pending payment
+                    </h1>
+                  )}
                 </div>
                 <div className={`booking-status-badge ${statusCfg.className}`}>
                   {statusCfg.label}
                 </div>
               </div>
 
-              {booking.status === 'awaiting_payment' && !booking.is_expired && (
+              {isPendingPayment && !booking.is_expired && (
                 <div className="payment-notice">
                   <Clock size={15} />
-                  <span>Complete payment within <strong>30 minutes</strong> to confirm your reservation.</span>
+                  <span>
+                    Complete payment to receive your reference number and check-in PIN.
+                    Your room is held for <strong>30 minutes</strong>.
+                  </span>
                 </div>
               )}
 
-              {booking.is_expired && (
+              {(booking.is_expired || booking.status === 'expired') && (
                 <div className="expired-notice">
                   <AlertCircle size={15} />
-                  <span>This booking has expired due to non-payment.</span>
+                  <span>This booking expired without payment. No credentials were issued.</span>
                 </div>
               )}
             </div>
 
-            {/* Check-in PIN */}
-            {booking.checkin_pin && booking.status !== 'cancelled' && (
+            {/* Check-in PIN — only shown when credentials exist (CONFIRMED+) */}
+            {hasCredentials && booking.checkin_pin && booking.status !== 'cancelled' && (
               <div className="detail-card pin-card">
                 <h3 className="card-title">
                   <Key size={16} />
@@ -157,21 +169,28 @@ export default function MyBookingDetailPage() {
             </div>
 
             {/* Cancellation info */}
-            {booking.status === 'cancelled' && (
+            {(booking.status === 'cancelled' || booking.status === 'expired') && (
               <div className="detail-card cancelled-card">
                 <h3 className="card-title">
                   <XCircle size={16} />
-                  Cancellation Details
+                  {booking.status === 'expired' ? 'Expiration Details' : 'Cancellation Details'}
                 </h3>
                 <div className="info-rows">
                   {booking.cancelled_at && (
-                    <InfoRow label="Cancelled at" value={new Date(booking.cancelled_at).toLocaleString()} />
+                    <InfoRow label={booking.status === 'expired' ? 'Expired at' : 'Cancelled at'}
+                             value={new Date(booking.cancelled_at).toLocaleString()} />
                   )}
                   {booking.cancellation_reason && (
                     <InfoRow label="Reason" value={booking.cancellation_reason} />
                   )}
-                  <InfoRow label="Refund" value={`${booking.refund_percentage}% — ₱${formatPrice(booking.refund_amount)}`} />
-                  <InfoRow label="Refund status" value={booking.refund_status_display} />
+                  <InfoRow label="Refund" value={
+                    booking.refund_amount > 0
+                      ? `${booking.refund_percentage}% — ₱${formatPrice(booking.refund_amount)}`
+                      : 'No refund (payment was not completed)'
+                  } />
+                  {booking.refund_amount > 0 && (
+                    <InfoRow label="Refund status" value={booking.refund_status_display} />
+                  )}
                 </div>
               </div>
             )}
@@ -239,10 +258,10 @@ export default function MyBookingDetailPage() {
             {/* Actions */}
 
             {/* Pay Now — show if not yet paid and not cancelled */}
-             {booking.payment_status !== 'paid' && booking.status !== 'cancelled' && (
+             {isPendingPayment && !booking.is_expired && (
                <Link to={`/payments/${booking.id}`} className="btn btn-primary btn-full">
                  <CreditCard size={16} />
-                 Pay Now
+                 Complete Payment
                </Link>
              )}
             {canCancel && !showCancelConfirm && (
@@ -269,7 +288,9 @@ export default function MyBookingDetailPage() {
                 )}
                 {refundPct === 0 && (
                   <p className="cancel-refund-info cancel-no-refund">
-                    This cancellation is not eligible for a refund based on current policy.
+                    {isPendingPayment
+                      ? 'No charge was made — your booking will be cancelled at no cost.'
+                      : 'This cancellation is not eligible for a refund based on current policy.'}
                   </p>
                 )}
                 <textarea

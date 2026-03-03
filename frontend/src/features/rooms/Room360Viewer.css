@@ -1,0 +1,278 @@
+/* Room 360 Viewer Styles */
+
+.room-360-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  animation: fadeIn 0.3s ease;
+}
+
+.room-360-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.95);
+  backdrop-filter: blur(4px);
+}
+
+.room-360-container {
+  position: relative;
+  width: 100%;
+  max-width: 1400px;
+  height: 90vh;
+  max-height: 900px;
+  background: #111;
+  border-radius: 16px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Header */
+.room-360-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.room-360-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: white;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.rotate-icon {
+  animation: rotate 3s linear infinite;
+}
+
+.room-360-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.room-360-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.room-360-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.room-360-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.room-360-btn.close {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+.room-360-btn.close:hover {
+  background: rgba(239, 68, 68, 0.3);
+}
+
+/* Viewer Wrapper */
+.room-360-viewer-wrapper {
+  position: relative;
+  flex: 1;
+  overflow: hidden;
+  background: #000;
+}
+
+.room-360-viewer {
+  width: 100%;
+  height: 100%;
+}
+
+/* Loading State */
+.room-360-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #000;
+  color: white;
+  gap: 16px;
+}
+
+.spin-icon {
+  animation: spin 1s linear infinite;
+}
+
+.room-360-loading p {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* Error State */
+.room-360-error {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #000;
+  color: white;
+  gap: 16px;
+  padding: 20px;
+}
+
+.room-360-error p {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.8);
+  text-align: center;
+}
+
+.error-close-btn {
+  padding: 10px 20px;
+  background: rgba(239, 68, 68, 0.2);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 8px;
+  color: white;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.error-close-btn:hover {
+  background: rgba(239, 68, 68, 0.3);
+}
+
+/* Instructions */
+.room-360-instructions {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 12px 20px;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(8px);
+  border-radius: 100px;
+  pointer-events: none;
+  animation: fadeIn 0.5s ease 1s both;
+}
+
+.room-360-instructions p {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.9);
+  margin: 0;
+  white-space: nowrap;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .room-360-modal {
+    padding: 0;
+  }
+
+  .room-360-container {
+    height: 100vh;
+    max-height: none;
+    border-radius: 0;
+  }
+
+  .room-360-header {
+    padding: 12px 16px;
+  }
+
+  .room-360-title {
+    font-size: 14px;
+  }
+
+  .room-360-title span {
+    max-width: 180px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .room-360-btn {
+    width: 36px;
+    height: 36px;
+  }
+
+  .room-360-instructions {
+    bottom: 80px;
+    left: 16px;
+    right: 16px;
+    transform: none;
+    text-align: center;
+  }
+
+  .room-360-instructions p {
+    font-size: 11px;
+    white-space: normal;
+  }
+}
+
+/* Fullscreen mode adjustments */
+.room-360-container:fullscreen {
+  max-width: none;
+  max-height: none;
+  border-radius: 0;
+}

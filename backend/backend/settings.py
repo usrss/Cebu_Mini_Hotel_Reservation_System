@@ -39,7 +39,10 @@ EMAIL_PORT          = 465
 EMAIL_HOST_USER     = config('EMAIL_HOST_USER')
 EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD')
 DEFAULT_FROM_EMAIL  = config('EMAIL_HOST_USER')
-
+# Used by confirmation email
+SITE_NAME           = 'CMH Hotel'
+SUPPORT_EMAIL       = config('EMAIL_HOST_USER')
+FRONTEND_URL        = 'http://localhost:5173'
 
 CORS_ALLOW_ALL_ORIGINS = True
 

@@ -8,7 +8,7 @@ from .models import Payment, Refund, PaymentStatus, PaymentType, PaymentMethod, 
 
 # ─── Guard helpers ────────────────────────────────────────────────────────────
 
-PAYABLE_BOOKING_STATUSES = [BookingStatus.AWAITING_PAYMENT, BookingStatus.CONFIRMED]
+PAYABLE_BOOKING_STATUSES = [BookingStatus.PENDING_PAYMENT, BookingStatus.CONFIRMED]
 
 
 def _assert_booking_payable(booking, user=None):

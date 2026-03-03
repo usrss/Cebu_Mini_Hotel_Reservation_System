@@ -12,7 +12,11 @@ import RoomDetailPage    from './features/rooms/RoomDetailPage';
 import AdminRoomsPage    from './features/rooms/AdminRoomsPage';
 import { bookingRoutes } from './features/bookings/BookingRoutes';
 import { paymentRoutes } from './features/payments/PaymentRoutes.jsx';
+import HotelHomepage from "./features/home/HotelHomepage.jsx";
+
 import './App.css';
+
+
 
 function App() {
   return (
@@ -53,10 +57,7 @@ function App() {
         {paymentRoutes}
 
         {/* ── Default & 404 ────────────────────────────────────────────── */}
-        <Route
-          path="/"
-          element={<Navigate to={isAuthenticated() ? "/dashboard" : "/login"} replace />}
-        />
+        <Route path="/" element={<HotelHomepage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
 
       </Routes>

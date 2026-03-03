@@ -1,0 +1,1336 @@
+/* ============================================================
+   HotelHomepage.css
+   Cebu Mini Hotel — Luxury Dark Theme
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&family=Raleway:wght@300;400;500;600;700&display=swap');
+
+/* ── CSS Variables ─────────────────────────────────────────── */
+:root {
+  --navy:      #0A0E1A;
+  --navy-mid:  #0F1729;
+  --navy-light:#162040;
+  --gold:      #C9A84C;
+  --gold-l:    #E2C97E;
+  --white:     #F8F6F0;
+  --white-dim: rgba(248, 246, 240, 0.55);
+  --gold-dim:  rgba(201, 168, 76, 0.15);
+}
+
+/* ── Reset & Base ──────────────────────────────────────────── */
+*,
+*::before,
+*::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: Georgia, serif;
+  background: var(--navy);
+  color: var(--white);
+  overflow-x: hidden;
+}
+
+/* ── Page wrapper ──────────────────────────────────────────── */
+.hp-page {
+  background: var(--navy);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ============================================================
+   NAVBAR
+   ============================================================ */
+.hp-nav {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 26px 56px;
+  transition: all 0.35s ease;
+}
+
+.hp-nav.scrolled {
+  padding: 14px 56px;
+  background: rgba(10, 14, 26, 0.97);
+  border-bottom: 1px solid rgba(201, 168, 76, 0.2);
+  backdrop-filter: blur(20px);
+}
+
+/* Logo */
+.hp-nav-logo {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.hp-nav-logo-icon {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--gold);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--gold);
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.hp-nav-logo-text {
+  font-family: 'Playfair Display', serif;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  background: linear-gradient(90deg, #C9A84C, #E2C97E, #C9A84C, #E2C97E);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: shimmer 4s linear infinite;
+}
+
+/* Nav links */
+.hp-nav-links {
+  display: flex;
+  gap: 34px;
+  align-items: center;
+}
+
+.hp-nav-link {
+  color: rgba(248, 246, 240, 0.82);
+  text-decoration: none;
+  font-family: 'Raleway', sans-serif;
+  font-size: 12.5px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  font-weight: 500;
+  position: relative;
+  padding-bottom: 5px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: color 0.3s ease;
+}
+
+.hp-nav-link::after {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 0;
+  width: 0; height: 1.5px;
+  background: var(--gold);
+  transition: width 0.3s ease;
+}
+
+.hp-nav-link:hover,
+.hp-nav-link.active {
+  color: var(--gold);
+}
+
+.hp-nav-link:hover::after,
+.hp-nav-link.active::after {
+  width: 100%;
+}
+
+/* Nav action buttons */
+.hp-nav-actions {
+  display: flex;
+  gap: 11px;
+  align-items: center;
+}
+
+/* ============================================================
+   BUTTONS (shared)
+   ============================================================ */
+.btn-gold {
+  background: linear-gradient(135deg, #C9A84C, #E2C97E, #C9A84C);
+  background-size: 200%;
+  background-position: right;
+  color: var(--navy);
+  border: none;
+  font-family: 'Raleway', sans-serif;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-gold:hover {
+  background-position: left;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 28px rgba(201, 168, 76, 0.4);
+}
+
+.btn-gold.sm { padding: 10px 20px; font-size: 10.5px; }
+.btn-gold.md { padding: 14px 36px; font-size: 12px; }
+
+.btn-outline {
+  background: transparent;
+  color: var(--white);
+  border: 1px solid rgba(248, 246, 240, 0.45);
+  font-family: 'Raleway', sans-serif;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-outline:hover {
+  border-color: var(--gold);
+  color: var(--gold);
+  transform: translateY(-2px);
+}
+
+.btn-outline.sm { padding: 10px 20px; font-size: 10.5px; }
+.btn-outline.md { padding: 14px 36px; font-size: 12px; }
+
+/* ============================================================
+   HERO SECTION  — mirrors examples.motion.dev/react/scroll-zoom-hero
+   ============================================================ */
+
+/* Outer scroll container — 200vh gives the effect room to breathe */
+.hero-section {
+  height: 200vh;
+  position: relative;
+}
+
+/* Sticky frame — stays pinned while .hero-section scrolls past */
+.hero-sticky {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* Background motion.div — Framer Motion drives scale, opacity, filter */
+.hero-background {
+  position: absolute;
+  inset: 0;
+  will-change: transform, opacity, filter;
+}
+
+.hero-background img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  display: block;
+}
+
+/* Static dark gradient — always keeps text legible */
+.hero-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    165deg,
+    rgba(10, 14, 26, 0.72) 0%,
+    rgba(10, 14, 26, 0.38) 45%,
+    rgba(10, 14, 26, 0.80) 100%
+  );
+  z-index: 1;
+  pointer-events: none;
+}
+
+/* Decorative corner accents */
+.hp-hero-corner {
+  position: absolute;
+  width: 68px;
+  height: 68px;
+  z-index: 2;
+}
+.hp-hero-corner.tl {
+  top: 110px;
+  left: 54px;
+  border-top:  1px solid rgba(201, 168, 76, 0.38);
+  border-left: 1px solid rgba(201, 168, 76, 0.38);
+}
+.hp-hero-corner.br {
+  bottom: 54px;
+  right:  54px;
+  border-bottom: 1px solid rgba(201, 168, 76, 0.38);
+  border-right:  1px solid rgba(201, 168, 76, 0.38);
+}
+
+/* Content motion.div — Framer Motion drives y and opacity */
+.hero-content {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  padding: 40px;
+  z-index: 10;
+  will-change: transform, opacity;
+}
+
+.hp-hero-eyebrow {
+  font-family: 'Raleway', sans-serif;
+  font-size: 10.5px;
+  letter-spacing: 7px;
+  color: var(--gold);
+  text-transform: uppercase;
+  margin-bottom: 16px;
+  animation: heroIn 1s ease forwards;
+  animation-delay: 0.15s;
+  opacity: 0;
+}
+
+.hp-hero-title {
+  font-family: 'Playfair Display', serif;
+  font-size: clamp(50px, 7vw, 80px);
+  font-weight: 900;
+  color: var(--white);
+  line-height: 1.07;
+  margin-bottom: 16px;
+  animation: heroIn 1.2s ease forwards;
+  animation-delay: 0.3s;
+  opacity: 0;
+  text-shadow: 0 4px 40px rgba(0, 0, 0, 0.5);
+}
+
+.hp-hero-divider {
+  width: 76px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--gold), transparent);
+  margin: 0 auto 20px;
+  animation: heroIn 0.8s ease forwards;
+  animation-delay: 0.72s;
+  opacity: 0;
+}
+
+.hp-hero-subtitle {
+  font-family: 'Raleway', sans-serif;
+  font-size: 14px;
+  letter-spacing: 4px;
+  color: var(--white-dim);
+  font-weight: 300;
+  margin-bottom: 46px;
+  text-transform: uppercase;
+  animation: heroIn 1.2s ease forwards;
+  animation-delay: 0.58s;
+  opacity: 0;
+}
+
+.hp-hero-btns {
+  display: flex;
+  gap: 14px;
+  justify-content: center;
+  flex-wrap: wrap;
+  animation: heroIn 1.2s ease forwards;
+  animation-delay: 0.88s;
+  opacity: 0;
+}
+
+.hp-hero-scroll {
+  position: absolute;
+  bottom: 36px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  z-index: 11;
+}
+
+.hp-hero-scroll span {
+  font-family: 'Raleway', sans-serif;
+  font-size: 9px;
+  letter-spacing: 5px;
+  color: rgba(201, 168, 76, 0.45);
+  text-transform: uppercase;
+}
+
+.hp-hero-scroll-line {
+  width: 1px;
+  height: 34px;
+  background: linear-gradient(to bottom, rgba(201, 168, 76, 0.5), transparent);
+  animation: scrollBounce 2s ease-in-out infinite;
+}
+
+/* ── Reduced motion ── */
+@media (prefers-reduced-motion: reduce) {
+  .hero-section    { height: 100vh; }
+  .hero-sticky     { position: relative; }
+  .hero-background,
+  .hero-content    { will-change: auto; }
+  .hp-hero-eyebrow,
+  .hp-hero-title,
+  .hp-hero-divider,
+  .hp-hero-subtitle,
+  .hp-hero-btns    { animation: none; opacity: 1; }
+}
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+  .hp-hero-corner.tl { top: 80px;  left: 20px; }
+  .hp-hero-corner.br { bottom: 30px; right: 20px; }
+  .hero-content { padding: 0 24px; }
+}
+
+@media (min-width: 1440px) {
+  .hero-section { height: 250vh; }
+}
+
+/* ============================================================
+   SECTION COMMONS
+   ============================================================ */
+.hp-section {
+  padding: 110px 56px;
+}
+
+.hp-section.bg-navy     { background: var(--navy); }
+.hp-section.bg-navy-mid { background: var(--navy-mid); }
+
+.hp-section-header {
+  text-align: center;
+  margin-bottom: 70px;
+}
+
+.hp-section-eyebrow {
+  font-family: 'Raleway', sans-serif;
+  font-size: 11px;
+  letter-spacing: 6px;
+  color: var(--gold);
+  text-transform: uppercase;
+  margin-bottom: 14px;
+  display: block;
+}
+
+.hp-section-title {
+  font-family: 'Playfair Display', serif;
+  font-size: clamp(34px, 4vw, 52px);
+  color: var(--white);
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.hp-section-divider {
+  width: 60px; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--gold), transparent);
+  margin: 16px auto;
+}
+
+.hp-section-subtitle {
+  font-family: 'Raleway', sans-serif;
+  color: rgba(248, 246, 240, 0.42);
+  font-size: 15px;
+  letter-spacing: 0.5px;
+  max-width: 520px;
+  margin: 0 auto;
+  line-height: 1.7;
+}
+
+.hp-max {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+/* ============================================================
+   ROOMS CAROUSEL
+   ============================================================ */
+
+/*
+  Layout: 5 cards in the inner track; viewport shows cards 1-3.
+  Card width  = (viewport - 2 gaps) / 3
+  Track width = 5 × card + 4 × gap
+  Offset      = 1 × card + 1 × gap  (hides ghost-left card off-screen)
+*/
+:root {
+  --carousel-gap: 20px;
+  /* card width: 3 visible cards fill 100% of viewport */
+  --card-w: calc((100% - 2 * var(--carousel-gap)) / 3);
+  /* one slot = card + gap */
+  --slot-w: calc(var(--card-w) + var(--carousel-gap));
+}
+
+.hp-carousel-viewport {
+  overflow: hidden;
+  margin-bottom: 36px;
+}
+
+/*
+  Inner track: 5 cards.  Natural width = 5 × card + 4 × gap.
+  Resting translateX = -1 slot  →  ghost-left hidden, cards 0-2 visible.
+*/
+.hp-carousel-inner {
+  display: flex;
+  gap: var(--carousel-gap);
+  transform: translateX(calc(-1 * var(--slot-w)));
+  /* no transition at rest — applied only while sliding */
+  transition: none;
+  will-change: transform;
+}
+
+/* Slide NEXT → move one slot to the LEFT */
+.hp-carousel-inner.sliding-next {
+  transform: translateX(calc(-2 * var(--slot-w)));
+  transition: transform 0.44s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Slide PREV → snap back to neutral (one slot right) */
+.hp-carousel-inner.sliding-prev {
+  transform: translateX(0px);
+  transition: transform 0.44s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.hp-room-card {
+  flex: 0 0 var(--card-w);
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid rgba(201, 168, 76, 0.13);
+  transition: box-shadow 0.4s ease;
+  /* Don't use transform here — the track owns the sliding transform */
+}
+
+.hp-room-card:hover {
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.65),
+              0 0 0 1px rgba(201, 168, 76, 0.3);
+  border-color: rgba(201, 168, 76, 0.4);
+}
+
+.hp-room-card:hover .hp-room-btn  { opacity: 1; transform: translateY(0); }
+.hp-room-card:hover .hp-room-img  { transform: scale(1.06); }
+
+.hp-room-img-wrap { position: relative; overflow: hidden; }
+
+.hp-room-img {
+  width: 100%; height: 300px;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.6s ease;
+}
+
+.hp-room-gradient {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  background: linear-gradient(to top, rgba(10,14,26,0.96) 0%, transparent 100%);
+  padding: 52px 24px 24px;
+}
+
+.hp-room-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.hp-room-name {
+  font-family: 'Playfair Display', serif;
+  color: var(--white);
+  font-size: 20px;
+  font-weight: 700;
+  margin-bottom: 5px;
+}
+
+.hp-room-desc {
+  font-family: 'Raleway', sans-serif;
+  color: rgba(248, 246, 240, 0.48);
+  font-size: 12px;
+  margin-bottom: 9px;
+}
+
+.hp-room-price {
+  font-family: 'Playfair Display', serif;
+  color: var(--gold);
+  font-size: 22px;
+  font-weight: 700;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.hp-room-price-sub {
+  font-family: 'Raleway', sans-serif;
+  color: rgba(201, 168, 76, 0.52);
+  font-size: 9.5px;
+  letter-spacing: 2px;
+  display: block;
+}
+
+.hp-room-btn {
+  opacity: 0;
+  transform: translateY(10px);
+  transition: all 0.3s ease;
+  background: var(--gold);
+  color: var(--navy);
+  border: none;
+  padding: 11px 26px;
+  font-family: 'Raleway', sans-serif;
+  font-size: 10.5px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  font-weight: 700;
+  cursor: pointer;
+  margin-top: 12px;
+}
+
+.hp-room-btn:hover { background: var(--gold-l); }
+
+/* Carousel controls */
+.hp-carousel-controls {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 18px;
+}
+
+.hp-carousel-arrow {
+  background: rgba(201, 168, 76, 0.1);
+  border: 1px solid rgba(201, 168, 76, 0.32);
+  color: var(--gold);
+  width: 48px; height: 48px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+}
+
+.hp-carousel-arrow:hover {
+  background: var(--gold);
+  color: var(--navy);
+}
+
+.hp-carousel-dots {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.hp-carousel-dot {
+  height: 2px;
+  background: rgba(201, 168, 76, 0.25);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  width: 8px;
+  border: none;
+  padding: 0;
+}
+
+.hp-carousel-dot.active {
+  width: 24px;
+  background: var(--gold);
+}
+
+/* ============================================================
+   SERVICES
+   ============================================================ */
+.hp-services-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 22px;
+}
+
+.hp-svc-card {
+  overflow: hidden;
+  border: 1px solid rgba(201, 168, 76, 0.1);
+  transition: transform 0.4s ease, box-shadow 0.4s ease;
+}
+
+.hp-svc-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5),
+              0 0 0 1px rgba(201, 168, 76, 0.22);
+}
+
+.hp-svc-card:hover .hp-svc-img { transform: scale(1.08); }
+
+.hp-svc-img-wrap { position: relative; overflow: hidden; }
+
+.hp-svc-img {
+  width: 100%; height: 210px;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.6s ease;
+}
+
+.hp-svc-img-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(10,14,26,0.82) 0%, rgba(10,14,26,0.08) 55%);
+}
+
+.hp-svc-badge {
+  position: absolute;
+  top: 14px; right: 14px;
+  background: rgba(10, 14, 26, 0.78);
+  border: 1px solid rgba(201, 168, 76, 0.38);
+  width: 42px; height: 42px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 19px;
+  backdrop-filter: blur(8px);
+}
+
+.hp-svc-body {
+  padding: 26px;
+  background: var(--navy-light);
+}
+
+.hp-svc-title {
+  font-family: 'Playfair Display', serif;
+  color: var(--white);
+  font-size: 19px;
+  font-weight: 700;
+  margin-bottom: 9px;
+}
+
+.hp-svc-desc {
+  font-family: 'Raleway', sans-serif;
+  color: rgba(248, 246, 240, 0.48);
+  font-size: 13.5px;
+  line-height: 1.75;
+}
+
+.hp-svc-line {
+  margin-top: 16px;
+  width: 34px; height: 1px;
+  background: linear-gradient(90deg, var(--gold), transparent);
+}
+
+/* ============================================================
+   GALLERY
+   ============================================================ */
+.hp-gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: 250px 250px;
+  gap: 10px;
+}
+
+.hp-gal-item {
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+/* grid positions are set via inline style in JSX */
+.hp-gal-item:hover .hp-gal-img     { transform: scale(1.07); }
+.hp-gal-item:hover .hp-gal-overlay { opacity: 1; }
+
+.hp-gal-img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  transition: transform 0.6s ease;
+}
+
+.hp-gal-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(10, 14, 26, 0.6);
+  display: flex;
+  align-items: flex-end;
+  padding: 18px 20px;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  border-bottom: 2px solid rgba(201, 168, 76, 0.5);
+}
+
+.hp-gal-label {
+  font-family: 'Playfair Display', serif;
+  color: var(--white);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+/* ============================================================
+   REVIEWS
+   ============================================================ */
+.hp-reviews-summary {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 70px;
+  margin-bottom: 70px;
+  flex-wrap: wrap;
+}
+
+.hp-reviews-score {
+  text-align: center;
+}
+
+.hp-reviews-score-num {
+  font-family: 'Playfair Display', serif;
+  font-size: 80px;
+  font-weight: 900;
+  color: var(--gold);
+  line-height: 1;
+}
+
+.hp-reviews-score-label {
+  font-family: 'Raleway', sans-serif;
+  color: rgba(248, 246, 240, 0.32);
+  font-size: 10px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  margin-top: 8px;
+  display: block;
+}
+
+.hp-reviews-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 240px;
+}
+
+.hp-reviews-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.hp-reviews-bar-label {
+  font-family: 'Raleway', sans-serif;
+  color: rgba(248, 246, 240, 0.45);
+  font-size: 12px;
+  width: 88px;
+}
+
+.hp-reviews-bar-track {
+  flex: 1;
+  height: 3px;
+  background: rgba(201, 168, 76, 0.14);
+  border-radius: 2px;
+}
+
+.hp-reviews-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--gold), var(--gold-l));
+  border-radius: 2px;
+}
+
+.hp-reviews-bar-val {
+  font-family: 'Raleway', sans-serif;
+  color: var(--gold);
+  font-size: 12px;
+  font-weight: 700;
+  width: 26px;
+}
+
+.hp-reviews-count {
+  font-family: 'Raleway', sans-serif;
+  color: rgba(248, 246, 240, 0.28);
+  font-size: 10.5px;
+  letter-spacing: 2px;
+  margin-top: 4px;
+}
+
+.hp-reviews-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 22px;
+}
+
+.hp-rev-card {
+  background: rgba(15, 23, 41, 0.8);
+  border: 1px solid rgba(201, 168, 76, 0.13);
+  padding: 36px;
+  transition: all 0.4s ease;
+  backdrop-filter: blur(10px);
+  position: relative;
+}
+
+.hp-rev-card::before {
+  content: '"';
+  position: absolute;
+  top: 16px; right: 26px;
+  font-size: 110px;
+  line-height: 1;
+  color: rgba(201, 168, 76, 0.07);
+  font-family: 'Playfair Display', serif;
+}
+
+.hp-rev-card:hover {
+  border-color: rgba(201, 168, 76, 0.38);
+  transform: translateY(-4px);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.5);
+}
+
+.hp-rev-text {
+  font-family: Georgia, serif;
+  color: rgba(248, 246, 240, 0.76);
+  font-size: 14px;
+  line-height: 1.84;
+  margin-bottom: 24px;
+  font-style: italic;
+  margin-top: 16px;
+}
+
+.hp-rev-footer {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  border-top: 1px solid rgba(201, 168, 76, 0.1);
+  padding-top: 20px;
+}
+
+.hp-rev-avatar {
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--gold), #162040);
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Raleway', sans-serif;
+  font-weight: 700;
+  color: var(--white);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.hp-rev-name {
+  font-family: 'Playfair Display', serif;
+  color: var(--white);
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.hp-rev-meta {
+  font-family: 'Raleway', sans-serif;
+  color: rgba(201, 168, 76, 0.62);
+  font-size: 10.5px;
+  letter-spacing: 1px;
+}
+
+/* ============================================================
+   STAR RATING
+   ============================================================ */
+.hp-stars {
+  display: flex;
+  gap: 3px;
+}
+
+/* ============================================================
+   FAQs
+   ============================================================ */
+.hp-faq-list {
+  max-width: 780px;
+  margin: 0 auto;
+}
+
+.hp-faq-item {
+  border-bottom: 1px solid rgba(201, 168, 76, 0.11);
+  overflow: hidden;
+}
+
+.hp-faq-question {
+  width: 100%;
+  background: none;
+  border: none;
+  color: var(--white);
+  font-family: 'Playfair Display', serif;
+  font-size: 16.5px;
+  font-weight: 600;
+  text-align: left;
+  padding: 26px 0;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 18px;
+  transition: color 0.3s ease;
+}
+
+.hp-faq-question:hover { color: var(--gold); }
+
+.hp-faq-chevron {
+  flex-shrink: 0;
+  width: 26px; height: 26px;
+  border: 1px solid rgba(201, 168, 76, 0.38);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--gold);
+  font-size: 11px;
+  transition: transform 0.3s ease, background 0.3s ease;
+}
+
+.hp-faq-chevron.open {
+  transform: rotate(180deg);
+  background: rgba(201, 168, 76, 0.12);
+}
+
+.hp-faq-answer {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.45s ease, padding 0.3s ease;
+}
+
+.hp-faq-answer.open {
+  max-height: 220px;
+  padding-bottom: 22px;
+}
+
+.hp-faq-answer p {
+  font-family: 'Raleway', sans-serif;
+  color: rgba(248, 246, 240, 0.55);
+  font-size: 14.5px;
+  line-height: 1.82;
+  padding-right: 48px;
+}
+
+/* FAQ CTA strip */
+.hp-faq-cta {
+  text-align: center;
+  padding: 48px 40px;
+  border: 1px solid rgba(201, 168, 76, 0.13);
+  max-width: 680px;
+  margin: 68px auto 0;
+  background: rgba(201, 168, 76, 0.03);
+}
+
+.hp-faq-cta-title {
+  font-family: 'Playfair Display', serif;
+  color: var(--white);
+  font-size: 22px;
+  margin-bottom: 10px;
+}
+
+.hp-faq-cta-sub {
+  font-family: 'Raleway', sans-serif;
+  color: rgba(248, 246, 240, 0.4);
+  font-size: 13.5px;
+  margin-bottom: 26px;
+  letter-spacing: 0.5px;
+}
+
+.hp-faq-cta-btns {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+/* ============================================================
+   CONTACT SECTION
+   ============================================================ */
+.hp-contact-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 60px;
+  align-items: start;
+}
+
+.hp-contact-info-list {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  margin-bottom: 40px;
+}
+
+.hp-contact-info-item {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.hp-contact-icon {
+  width: 44px; height: 44px;
+  border: 1px solid rgba(201, 168, 76, 0.3);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+  background: rgba(201, 168, 76, 0.05);
+}
+
+.hp-contact-info-label {
+  font-family: 'Raleway', sans-serif;
+  color: rgba(201, 168, 76, 0.7);
+  font-size: 10px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.hp-contact-info-value {
+  font-family: 'Raleway', sans-serif;
+  color: rgba(248, 246, 240, 0.65);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.hp-contact-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.hp-contact-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.hp-contact-field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.hp-contact-field label {
+  font-family: 'Raleway', sans-serif;
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: rgba(201, 168, 76, 0.7);
+  font-weight: 600;
+}
+
+.hp-contact-input,
+.hp-contact-textarea {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(201, 168, 76, 0.2);
+  color: var(--white);
+  font-family: 'Raleway', sans-serif;
+  font-size: 14px;
+  padding: 13px 16px;
+  outline: none;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+  resize: none;
+}
+
+.hp-contact-input:focus,
+.hp-contact-textarea:focus {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.1);
+}
+
+.hp-contact-input::placeholder,
+.hp-contact-textarea::placeholder {
+  color: rgba(248, 246, 240, 0.25);
+}
+
+/* ============================================================
+   FOOTER
+   ============================================================ */
+.hp-footer {
+  background: #060A14;
+  border-top: 1px solid rgba(201, 168, 76, 0.26);
+  padding: 78px 56px 34px;
+}
+
+.hp-footer-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1.5fr;
+  gap: 52px;
+  max-width: 1200px;
+  margin: 0 auto 52px;
+}
+
+.hp-footer-brand-logo {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin-bottom: 16px;
+}
+
+.hp-footer-brand-icon {
+  width: 30px; height: 30px;
+  border: 1px solid var(--gold);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--gold);
+  font-size: 13px;
+}
+
+.hp-footer-brand-name {
+  font-family: 'Playfair Display', serif;
+  font-size: 14.5px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  background: linear-gradient(90deg, #C9A84C, #E2C97E, #C9A84C, #E2C97E);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: shimmer 4s linear infinite;
+}
+
+.hp-footer-desc {
+  font-family: 'Raleway', sans-serif;
+  color: rgba(248, 246, 240, 0.36);
+  font-size: 13.5px;
+  line-height: 1.85;
+  max-width: 260px;
+}
+
+.hp-footer-socials {
+  display: flex;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.hp-footer-social {
+  width: 32px; height: 32px;
+  border: 1px solid rgba(201, 168, 76, 0.28);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  font-size: 10px;
+  color: rgba(201, 168, 76, 0.55);
+  font-family: 'Raleway', sans-serif;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  transition: all 0.3s ease;
+  background: none;
+  border-radius: 0;
+}
+
+.hp-footer-social:hover {
+  background: rgba(201, 168, 76, 0.1);
+  color: var(--gold);
+  border-color: var(--gold);
+}
+
+.hp-footer-col-title {
+  font-family: 'Raleway', sans-serif;
+  color: var(--gold);
+  font-size: 10px;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  margin-bottom: 20px;
+  font-weight: 600;
+}
+
+.hp-footer-link {
+  color: rgba(248, 246, 240, 0.45);
+  text-decoration: none;
+  font-family: 'Raleway', sans-serif;
+  font-size: 13px;
+  letter-spacing: 1px;
+  display: block;
+  margin-bottom: 11px;
+  transition: color 0.3s ease;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  padding: 0;
+}
+
+.hp-footer-link:hover { color: var(--gold); }
+
+.hp-footer-contact-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 12px;
+  align-items: flex-start;
+}
+
+.hp-footer-contact-icon { font-size: 12px; margin-top: 2px; }
+
+.hp-footer-contact-text {
+  font-family: 'Raleway', sans-serif;
+  color: rgba(248, 246, 240, 0.38);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.hp-footer-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(201, 168, 76, 0.42), transparent);
+  max-width: 1200px;
+  margin: 0 auto 26px;
+}
+
+.hp-footer-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  max-width: 1200px;
+  margin: 0 auto;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.hp-footer-copy {
+  font-family: 'Raleway', sans-serif;
+  color: rgba(248, 246, 240, 0.2);
+  font-size: 11.5px;
+  letter-spacing: 2px;
+}
+
+.hp-footer-legal {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+/* ============================================================
+   SCROLL ANIMATIONS
+   ============================================================ */
+.fade-up {
+  opacity: 0;
+  transform: translateY(38px);
+  transition: opacity 0.8s ease, transform 0.8s ease;
+}
+
+.fade-up.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.s1 { transition-delay: 0.08s; }
+.s2 { transition-delay: 0.18s; }
+.s3 { transition-delay: 0.28s; }
+.s4 { transition-delay: 0.38s; }
+.s5 { transition-delay: 0.48s; }
+.s6 { transition-delay: 0.58s; }
+
+/* ============================================================
+   KEYFRAME ANIMATIONS
+   ============================================================ */
+@keyframes heroIn {
+  from { opacity: 0; transform: translateY(28px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position:  200% center; }
+}
+
+@keyframes scrollBounce {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(7px); }
+}
+
+/* ============================================================
+   RESPONSIVE
+   ============================================================ */
+@media (max-width: 1024px) {
+  .hp-nav { padding: 20px 32px; }
+  .hp-nav.scrolled { padding: 12px 32px; }
+  .hp-section { padding: 80px 32px; }
+  .hp-footer { padding: 60px 32px 28px; }
+  .hp-footer-grid { grid-template-columns: 1fr 1fr; gap: 36px; }
+  .hp-services-grid { grid-template-columns: repeat(2, 1fr); }
+  .hp-reviews-grid  { grid-template-columns: repeat(2, 1fr); }
+  .hp-contact-grid  { grid-template-columns: 1fr; gap: 40px; }
+}
+
+@media (max-width: 768px) {
+  .hp-nav-links { display: none; }
+  .hp-hero-title { font-size: 42px; }
+  .hp-carousel-track { flex-direction: column; }
+  .hp-room-card { flex: none; width: 100%; }
+  .hp-services-grid { grid-template-columns: 1fr; }
+  .hp-gallery-grid {
+    grid-template-columns: 1fr;
+    grid-template-rows: repeat(5, 200px);
+  }
+  .hp-gal-item.wide,
+  .hp-gal-item.tall { grid-column: auto; grid-row: auto; }
+  .hp-reviews-grid { grid-template-columns: 1fr; }
+  .hp-footer-grid  { grid-template-columns: 1fr; gap: 28px; }
+  .hp-contact-form-row { grid-template-columns: 1fr; }
+}

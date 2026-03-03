@@ -1,10 +1,5 @@
 /* Room Detail Page Styles */
 
-:root {
-  --text-muted: #9ca3af;
-  --border-color: #e5e7eb;
-}
-
 .room-detail-page {
   min-height: 100vh;
   background: linear-gradient(135deg, #f9fafb 0%, rgba(249, 250, 251, 0.5) 100%);
@@ -78,6 +73,43 @@
   box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
 }
 
+/* 360° Tour Button */
+.tour-360-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  padding: 16px 24px;
+  background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%);
+  color: white;
+  border: none;
+  border-radius: 16px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.2);
+}
+
+.tour-360-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 15px -3px rgba(79, 70, 229, 0.3);
+}
+
+.tour-360-button:active {
+  transform: translateY(0);
+}
+
+.tour-360-button svg {
+  animation: rotate 3s linear infinite;
+}
+
+@keyframes rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 .gallery-main {
   position: relative;
   height: 450px;
@@ -135,23 +167,6 @@
   font-size: 14px;
   font-weight: 600;
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-}
-
-.sidebar-divider {
-  height: 1px;
-  background: var(--border-color, #e5e7eb);
-  margin: 1.25rem 0;
-}
-
-.sidebar-booking-form {
-  /* no extra padding needed — BookingForm handles its own spacing */
-}
-
-.sidebar-note {
-  font-size: 0.8rem;
-  color: var(--text-muted, #9ca3af);
-  margin: 1rem 0 0;
-  text-align: center;
 }
 
 .status-available {

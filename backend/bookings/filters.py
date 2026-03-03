@@ -5,7 +5,7 @@ from .models import Booking, BookingStatus, PaymentStatus
 class BookingFilter(django_filters.FilterSet):
     """
     Filter set for the reception dashboard.
-    Field names match the Booking model: check_in, check_out, status.
+    Status choices updated to match the new two-phase booking flow.
     """
     status         = django_filters.MultipleChoiceFilter(choices=BookingStatus.choices)
     payment_status = django_filters.MultipleChoiceFilter(choices=PaymentStatus.choices)
@@ -18,6 +18,8 @@ class BookingFilter(django_filters.FilterSet):
     email          = django_filters.CharFilter(lookup_expr="icontains")
     created_from   = django_filters.DateTimeFilter(field_name="created_at", lookup_expr="gte")
     created_to     = django_filters.DateTimeFilter(field_name="created_at", lookup_expr="lte")
+    # Filter to quickly find bookings that have credentials (i.e. confirmed+)
+    has_credentials = django_filters.BooleanFilter(method="filter_has_credentials")
 
     class Meta:
         model  = Booking
@@ -27,4 +29,14 @@ class BookingFilter(django_filters.FilterSet):
             "check_out_from", "check_out_to",
             "room", "room_number", "email",
             "created_from", "created_to",
+            "has_credentials",
         ]
+
+    def filter_has_credentials(self, queryset, name, value):
+        """
+        has_credentials=true  → bookings with a reference_number (CONFIRMED+)
+        has_credentials=false → bookings without (PENDING_PAYMENT / EXPIRED / CANCELLED)
+        """
+        if value:
+            return queryset.exclude(reference_number__isnull=True).exclude(reference_number="")
+        return queryset.filter(reference_number__isnull=True)

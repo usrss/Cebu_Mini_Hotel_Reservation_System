@@ -5,21 +5,23 @@ import { useMyBookings } from '../hooks/useBookings';
 import './MyBookingsPage.css';
 
 const STATUS_CONFIG = {
-  awaiting_payment: { label: 'Awaiting Payment', className: 'status-awaiting' },
-  confirmed:        { label: 'Confirmed',         className: 'status-confirmed' },
-  checked_in:       { label: 'Checked In',        className: 'status-checkedin' },
-  checked_out:      { label: 'Checked Out',       className: 'status-checkedout' },
-  cancelled:        { label: 'Cancelled',         className: 'status-cancelled' },
-  no_show:          { label: 'No Show',           className: 'status-noshow' },
+  pending_payment: { label: 'Pending Payment', className: 'status-awaiting' },
+  confirmed:       { label: 'Confirmed',        className: 'status-confirmed' },
+  checked_in:      { label: 'Checked In',       className: 'status-checkedin' },
+  checked_out:     { label: 'Checked Out',      className: 'status-checkedout' },
+  cancelled:       { label: 'Cancelled',        className: 'status-cancelled' },
+  expired:         { label: 'Expired',          className: 'status-cancelled' },
+  no_show:         { label: 'No Show',          className: 'status-noshow' },
 };
 
 const STATUS_FILTERS = [
   { value: '',                label: 'All' },
-  { value: 'awaiting_payment', label: 'Awaiting Payment' },
-  { value: 'confirmed',        label: 'Confirmed' },
-  { value: 'checked_in',       label: 'Checked In' },
-  { value: 'checked_out',      label: 'Checked Out' },
-  { value: 'cancelled',        label: 'Cancelled' },
+  { value: 'pending_payment', label: 'Pending Payment' },
+  { value: 'confirmed',       label: 'Confirmed' },
+  { value: 'checked_in',      label: 'Checked In' },
+  { value: 'checked_out',     label: 'Checked Out' },
+  { value: 'cancelled',       label: 'Cancelled' },
+  { value: 'expired',         label: 'Expired' },
 ];
 
 function formatPrice(amount) {
@@ -108,7 +110,7 @@ export default function MyBookingsPage() {
 }
 
 function BookingCard({ booking }) {
-  const statusCfg = STATUS_CONFIG[booking.status] || STATUS_CONFIG.awaiting_payment;
+  const statusCfg = STATUS_CONFIG[booking.status] || STATUS_CONFIG.pending_payment;
 
   return (
     <Link to={`/bookings/my/${booking.id}`} className="booking-card">

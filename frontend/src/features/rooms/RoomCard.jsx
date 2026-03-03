@@ -1,3 +1,4 @@
+// current file with 360° badge added
 import { Link } from 'react-router-dom';
 import { Users, Bed, Maximize2, ArrowRight } from 'lucide-react';
 import './RoomCard.css';
@@ -14,6 +15,7 @@ export default function RoomCard({ room }) {
     status_display,
     size_sqm,
     primary_image,
+    panorama_image_url, // NEW: for 360° badge
   } = room;
 
   return (
@@ -43,6 +45,13 @@ export default function RoomCard({ room }) {
         <div className={`room-card-status status-${status}`}>
           {status_display}
         </div>
+
+        {/* NEW: 360° Available badge */}
+        {panorama_image_url && (
+          <div className="room-card-360-badge">
+            360° Available
+          </div>
+        )}
       </Link>
 
       {/* Content */}

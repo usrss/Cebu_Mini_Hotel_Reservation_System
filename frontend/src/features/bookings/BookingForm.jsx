@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Calendar, Users, User, Mail, Phone, CreditCard, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Calendar, Users, User, Mail, Phone, CreditCard, AlertCircle, Clock } from 'lucide-react';
 import { useCreateBooking, useCurrentUser } from '../hooks/useBookings';
 import './BookingForm.css';
 
@@ -20,7 +20,7 @@ export default function BookingForm({ room, prefillCheckIn, prefillCheckOut }) {
   const navigate = useNavigate();
   const { createBooking, loading, error } = useCreateBooking();
 
-  // ✅ Fetch logged-in user internally — no need to pass as prop
+  // Fetch logged-in user internally
   const { user, loading: userLoading } = useCurrentUser();
 
   const [form, setForm] = useState({
@@ -33,8 +33,7 @@ export default function BookingForm({ room, prefillCheckIn, prefillCheckOut }) {
   });
   const [fieldErrors, setFieldErrors] = useState({});
 
-  // ✅ Auto-fill guest fields once user data loads
-  // Field names match what api.js stores: { full_name, email, phone_number, ... }
+  // Auto-fill guest fields once user data loads
   useEffect(() => {
     if (user) {
       setForm((prev) => ({
@@ -69,7 +68,6 @@ export default function BookingForm({ room, prefillCheckIn, prefillCheckOut }) {
     if (!form.check_out) errs.check_out   = 'Check-out date is required.';
     if (!form.guests_count || form.guests_count < 1) errs.guests_count = 'At least 1 guest required.';
     if (form.guests_count > room.capacity) errs.guests_count = `Max capacity is ${room.capacity}.`;
-    // Always validate guest fields — they're always visible
     if (!form.full_name.trim()) errs.full_name = 'Full name is required.';
     if (!form.email.trim())     errs.email     = 'Email is required.';
     if (!form.phone.trim())     errs.phone     = 'Phone number is required.';
@@ -85,7 +83,6 @@ export default function BookingForm({ room, prefillCheckIn, prefillCheckOut }) {
       check_in:     form.check_in,
       check_out:    form.check_out,
       guests_count: Number(form.guests_count),
-      // ✅ Always send guest info — backend uses it for the booking snapshot
       full_name:    form.full_name,
       email:        form.email,
       phone:        form.phone,
@@ -93,7 +90,9 @@ export default function BookingForm({ room, prefillCheckIn, prefillCheckOut }) {
 
     const booking = await createBooking(payload);
     if (booking) {
-      navigate(`/bookings/confirmation/${booking.id}`, { state: { booking } });
+      // Phase 1 complete: booking is PENDING_PAYMENT.
+      // Navigate to payment page — confirmation page is only shown after payment.
+      navigate(`/payments/${booking.id}`, { state: { booking } });
     }
   };
 
@@ -163,7 +162,7 @@ export default function BookingForm({ room, prefillCheckIn, prefillCheckOut }) {
         <p className="booking-capacity-hint">Max capacity: {room.capacity} guest{room.capacity !== 1 ? 's' : ''}</p>
       </FormSection>
 
-      {/* ✅ Guest Info — ALWAYS shown, pre-filled when logged in, editable either way */}
+      {/* Guest Info */}
       <FormSection
         title="Guest Information"
         icon={<User size={16} />}
@@ -177,10 +176,7 @@ export default function BookingForm({ room, prefillCheckIn, prefillCheckOut }) {
         ) : (
           <div className="booking-guest-info">
             <div className="booking-field">
-              <label>
-                <User size={14} />
-                Full Name
-              </label>
+              <label><User size={14} /> Full Name</label>
               <input
                 type="text"
                 placeholder="Maria Santos"
@@ -190,12 +186,8 @@ export default function BookingForm({ room, prefillCheckIn, prefillCheckOut }) {
               />
               {fieldErrors.full_name && <span className="field-error">{fieldErrors.full_name}</span>}
             </div>
-
             <div className="booking-field">
-              <label>
-                <Mail size={14} />
-                Email
-              </label>
+              <label><Mail size={14} /> Email</label>
               <input
                 type="email"
                 placeholder="maria@example.com"
@@ -205,12 +197,8 @@ export default function BookingForm({ room, prefillCheckIn, prefillCheckOut }) {
               />
               {fieldErrors.email && <span className="field-error">{fieldErrors.email}</span>}
             </div>
-
             <div className="booking-field">
-              <label>
-                <Phone size={14} />
-                Phone
-              </label>
+              <label><Phone size={14} /> Phone</label>
               <input
                 type="tel"
                 placeholder="+63 912 345 6789"
@@ -274,14 +262,16 @@ export default function BookingForm({ room, prefillCheckIn, prefillCheckOut }) {
           </span>
         ) : (
           <>
-            <CheckCircle2 size={18} />
-            Confirm Booking
+            <CreditCard size={18} />
+            Proceed to Payment
           </>
         )}
       </button>
 
       <p className="booking-disclaimer">
-        You'll have 30 minutes to complete payment before this booking expires.
+        <Clock size={12} style={{ display: 'inline', marginRight: 4 }} />
+        Your room will be held for {30} minutes while you complete payment.
+        Reference number and check-in PIN are issued after payment is confirmed.
       </p>
     </div>
   );

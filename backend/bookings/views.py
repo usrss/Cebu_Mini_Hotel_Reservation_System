@@ -12,11 +12,13 @@ from .serializers import (
     BookingListSerializer,
     BookingDetailSerializer,
     BookingCreateSerializer,
+    BookingConfirmSerializer,
     BookingStatusUpdateSerializer,
     CheckInVerifySerializer,
     BookingCancelSerializer,
 )
 from .filters import BookingFilter
+from .permissions import IsOwnerOrStaff
 
 
 # ─── Public / Guest ───────────────────────────────────────────────────────────
@@ -24,8 +26,13 @@ from .filters import BookingFilter
 class BookingCreateView(APIView):
     """
     POST /api/bookings/
-    Creates a booking for authenticated users or anonymous guests.
-    Price is always calculated server-side. Uses DB transaction + SELECT FOR UPDATE.
+
+    Phase 1 — Creates a PENDING_PAYMENT booking.
+    - Checks room availability and locks it for PAYMENT_WINDOW_MINUTES.
+    - Does NOT generate reference_number, QR code, or checkin_pin.
+    - Returns booking id + total_price + payment_deadline for the payment UI.
+
+    Phase 2 (CONFIRMED) happens via BookingConfirmView after payment succeeds.
     """
     permission_classes = [AllowAny]
 
@@ -43,21 +50,61 @@ class BookingCreateView(APIView):
 class BookingLookupView(APIView):
     """
     GET /api/bookings/lookup/?reference=CMH-2026-000001
-    Allows guests to retrieve their booking by reference number.
+
+    Guests can retrieve their confirmed booking by reference number.
+    reference_number only exists on CONFIRMED (and beyond) bookings, so
+    this endpoint naturally cannot expose PENDING_PAYMENT bookings.
     """
     permission_classes = [AllowAny]
 
     def get(self, request):
         ref = request.query_params.get("reference", "").strip()
         if not ref:
-            return Response({"error": "reference query param is required."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "reference query param is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         try:
-            booking = Booking.objects.select_related("room").prefetch_related("status_history").get(
-                reference_number=ref
+            booking = (
+                Booking.objects
+                .select_related("room")
+                .prefetch_related("status_history")
+                .get(reference_number=ref)   # NULL reference_number never matches
             )
         except Booking.DoesNotExist:
             return Response({"error": "Booking not found."}, status=status.HTTP_404_NOT_FOUND)
         return Response(BookingDetailSerializer(booking).data)
+
+
+# ─── Payment confirmation (Phase 2) ──────────────────────────────────────────
+
+class BookingConfirmView(APIView):
+    """
+    POST /api/bookings/<id>/confirm/
+
+    Called ONLY by the payments app (or a payment webhook handler) after
+    verifying a successful payment.  Transitions PENDING_PAYMENT → CONFIRMED
+    and generates the reference_number, QR code, and checkin_pin.
+
+    This is the sole entry-point for credential generation.
+    Requires IsStaffOrAdmin or a dedicated payments service permission.
+    """
+    permission_classes = [IsStaffOrAdmin]
+
+    def post(self, request, pk):
+        try:
+            booking = Booking.objects.get(pk=pk)
+        except Booking.DoesNotExist:
+            return Response({"error": "Booking not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = BookingConfirmSerializer(
+            data={},
+            context={"booking": booking, "request": request},
+        )
+        if serializer.is_valid():
+            booking = serializer.save()
+            return Response(BookingDetailSerializer(booking).data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 # ─── Authenticated user: my bookings ─────────────────────────────────────────
@@ -100,6 +147,7 @@ class MyBookingCancelView(APIView):
     """
     POST /api/bookings/my/<id>/cancel/
     User cancels their own booking. Refund calculated automatically.
+    Only PENDING_PAYMENT and CONFIRMED bookings can be cancelled.
     """
     permission_classes = [IsAuthenticated]
 
@@ -125,7 +173,6 @@ class ReceptionBookingListView(generics.ListAPIView):
     """
     GET /api/bookings/admin/
     All bookings. Filterable by status, dates, room, guest name/email.
-    Searchable by reference_number, full_name, email.
     """
     serializer_class   = BookingListSerializer
     permission_classes = [IsStaffOrAdmin]
@@ -157,7 +204,8 @@ class ReceptionBookingStatusView(APIView):
     """
     PATCH /api/bookings/admin/<id>/status/
     Staff: manually transition a booking's status.
-    Body: { "status": "confirmed", "note": "optional note" }
+    NOTE: To confirm after payment use /admin/<id>/confirm/ instead.
+    Body: { "status": "checked_in", "note": "optional note" }
     """
     permission_classes = [IsStaffOrAdmin]
 
@@ -181,6 +229,7 @@ class ReceptionCheckInVerifyView(APIView):
     """
     POST /api/bookings/admin/check-in/verify/
     Reception verifies reference + PIN then marks booking CHECKED_IN.
+    Only CONFIRMED bookings with valid credentials can pass.
     Body: { "reference_number": "CMH-2026-000001", "checkin_pin": "4821" }
     """
     permission_classes = [IsStaffOrAdmin]
@@ -206,6 +255,7 @@ class ReceptionCancelBookingView(APIView):
     """
     POST /api/bookings/admin/<id>/cancel/
     Staff cancels a booking with optional reason.
+    Works for both PENDING_PAYMENT and CONFIRMED bookings.
     """
     permission_classes = [IsStaffOrAdmin]
 
@@ -230,8 +280,9 @@ class ReceptionCancelBookingView(APIView):
 class ExpireBookingsView(APIView):
     """
     POST /api/bookings/admin/expire/
-    Cancels all AWAITING_PAYMENT / PENDING bookings older than 30 minutes.
+    Cancels all PENDING_PAYMENT bookings older than PAYMENT_WINDOW_MINUTES.
     Intended to be called by Celery beat or a cron job.
+    No reference_number or PIN was ever generated for these bookings.
     """
     permission_classes = [IsStaffOrAdmin]
 
@@ -240,36 +291,44 @@ class ExpireBookingsView(APIView):
         return Response({"expired": count})
 
 
-# ─── Utility (also callable from management command / Celery task) ─────────────
+# ─── Utility (callable from management command / Celery task) ─────────────────
 
 def expire_unpaid_bookings():
     """
-    Cancels unpaid bookings that have exceeded the 30-minute payment window.
+    Expires PENDING_PAYMENT bookings that exceeded the payment window.
     Safe to call from management commands, Celery tasks, or the API view above.
+    Guarantees: no reference_number or checkin_pin is ever generated for expired bookings.
     """
     from datetime import timedelta
 
-    cutoff = timezone.now() - timedelta(minutes=30)
+    cutoff = timezone.now() - timedelta(minutes=Booking.PAYMENT_WINDOW_MINUTES)
 
     with transaction.atomic():
         expired = Booking.objects.filter(
-            status__in=[BookingStatus.AWAITING_PAYMENT, BookingStatus.PENDING],
+            status=BookingStatus.PENDING_PAYMENT,
             created_at__lt=cutoff,
         )
         ids = list(expired.values_list("id", flat=True))
 
         expired.update(
-            status              = BookingStatus.CANCELLED,
+            status              = BookingStatus.EXPIRED,
             cancelled_at        = timezone.now(),
-            cancellation_reason = "Auto-cancelled: payment not received within 30 minutes.",
+            cancellation_reason = (
+                f"Auto-expired: payment not received within "
+                f"{Booking.PAYMENT_WINDOW_MINUTES} minutes."
+            ),
         )
 
         BookingStatusHistory.objects.bulk_create([
             BookingStatusHistory(
                 booking_id = bid,
-                old_status = BookingStatus.AWAITING_PAYMENT,
-                new_status = BookingStatus.CANCELLED,
-                note       = "Payment timeout — auto-cancelled by system.",
+                old_status = BookingStatus.PENDING_PAYMENT,
+                new_status = BookingStatus.EXPIRED,
+                note       = (
+                    f"Payment timeout — auto-expired by system after "
+                    f"{Booking.PAYMENT_WINDOW_MINUTES} minutes. "
+                    f"No credentials were generated."
+                ),
             )
             for bid in ids
         ])

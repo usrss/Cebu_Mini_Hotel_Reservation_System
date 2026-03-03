@@ -1,4 +1,5 @@
-import { useState } from 'react';
+// current file with 360° viewer added
+import { useState, lazy, Suspense } from 'react';
 import { useParams, Link, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -8,10 +9,14 @@ import {
   ChevronLeft,
   ChevronRight,
   CheckCircle2,
+  RotateCw, // NEW: for 360° button
 } from 'lucide-react';
 import { useRoomDetail } from '../hooks/useRooms';
 import BookingForm from '../bookings/BookingForm';
 import './RoomDetailPage.css';
+
+// NEW: Lazy load 360 viewer - only loads when button is clicked
+const Room360Viewer = lazy(() => import('./Room360Viewer'));
 
 const STATUS_CONFIG = {
   available:   { label: 'Available',         className: 'status-available' },
@@ -24,6 +29,7 @@ export default function RoomDetailPage() {
   const [searchParams]   = useSearchParams();
   const { room, loading, error } = useRoomDetail(id);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const [show360Viewer, setShow360Viewer] = useState(false); // NEW: 360 viewer state
 
   if (loading) return <LoadingSkeleton />;
 
@@ -129,6 +135,17 @@ export default function RoomDetailPage() {
               )}
             </div>
 
+            {/* NEW: 360° Virtual Tour Button */}
+            {room.panorama_image_url && (
+              <button
+                onClick={() => setShow360Viewer(true)}
+                className="tour-360-button"
+              >
+                <RotateCw size={20} />
+                <span>View 360° Virtual Tour</span>
+              </button>
+            )}
+
             {/* Room Info Card */}
             <div className="info-card">
               <div className="info-header">
@@ -221,6 +238,17 @@ export default function RoomDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* NEW: 360° Viewer Modal - Lazy Loaded */}
+      {show360Viewer && room.panorama_image_url && (
+        <Suspense fallback={null}>
+          <Room360Viewer
+            imageUrl={room.panorama_image_url}
+            roomName={`${room.room_type_display} Room ${room.room_number}`}
+            onClose={() => setShow360Viewer(false)}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }

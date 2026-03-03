@@ -9,21 +9,21 @@ from django.core.validators import MinValueValidator
 # ─── Enums ────────────────────────────────────────────────────────────────────
 
 class BookingStatus(models.TextChoices):
-    PENDING         = "pending",         "Pending"           # alias kept for rooms.is_available_for_dates()
-    AWAITING_PAYMENT = "awaiting_payment", "Awaiting Payment"
-    CONFIRMED       = "confirmed",       "Confirmed"
+    PENDING_PAYMENT = "pending_payment", "Pending Payment"   # Created, awaiting payment
+    CONFIRMED       = "confirmed",       "Confirmed"          # Payment received — credentials generated
     CHECKED_IN      = "checked_in",      "Checked In"
     CHECKED_OUT     = "checked_out",     "Checked Out"
-    CANCELLED       = "cancelled",       "Cancelled"
+    EXPIRED         = "expired",         "Expired"            # Payment window elapsed
+    CANCELLED       = "cancelled",       "Cancelled"          # Explicitly cancelled
     NO_SHOW         = "no_show",         "No Show"
 
 
 class PaymentStatus(models.TextChoices):
-    UNPAID              = "unpaid",             "Unpaid"
-    PAID                = "paid",               "Paid"
-    REFUNDED            = "refunded",           "Refunded"
-    PARTIALLY_REFUNDED  = "partially_refunded", "Partially Refunded"
-    FAILED              = "failed",             "Failed"
+    UNPAID             = "unpaid",             "Unpaid"
+    PAID               = "paid",               "Paid"
+    REFUNDED           = "refunded",           "Refunded"
+    PARTIALLY_REFUNDED = "partially_refunded", "Partially Refunded"
+    FAILED             = "failed",             "Failed"
 
 
 class RefundStatus(models.TextChoices):
@@ -36,19 +36,24 @@ class RefundStatus(models.TextChoices):
 # ─── Status transition map ────────────────────────────────────────────────────
 
 ALLOWED_TRANSITIONS = {
-    BookingStatus.AWAITING_PAYMENT: [BookingStatus.CONFIRMED, BookingStatus.CANCELLED],
-    BookingStatus.PENDING:          [BookingStatus.CONFIRMED, BookingStatus.CANCELLED],
-    BookingStatus.CONFIRMED:        [BookingStatus.CHECKED_IN, BookingStatus.CANCELLED, BookingStatus.NO_SHOW],
-    BookingStatus.CHECKED_IN:       [BookingStatus.CHECKED_OUT],
-    BookingStatus.CHECKED_OUT:      [],
-    BookingStatus.CANCELLED:        [],
-    BookingStatus.NO_SHOW:          [],
+    BookingStatus.PENDING_PAYMENT: [BookingStatus.CONFIRMED, BookingStatus.CANCELLED, BookingStatus.EXPIRED],
+    BookingStatus.CONFIRMED:       [BookingStatus.CHECKED_IN, BookingStatus.CANCELLED, BookingStatus.NO_SHOW],
+    BookingStatus.CHECKED_IN:      [BookingStatus.CHECKED_OUT],
+    BookingStatus.CHECKED_OUT:     [],
+    BookingStatus.EXPIRED:         [],
+    BookingStatus.CANCELLED:       [],
+    BookingStatus.NO_SHOW:         [],
 }
 
 # Statuses that block a room from being booked — must match rooms.is_available_for_dates()
 BLOCKING_STATUSES = [
-    BookingStatus.AWAITING_PAYMENT,
-    BookingStatus.PENDING,
+    BookingStatus.PENDING_PAYMENT,
+    BookingStatus.CONFIRMED,
+    BookingStatus.CHECKED_IN,
+]
+
+# Statuses that are considered "access-granted" — only these may check in
+ACCESS_GRANTED_STATUSES = [
     BookingStatus.CONFIRMED,
     BookingStatus.CHECKED_IN,
 ]
@@ -57,7 +62,10 @@ BLOCKING_STATUSES = [
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
 def generate_reference_number():
-    """Generate unique booking reference like CMH-2026-000124."""
+    """
+    Generate a unique customer-facing reference like CMH-2026-000124.
+    MUST only be called after successful payment confirmation.
+    """
     year = timezone.now().year
     while True:
         seq = random.randint(1, 999999)
@@ -67,7 +75,10 @@ def generate_reference_number():
 
 
 def generate_checkin_pin():
-    """Generate a secure 4-digit numeric PIN."""
+    """
+    Generate a secure 4-digit numeric PIN.
+    MUST only be called after successful payment confirmation.
+    """
     return f"{random.randint(1000, 9999)}"
 
 
@@ -77,15 +88,51 @@ class Booking(models.Model):
     """
     Core booking record. Single source of truth for reservation state.
 
-    Field naming convention deliberately matches rooms.Room.is_available_for_dates():
+    ── Two-phase booking design ──────────────────────────────────────────────
+    Phase 1 — Creation (PENDING_PAYMENT):
+      • Internal `id` is assigned by the DB.
+      • `reference_number`, `checkin_pin` are NULL — not yet generated.
+      • Room is soft-blocked via BLOCKING_STATUSES.
+      • A payment window timer starts (PAYMENT_WINDOW_MINUTES).
+
+    Phase 2 — Confirmation (CONFIRMED):
+      • Payment is verified externally (payments app).
+      • `reference_number` is generated and stored.
+      • `checkin_pin` is generated and stored.
+      • Room remains hard-locked for the booked dates.
+      • Confirmation notification is triggered via signal.
+
+    Access credentials (reference_number, checkin_pin) are NEVER present
+    on PENDING_PAYMENT, EXPIRED, or CANCELLED bookings.
+
+    Field naming deliberately matches rooms.Room.is_available_for_dates():
       - check_in  (DateField)
       - check_out (DateField)
       - status    (CharField)
     """
 
-    # Reference & PIN
-    reference_number = models.CharField(max_length=20, unique=True, editable=False)
-    checkin_pin      = models.CharField(max_length=4, editable=False)
+    # Payment window — room is held this many minutes before auto-expiry
+    PAYMENT_WINDOW_MINUTES = 30
+
+    # ── Internal ID (never exposed to guests before confirmation) ──────────
+    # reference_number is NULL until payment is confirmed
+    reference_number = models.CharField(
+        max_length=20,
+        unique=True,
+        null=True,
+        blank=True,
+        editable=False,
+        help_text="Generated ONLY after payment is confirmed. NULL for pending/expired bookings.",
+    )
+
+    # checkin_pin is NULL until payment is confirmed
+    checkin_pin = models.CharField(
+        max_length=4,
+        null=True,
+        blank=True,
+        editable=False,
+        help_text="Generated ONLY after payment is confirmed. NULL for pending/expired bookings.",
+    )
 
     # Relations
     user = models.ForeignKey(
@@ -112,24 +159,30 @@ class Booking(models.Model):
     nights       = models.PositiveIntegerField()
     guests_count = models.PositiveIntegerField(validators=[MinValueValidator(1)])
 
-    # Price snapshot (immutable after creation — never recalculate from room table)
+    # Price snapshot (immutable after creation)
     room_price_snapshot = models.DecimalField(max_digits=10, decimal_places=2)
     subtotal            = models.DecimalField(max_digits=10, decimal_places=2)
     tax                 = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     service_fee         = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     total_price         = models.DecimalField(max_digits=10, decimal_places=2)
 
-    # Status — field name matches rooms.is_available_for_dates() filter on `status`
+    # Status
     status = models.CharField(
         max_length=20,
         choices=BookingStatus.choices,
-        default=BookingStatus.AWAITING_PAYMENT,
+        default=BookingStatus.PENDING_PAYMENT,
         db_index=True,
     )
     payment_status = models.CharField(
         max_length=20,
         choices=PaymentStatus.choices,
         default=PaymentStatus.UNPAID,
+    )
+
+    # Confirmation timestamps
+    confirmed_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="Set when booking transitions to CONFIRMED after payment.",
     )
 
     # Cancellation / refund
@@ -155,7 +208,6 @@ class Booking(models.Model):
             models.Index(fields=["status"]),
             models.Index(fields=["check_in", "check_out"]),
             models.Index(fields=["email"]),
-            # PostgreSQL partial index — fast lookup of active bookings only
             models.Index(
                 fields=["room", "check_in", "check_out"],
                 name="bookings_room_dates_idx",
@@ -163,7 +215,30 @@ class Booking(models.Model):
         ]
 
     def __str__(self):
-        return f"Booking {self.reference_number} — {self.full_name}"
+        ref = self.reference_number or f"(pending #{self.pk})"
+        return f"Booking {ref} — {self.full_name}"
+
+    # ── Credential helpers ─────────────────────────────────────────────────
+
+    @property
+    def has_credentials(self):
+        """True only when reference_number and checkin_pin are both present."""
+        return bool(self.reference_number and self.checkin_pin)
+
+    @property
+    def payment_deadline(self):
+        """Datetime by which payment must be completed."""
+        return self.created_at + timedelta(minutes=self.PAYMENT_WINDOW_MINUTES)
+
+    @property
+    def is_expired(self):
+        """
+        True if still in PENDING_PAYMENT and the payment window has elapsed.
+        Does NOT apply to any other status.
+        """
+        if self.status != BookingStatus.PENDING_PAYMENT:
+            return False
+        return timezone.now() > self.payment_deadline
 
     # ── Lifecycle ──────────────────────────────────────────────────────────
 
@@ -188,18 +263,62 @@ class Booking(models.Model):
         )
         return self
 
+    def confirm_after_payment(self, changed_by=None):
+        """
+        Called exclusively by the payments app after a successful payment.
+        Generates credentials and transitions to CONFIRMED.
+        This is the ONLY place reference_number and checkin_pin are created.
+        """
+        if self.status != BookingStatus.PENDING_PAYMENT:
+            raise ValueError(
+                f"Cannot confirm booking with status '{self.status}'. "
+                "Only PENDING_PAYMENT bookings can be confirmed."
+            )
+        if self.is_expired:
+            raise ValueError(
+                "Cannot confirm booking: payment window has expired."
+            )
+
+        # Generate access credentials — only here, only after payment
+        self.reference_number = generate_reference_number()
+        self.checkin_pin      = generate_checkin_pin()
+        self.status           = BookingStatus.CONFIRMED
+        self.payment_status   = PaymentStatus.PAID
+        self.confirmed_at     = timezone.now()
+
+        self.save(update_fields=[
+            "reference_number", "checkin_pin",
+            "status", "payment_status", "confirmed_at", "updated_at",
+        ])
+
+        BookingStatusHistory.objects.create(
+            booking    = self,
+            old_status = BookingStatus.PENDING_PAYMENT,
+            new_status = BookingStatus.CONFIRMED,
+            changed_by = changed_by,
+            note       = "Payment confirmed. Reference number and check-in credentials generated.",
+        )
+        return self
+
     # ── Cancellation / refund ──────────────────────────────────────────────
 
     def compute_refund(self):
         """
-        Returns (refund_percentage, refund_amount) based on policy:
+        Returns (refund_percentage, refund_amount) based on policy.
+        Only CONFIRMED bookings are eligible for a refund (payment was made).
+        PENDING_PAYMENT cancellations never have a refund.
           ≥ 48 h before check-in  → 90 %
           <  48 h before check-in → 50 %
           Same day / past         →  0 %
         """
         from decimal import Decimal
-        now_date     = timezone.now().date()
-        hours_until  = (self.check_in - now_date).total_seconds() / 3600
+
+        # No refund if payment was never received
+        if self.payment_status != PaymentStatus.PAID:
+            return Decimal("0"), Decimal("0")
+
+        now_date    = timezone.now().date()
+        hours_until = (self.check_in - now_date).total_seconds() / 3600
 
         if hours_until >= 48:
             pct = Decimal("90")
@@ -210,14 +329,6 @@ class Booking(models.Model):
 
         amount = (self.total_price * pct / 100).quantize(Decimal("0.01"))
         return pct, amount
-
-    # ── Expiration ─────────────────────────────────────────────────────────
-
-    @property
-    def is_expired(self):
-        if self.status not in (BookingStatus.AWAITING_PAYMENT, BookingStatus.PENDING):
-            return False
-        return timezone.now() > self.created_at + timedelta(minutes=30)
 
 
 # ─── Status History ───────────────────────────────────────────────────────────
@@ -241,4 +352,5 @@ class BookingStatusHistory(models.Model):
         ordering = ["-changed_at"]
 
     def __str__(self):
-        return f"{self.booking.reference_number}: {self.old_status} → {self.new_status}"
+        ref = self.booking.reference_number or f"(pending #{self.booking_id})"
+        return f"{ref}: {self.old_status} → {self.new_status}"

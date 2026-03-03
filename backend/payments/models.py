@@ -7,8 +7,6 @@ from django.utils import timezone
 from django.core.validators import MinValueValidator
 
 
-# ─── Enums ────────────────────────────────────────────────────────────────────
-
 class PaymentProvider(models.TextChoices):
     PAYMONGO = "paymongo", "PayMongo"
     PAYPAL   = "paypal",   "PayPal"
@@ -39,13 +37,10 @@ class PaymentType(models.TextChoices):
     BALANCE_PAYMENT = "balance_payment", "Balance Payment"
 
 
-DEPOSIT_PERCENTAGE = Decimal("0.30")  # 30% deposit
+DEPOSIT_PERCENTAGE = Decimal("0.30")
 
-
-# ─── Helpers ──────────────────────────────────────────────────────────────────
 
 def generate_receipt_number():
-    """Generate unique receipt like RCP-2026-A4B7C2."""
     year   = timezone.now().year
     suffix = "".join(random.choices(string.ascii_uppercase + string.digits, k=6))
     receipt = f"RCP-{year}-{suffix}"
@@ -55,31 +50,13 @@ def generate_receipt_number():
     return receipt
 
 
-# ─── Payment ──────────────────────────────────────────────────────────────────
-
 class Payment(models.Model):
-    """
-    Core payment record linked to a booking.
-
-    Supports both single full payment and deposit + balance flow.
-    Provider integrations: PayMongo (card, GCash, bank transfer) and PayPal.
-    Manual/cash payments for walk-in bookings.
-
-    Booking ← Payment (one-to-many, supports deposit + balance)
-    """
-
-    # Reference / receipt — NULL until paid, then auto-generated.
-    # null=True is required so multiple pending payments can coexist —
-    # PostgreSQL unique constraints never conflict on NULL values.
     receipt_number = models.CharField(
         max_length=20, unique=True, blank=True, null=True, default=None,
-        help_text="Auto-generated on payment success. NULL while pending.",
     )
-
-    # Relations
     booking = models.ForeignKey(
         "bookings.Booking",
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         related_name="payments",
     )
     user = models.ForeignKey(
@@ -87,52 +64,19 @@ class Payment(models.Model):
         null=True, blank=True,
         on_delete=models.SET_NULL,
         related_name="payments",
-        help_text="Null for anonymous / walk-in guests.",
     )
-
-    # Amount
-    amount   = models.DecimalField(
-        max_digits=10, decimal_places=2,
-        validators=[MinValueValidator(Decimal("0.01"))],
-    )
+    amount   = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(0)])
     currency = models.CharField(max_length=3, default="PHP")
-
-    # Payment type — full, deposit, or balance
-    payment_type = models.CharField(
-        max_length=20,
-        choices=PaymentType.choices,
-        default=PaymentType.FULL_PAYMENT,
-    )
-
-    # Provider & method
-    provider = models.CharField(
-        max_length=20, choices=PaymentProvider.choices,
-        default=PaymentProvider.PAYMONGO,
-    )
+    payment_type   = models.CharField(max_length=20, choices=PaymentType.choices, default=PaymentType.FULL_PAYMENT)
+    provider       = models.CharField(max_length=20, choices=PaymentProvider.choices)
     payment_method = models.CharField(max_length=20, choices=PaymentMethod.choices)
-
-    # Status
-    status = models.CharField(
-        max_length=20, choices=PaymentStatus.choices,
-        default=PaymentStatus.PENDING, db_index=True,
-    )
-
-    # Provider-specific IDs
-    transaction_id    = models.CharField(max_length=255, blank=True, null=True,
-                                         help_text="Provider transaction / payment intent ID.")
-    checkout_url      = models.URLField(blank=True, null=True,
-                                        help_text="Redirect URL returned by provider.")
-    checkout_session_id = models.CharField(max_length=255, blank=True, null=True,
-                                            help_text="PayMongo link_id or PayPal order_id.")
-
-    # Webhook raw payload for audit
-    provider_payload  = models.JSONField(blank=True, null=True,
-                                          help_text="Raw webhook payload for audit / debugging.")
-
-    # Timestamps
+    status         = models.CharField(max_length=20, choices=PaymentStatus.choices, default=PaymentStatus.PENDING)
+    transaction_id      = models.CharField(max_length=255, blank=True, null=True, unique=True)
+    checkout_url        = models.URLField(max_length=1024, blank=True, null=True)
+    checkout_session_id = models.CharField(max_length=255, blank=True, null=True)
+    provider_payload    = models.JSONField(blank=True, null=True)
     paid_at    = models.DateTimeField(null=True, blank=True)
-    expires_at = models.DateTimeField(null=True, blank=True,
-                                       help_text="When the pending checkout session expires.")
+    expires_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -149,8 +93,6 @@ class Payment(models.Model):
     def __str__(self):
         return f"Payment {self.receipt_number or self.pk} — {self.get_status_display()} ({self.amount} {self.currency})"
 
-    # ── Computed ───────────────────────────────────────────────────────────
-
     @property
     def is_expired(self):
         if self.status == PaymentStatus.PENDING and self.expires_at:
@@ -161,16 +103,13 @@ class Payment(models.Model):
     def is_successful(self):
         return self.status == PaymentStatus.PAID
 
-    # ── Lifecycle ──────────────────────────────────────────────────────────
-
     def mark_paid(self, transaction_id=None, payload=None):
-        """
-        Mark payment as PAID, stamp paid_at, generate receipt number,
-        and sync the linked booking to CONFIRMED.
-        Called by webhook handlers — never by the frontend redirect alone.
-        """
-        from bookings.models import BookingStatus
+        import logging
+        logger = logging.getLogger(__name__)
 
+        from bookings.models import BookingStatus, PaymentStatus as BPaymentStatus
+
+        # Step 1: Mark payment PAID and generate receipt
         self.status         = PaymentStatus.PAID
         self.paid_at        = timezone.now()
         self.receipt_number = generate_receipt_number()
@@ -183,17 +122,38 @@ class Payment(models.Model):
             "transaction_id", "provider_payload", "updated_at",
         ])
 
-        # Sync booking — only if it can transition to CONFIRMED
+        # Step 2: Confirm booking — generates reference_number, checkin_pin,
+        # transitions to CONFIRMED, and fires the post_save signal that
+        # sends the confirmation email with QR code and PIN.
         booking = self.booking
-        if booking.can_transition_to(BookingStatus.CONFIRMED):
-            booking.transition_to(
-                BookingStatus.CONFIRMED,
-                note=f"Auto-confirmed after payment {self.receipt_number}.",
-            )
-            # Also update booking payment_status
-            from bookings.models import PaymentStatus as BPaymentStatus
+        if booking.status == BookingStatus.PENDING_PAYMENT:
+            try:
+                booking.confirm_after_payment(changed_by=None)
+                logger.info(
+                    "Booking pk=%s confirmed after payment %s — ref=%s pin=%s",
+                    booking.pk, self.receipt_number,
+                    booking.reference_number, booking.checkin_pin,
+                )
+            except Exception as exc:
+                logger.error(
+                    "confirm_after_payment failed for booking pk=%s: %s",
+                    booking.pk, exc,
+                )
+                raise
+
+        elif booking.status == BookingStatus.CONFIRMED:
+            # Balance payment on an already-confirmed booking
             booking.payment_status = BPaymentStatus.PAID
             booking.save(update_fields=["payment_status", "updated_at"])
+            logger.info(
+                "Balance payment %s received for confirmed booking pk=%s",
+                self.receipt_number, booking.pk,
+            )
+        else:
+            logger.warning(
+                "mark_paid: booking pk=%s has unexpected status '%s'",
+                booking.pk, booking.status,
+            )
 
     def mark_failed(self, payload=None):
         self.status = PaymentStatus.FAILED
@@ -206,27 +166,18 @@ class Payment(models.Model):
         self.save(update_fields=["status", "updated_at"])
 
 
-# ─── Refund ───────────────────────────────────────────────────────────────────
-
 class Refund(models.Model):
-    """
-    Tracks individual refund records tied to a Payment.
-    Admin triggers refund → provider processes → webhook confirms.
-    """
-
     class RefundStatus(models.TextChoices):
         PENDING   = "pending",   "Pending"
         COMPLETED = "completed", "Completed"
         FAILED    = "failed",    "Failed"
 
-    payment = models.ForeignKey(Payment, on_delete=models.CASCADE, related_name="refunds")
-    amount  = models.DecimalField(max_digits=10, decimal_places=2)
-    reason  = models.TextField(blank=True)
-
-    status         = models.CharField(max_length=20, choices=RefundStatus.choices, default=RefundStatus.PENDING)
+    payment            = models.ForeignKey(Payment, on_delete=models.CASCADE, related_name="refunds")
+    amount             = models.DecimalField(max_digits=10, decimal_places=2)
+    reason             = models.TextField(blank=True)
+    status             = models.CharField(max_length=20, choices=RefundStatus.choices, default=RefundStatus.PENDING)
     provider_refund_id = models.CharField(max_length=255, blank=True, null=True)
-
-    initiated_by = models.ForeignKey(
+    initiated_by       = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         null=True, blank=True,
         on_delete=models.SET_NULL,

@@ -7,4 +7,4 @@ class PaymentsConfig(AppConfig):
     verbose_name       = "Payments"
 
     def ready(self):
-        import payments.signals  # noqa: F401 — connect signal handlers
+        import payments.signals  # noqa: F401 — connects all payment + confirmation signal handlers
