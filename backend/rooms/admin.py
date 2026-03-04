@@ -1,13 +1,12 @@
 from django.contrib import admin
 from django.utils.html import format_html
-from .models import Room, RoomAmenity, RoomAmenityAssignment, RoomImage, RoomPriceHistory, RoomTemporaryLock
-from .models import RoomReview
-
-from django.utils.html import format_html
+from django.utils.safestring import mark_safe
 from .models import (
-      ReviewHelpfulness,
-    Inclusion, RoomInclusion, SeasonalPrice  # NEW
+    Room, RoomAmenity, RoomAmenityAssignment, RoomImage,
+    RoomPriceHistory, RoomTemporaryLock, RoomReview, ReviewHelpfulness,
+    Inclusion, RoomInclusion, SeasonalPrice
 )
+
 
 class RoomImageInline(admin.TabularInline):
     model = RoomImage
@@ -19,6 +18,7 @@ class RoomImageInline(admin.TabularInline):
         if obj.image:
             return format_html('<img src="{}" height="60" style="border-radius:4px;" />', obj.image.url)
         return "—"
+
     image_preview.short_description = "Preview"
 
 
@@ -64,12 +64,12 @@ class RoomAdmin(admin.ModelAdmin):
         "room_type",
         "floor",
         "bed_type",
-        "capacity_display",  # NEW - Shows adults/children
-        "price_display",  # NEW - Shows discount
+        "capacity_display",
+        "price_display",
         "status_badge",
-        "featured_badge",  # NEW
-        "trending_badge",  # NEW
-        "view_type",  # NEW
+        "featured_badge",
+        "trending_badge",
+        "view_type",
         "is_active"
     )
 
@@ -79,9 +79,9 @@ class RoomAdmin(admin.ModelAdmin):
         "floor",
         "bed_type",
         "is_active",
-        "is_featured",  # NEW
-        "view_type",  # NEW
-        ("discount_percentage", admin.EmptyFieldListFilter),  # NEW
+        "is_featured",
+        "view_type",
+        "discount_percentage",
     )
 
     search_fields = ("room_number", "description")
@@ -90,16 +90,16 @@ class RoomAdmin(admin.ModelAdmin):
     readonly_fields = (
         "created_at",
         "updated_at",
-        "discounted_price_display",  # NEW
-        "trending_status",  # NEW
-        "seasonal_pricing_summary"  # NEW
+        "discounted_price_display",
+        "trending_status",
+        "seasonal_pricing_summary"
     )
 
     inlines = [
         RoomImageInline,
         RoomAmenityAssignmentInline,
-        RoomInclusionInline,  # NEW
-        SeasonalPriceInline,  # NEW
+        RoomInclusionInline,
+        SeasonalPriceInline,
         RoomPriceHistoryInline
     ]
 
@@ -110,23 +110,23 @@ class RoomAdmin(admin.ModelAdmin):
                 "room_type",
                 "floor",
                 "bed_type",
-                "view_type"  # NEW
+                "view_type"
             )
         }),
         ("Capacity & Pricing", {
             "fields": (
                 "capacity",
-                ("max_adults", "max_children"),  # NEW - Side by side
+                ("max_adults", "max_children"),
                 "price_per_night",
-                "discount_percentage",  # NEW
-                "discounted_price_display",  # NEW - Read-only
+                "discount_percentage",
+                "discounted_price_display",
                 "size_sqm"
             )
         }),
         ("Marketing & Features", {
             "fields": (
-                "is_featured",  # NEW
-                "trending_status",  # NEW - Read-only
+                "is_featured",
+                "trending_status",
             )
         }),
         ("360° Virtual Tour", {
@@ -136,13 +136,13 @@ class RoomAdmin(admin.ModelAdmin):
         }),
         ("Policies", {
             "fields": (
-                "cancellation_policy",  # NEW
-                ("checkin_time", "checkout_time"),  # NEW - Side by side
+                "cancellation_policy",
+                ("checkin_time", "checkout_time"),
             ),
             "classes": ("collapse",),
         }),
         ("Seasonal Pricing Summary", {
-            "fields": ("seasonal_pricing_summary",),  # NEW - Read-only
+            "fields": ("seasonal_pricing_summary",),
             "classes": ("collapse",),
             "description": "Active seasonal pricing rules for this room"
         }),
@@ -205,7 +205,7 @@ class RoomAdmin(admin.ModelAdmin):
     def featured_badge(self, obj):
         """Show featured badge."""
         if obj.is_featured:
-            return format_html(
+            return mark_safe(
                 '<span style="background:#4f46e5;color:white;padding:2px 8px;border-radius:12px;font-size:11px;">⭐ Featured</span>'
             )
         return "—"
@@ -215,7 +215,7 @@ class RoomAdmin(admin.ModelAdmin):
     def trending_badge(self, obj):
         """Show trending badge."""
         if obj.is_trending:
-            return format_html(
+            return mark_safe(
                 '<span style="background:#10b981;color:white;padding:2px 8px;border-radius:12px;font-size:11px;">🔥 Trending</span>'
             )
         return "—"
@@ -239,7 +239,7 @@ class RoomAdmin(admin.ModelAdmin):
                 obj.discounted_price,
                 obj.discount_percentage
             )
-        return format_html('<div style="color:#6b7280;">No discount applied</div>')
+        return mark_safe('<div style="color:#6b7280;">No discount applied</div>')
 
     discounted_price_display.short_description = "Calculated Price"
 
@@ -274,7 +274,7 @@ class RoomAdmin(admin.ModelAdmin):
         active_prices = obj.seasonal_prices.filter(is_active=True).order_by('-priority', 'start_date')
 
         if not active_prices.exists():
-            return format_html('<div style="color:#999;">No active seasonal pricing</div>')
+            return mark_safe('<div style="color:#999;">No active seasonal pricing</div>')
 
         html = '<table style="width:100%;border-collapse:collapse;">'
         html += '<thead><tr style="background:#f3f4f6;"><th>Name</th><th>Dates</th><th>Price</th><th>Priority</th><th>Weekend Only</th></tr></thead>'
@@ -294,7 +294,7 @@ class RoomAdmin(admin.ModelAdmin):
         if active_prices.count() > 10:
             html += f'<div style="margin-top:8px;color:#6b7280;font-size:12px;">...and {active_prices.count() - 10} more</div>'
 
-        return format_html(html)
+        return mark_safe(html)
 
     seasonal_pricing_summary.short_description = "Active Seasonal Prices"
 
@@ -384,12 +384,13 @@ class SeasonalPriceAdmin(admin.ModelAdmin):
     def weekend_badge(self, obj):
         """Show if weekend-only."""
         if obj.is_weekend_only:
-            return format_html(
+            return mark_safe(
                 '<span style="background:#8b5cf6;color:white;padding:2px 8px;border-radius:12px;font-size:11px;">Weekend</span>'
             )
         return "—"
 
     weekend_badge.short_description = "Type"
+
 
 @admin.register(RoomPriceHistory)
 class RoomPriceHistoryAdmin(admin.ModelAdmin):
@@ -409,6 +410,7 @@ class RoomTemporaryLockAdmin(admin.ModelAdmin):
 
     def is_active_display(self, obj):
         return obj.is_active
+
     is_active_display.boolean = True
     is_active_display.short_description = "Active"
 
@@ -438,3 +440,27 @@ class RoomReviewAdmin(admin.ModelAdmin):
         return obj.guest.email
 
     guest_display.short_description = "Guest"
+
+
+@admin.register(ReviewHelpfulness)
+class ReviewHelpfulnessAdmin(admin.ModelAdmin):
+    list_display = (
+        'review',
+        'user_email',
+        'vote_display',
+        'voted_at'
+    )
+    list_filter = ('is_helpful', 'voted_at')
+    search_fields = ('review__room__room_number', 'user__email')
+    readonly_fields = ('review', 'user', 'is_helpful', 'voted_at')
+    ordering = ('-voted_at',)
+
+    def user_email(self, obj):
+        return obj.user.email
+
+    user_email.short_description = "User"
+
+    def vote_display(self, obj):
+        return "👍 Helpful" if obj.is_helpful else "👎 Not Helpful"
+
+    vote_display.short_description = "Vote"

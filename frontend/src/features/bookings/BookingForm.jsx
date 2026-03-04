@@ -45,11 +45,15 @@ export default function BookingForm({ room, prefillCheckIn, prefillCheckOut }) {
     }
   }, [user]);
 
-  const nights   = calculateNights(form.check_in, form.check_out);
-  const subtotal = nights * Number(room.price_per_night);
-  const tax      = subtotal * 0.12;
-  const fee      = subtotal * 0.05;
-  const total    = subtotal + tax + fee;
+  const nights         = calculateNights(form.check_in, form.check_out);
+  const effectiveRate  = Number(room.discounted_price ?? room.price_per_night);
+  const subtotal       = nights * effectiveRate;
+  const tax            = subtotal * 0.12;
+  const fee            = subtotal * 0.05;
+  const total          = subtotal + tax + fee;
+  const hasDiscount    = Number(room.discount_percentage) > 0;
+  const originalSubtotal = nights * Number(room.price_per_night);
+  const savedAmount    = originalSubtotal - subtotal;
 
   const update = (key, value) => {
     setForm((prev) => {
@@ -220,10 +224,31 @@ export default function BookingForm({ room, prefillCheckIn, prefillCheckOut }) {
             Price Breakdown
           </h5>
           <div className="breakdown-rows">
+            {/* Discount badge — only shown when a discount is active */}
+            {hasDiscount && (
+              <div className="breakdown-discount-badge">
+                {Number(room.discount_percentage)}% discount applied
+              </div>
+            )}
             <div className="breakdown-row">
-              <span>₱{formatPrice(room.price_per_night)} × {nights} night{nights !== 1 ? 's' : ''}</span>
+              <span>
+                {/* Show strikethrough original rate when discounted */}
+                {hasDiscount && (
+                  <span className="breakdown-original-price">
+                    ₱{formatPrice(room.price_per_night)}
+                  </span>
+                )}{' '}
+                ₱{formatPrice(effectiveRate)} × {nights} night{nights !== 1 ? 's' : ''}
+              </span>
               <span>₱{formatPrice(subtotal)}</span>
             </div>
+            {/* Savings row — only shown when a discount is active */}
+            {hasDiscount && nights > 0 && (
+              <div className="breakdown-row breakdown-savings">
+                <span>You save</span>
+                <span>−₱{formatPrice(savedAmount)}</span>
+              </div>
+            )}
             <div className="breakdown-row">
               <span>Tax (12%)</span>
               <span>₱{formatPrice(tax)}</span>

@@ -240,6 +240,14 @@ export default function MyBookingDetailPage() {
                   label={`₱${formatPrice(booking.room_price_snapshot)} × ${booking.nights} night${booking.nights !== 1 ? 's' : ''}`}
                   value={`₱${formatPrice(booking.subtotal)}`}
                 />
+                {/* Discount savings row — shown when backend reports a discount_amount */}
+                {Number(booking.discount_amount) > 0 && (
+                  <PriceRow
+                    label={`Discount (${booking.discount_percentage}% off)`}
+                    value={`−₱${formatPrice(booking.discount_amount)}`}
+                    isDiscount
+                  />
+                )}
                 <PriceRow label="Tax (12%)"        value={`₱${formatPrice(booking.tax)}`} />
                 <PriceRow label="Service fee (5%)" value={`₱${formatPrice(booking.service_fee)}`} />
                 <div className="price-total-row">
@@ -339,9 +347,9 @@ function InfoRow({ label, value }) {
   );
 }
 
-function PriceRow({ label, value }) {
+function PriceRow({ label, value, isDiscount = false }) {
   return (
-    <div className="price-row">
+    <div className={`price-row${isDiscount ? ' price-row-discount' : ''}`}>
       <span>{label}</span>
       <span>{value}</span>
     </div>

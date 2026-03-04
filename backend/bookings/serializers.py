@@ -1,26 +1,22 @@
 from decimal import Decimal
 from django.utils import timezone
 from django.db import transaction
+from django.db.models import Sum
 from rest_framework import serializers
 
 from rooms.models import Room, RoomStatus  # noqa
+
 
 from .models import (
     Booking, BookingStatus, BookingStatusHistory,
     PaymentStatus, RefundStatus, BLOCKING_STATUSES,
 )
 
-TAX_RATE        = Decimal("0.12")   # 12 % VAT
-SERVICE_FEE_PCT = Decimal("0.05")   # 5 % service fee
+TAX_RATE        = Decimal("0.12")
+SERVICE_FEE_PCT = Decimal("0.05")
 
-
-# ─── Overlap check ────────────────────────────────────────────────────────────
 
 def check_overlapping_bookings(room, check_in, check_out, exclude_id=None):
-    """
-    Returns True if an active (blocking) booking overlaps the requested dates.
-    BLOCKING_STATUSES includes PENDING_PAYMENT so pending bookings hold the room.
-    """
     qs = Booking.objects.filter(
         room=room,
         status__in=BLOCKING_STATUSES,
@@ -31,8 +27,6 @@ def check_overlapping_bookings(room, check_in, check_out, exclude_id=None):
         qs = qs.exclude(pk=exclude_id)
     return qs.exists()
 
-
-# ─── Read serializers ─────────────────────────────────────────────────────────
 
 class BookingStatusHistorySerializer(serializers.ModelSerializer):
     changed_by_name = serializers.SerializerMethodField()
@@ -52,7 +46,6 @@ class BookingListSerializer(serializers.ModelSerializer):
     room_type              = serializers.CharField(source="room.get_room_type_display", read_only=True)
     status_display         = serializers.CharField(source="get_status_display", read_only=True)
     payment_status_display = serializers.CharField(source="get_payment_status_display", read_only=True)
-    # reference_number may be null — safe to expose; null = not yet confirmed
     has_credentials        = serializers.BooleanField(read_only=True)
 
     class Meta:
@@ -82,15 +75,63 @@ class BookingDetailSerializer(serializers.ModelSerializer):
     is_expired             = serializers.BooleanField(read_only=True)
     has_credentials        = serializers.BooleanField(read_only=True)
     payment_deadline       = serializers.DateTimeField(read_only=True)
-    amount_paid            = serializers.SerializerMethodField()
-    amount_due             = serializers.SerializerMethodField()
-    payment_type_used      = serializers.SerializerMethodField()
 
-    # Credentials are included in the serializer output but will be null
-    # until the booking is CONFIRMED. The frontend must handle null gracefully.
-    # checkin_pin is intentionally included here so the confirmation page
-    # can display it immediately after payment — but it will be null/absent
-    # for any unconfirmed booking.
+    # Payment breakdown — consumed by PaymentPage.jsx and MybookingDetailPage.jsx
+    amount_paid       = serializers.SerializerMethodField()
+    amount_due        = serializers.SerializerMethodField()
+    payment_type_used = serializers.SerializerMethodField()
+
+    # ✅ FIX (Problem 6): expose discount info so confirmation and detail pages
+    #    can render a "You saved ₱X" row in the price summary.
+    original_price_per_night = serializers.SerializerMethodField()
+    discount_percentage      = serializers.SerializerMethodField()
+    discount_amount          = serializers.SerializerMethodField()
+
+    def get_amount_paid(self, obj):
+        from payments.models import PaymentStatus as PStatus
+        total = obj.payments.filter(status=PStatus.PAID).aggregate(
+            total=Sum('amount')
+        )['total']
+        return str(total or Decimal('0.00'))
+
+    def get_amount_due(self, obj):
+        from payments.models import PaymentStatus as PStatus
+        paid = obj.payments.filter(status=PStatus.PAID).aggregate(
+            total=Sum('amount')
+        )['total'] or Decimal('0.00')
+        return str(max(obj.total_price - paid, Decimal('0.00')))
+
+    def get_payment_type_used(self, obj):
+        from payments.models import PaymentStatus as PStatus, PaymentType
+        if obj.status not in [BookingStatus.PENDING_PAYMENT, BookingStatus.CONFIRMED]:
+            return 'none'
+        has_full    = obj.payments.filter(status=PStatus.PAID, payment_type=PaymentType.FULL_PAYMENT).exists()
+        has_deposit = obj.payments.filter(status=PStatus.PAID, payment_type=PaymentType.DEPOSIT).exists()
+        has_balance = obj.payments.filter(status=PStatus.PAID, payment_type=PaymentType.BALANCE_PAYMENT).exists()
+        if has_full or (has_deposit and has_balance):
+            return 'settled'
+        if has_deposit:
+            return 'balance_payment'
+        return 'full_payment'
+
+    def get_original_price_per_night(self, obj):
+        """The undiscounted base rate stored on the room."""
+        return str(obj.room.price_per_night)
+
+    def get_discount_percentage(self, obj):
+        """The discount percentage that was active on the room."""
+        return str(obj.room.discount_percentage or Decimal("0"))
+
+    def get_discount_amount(self, obj):
+        """
+        Total savings = (original rate − snapshot rate) × nights.
+        Returns '0.00' when no discount was applied.
+        """
+        original = obj.room.price_per_night
+        snapshot = obj.room_price_snapshot
+        nights   = obj.nights or 0
+        savings  = max(original - snapshot, Decimal("0")) * nights
+        return str(savings.quantize(Decimal("0.01")))
 
     class Meta:
         model  = Booking
@@ -108,19 +149,15 @@ class BookingDetailSerializer(serializers.ModelSerializer):
             "refund_percentage", "refund_amount",
             "refund_status", "refund_status_display",
             "is_expired", "has_credentials", "payment_deadline",
+            "amount_paid", "amount_due", "payment_type_used",
+            # ✅ new discount fields
+            "original_price_per_night", "discount_percentage", "discount_amount",
             "created_at", "updated_at",
             "status_history",
         ]
 
 
-# ─── Booking creation (Phase 1 — PENDING_PAYMENT) ────────────────────────────
-
 class BookingCreateSerializer(serializers.Serializer):
-    """
-    Creates a booking in PENDING_PAYMENT status.
-    No reference number, QR code, or PIN is generated here.
-    The room is soft-blocked for PAYMENT_WINDOW_MINUTES minutes.
-    """
     room_id      = serializers.IntegerField()
     check_in     = serializers.DateField()
     check_out    = serializers.DateField()
@@ -181,7 +218,6 @@ class BookingCreateSerializer(serializers.Serializer):
         request = self.context.get("request")
         user    = request.user if request and request.user.is_authenticated else None
 
-        # Lock the room row to prevent race conditions
         room = Room.objects.select_for_update().get(pk=room.pk)
 
         if check_overlapping_bookings(room, check_in, check_out):
@@ -189,18 +225,25 @@ class BookingCreateSerializer(serializers.Serializer):
                 "This room is no longer available for the selected dates."
             )
 
-        nights              = (check_out - check_in).days
-        room_price_snapshot = room.price_per_night
-        subtotal            = room_price_snapshot * nights
-        tax                 = (subtotal * TAX_RATE).quantize(Decimal("0.01"))
-        service_fee         = (subtotal * SERVICE_FEE_PCT).quantize(Decimal("0.01"))
-        total_price         = subtotal + tax + service_fee
+        nights = (check_out - check_in).days
 
-        # Phase 1: Create booking WITHOUT reference_number, checkin_pin
-        # These are intentionally left NULL until payment is confirmed.
+        # ✅ FIX (Problem 1): use calculate_total_price() which applies
+        #    discount_percentage and seasonal pricing night-by-night,
+        #    then derive the effective per-night snapshot from the total.
+        #    This replaces the old `room.price_per_night` which ignored discounts entirely.
+        total_room_cost     = room.calculate_total_price(check_in, check_out)
+        room_price_snapshot = (
+            (total_room_cost / nights).quantize(Decimal("0.01"))
+            if nights > 0
+            else (room.discounted_price or room.price_per_night)
+        )
+
+        subtotal    = (room_price_snapshot * nights).quantize(Decimal("0.01"))
+        tax         = (subtotal * TAX_RATE).quantize(Decimal("0.01"))
+        service_fee = (subtotal * SERVICE_FEE_PCT).quantize(Decimal("0.01"))
+        total_price = subtotal + tax + service_fee
+
         booking = Booking.objects.create(
-            # reference_number = NULL (not yet assigned)
-            # checkin_pin      = NULL (not yet assigned)
             user                = user,
             room                = room,
             full_name           = validated_data["full_name"],
@@ -233,18 +276,9 @@ class BookingCreateSerializer(serializers.Serializer):
         return booking
 
 
-# ─── Payment confirmation (Phase 2 — CONFIRMED) ───────────────────────────────
-
 class BookingConfirmSerializer(serializers.Serializer):
-    """
-    Called by the payments app after a successful payment.
-    Transitions PENDING_PAYMENT → CONFIRMED and generates credentials.
-    This is the ONLY serializer allowed to produce reference_number / checkin_pin.
-    """
-
     def validate(self, data):
         booking = self.context["booking"]
-
         if booking.status != BookingStatus.PENDING_PAYMENT:
             raise serializers.ValidationError(
                 f"Booking is not in PENDING_PAYMENT status (current: '{booking.status}')."
@@ -263,10 +297,7 @@ class BookingConfirmSerializer(serializers.Serializer):
         return booking.confirm_after_payment(changed_by=changed_by)
 
 
-# ─── Status transition (staff only) ──────────────────────────────────────────
-
 class BookingStatusUpdateSerializer(serializers.Serializer):
-    """Staff-only manual status transition."""
     status = serializers.ChoiceField(choices=BookingStatus.choices)
     note   = serializers.CharField(required=False, allow_blank=True)
 
@@ -291,18 +322,11 @@ class BookingStatusUpdateSerializer(serializers.Serializer):
         )
 
 
-# ─── Check-in verification ────────────────────────────────────────────────────
-
 class CheckInVerifySerializer(serializers.Serializer):
-    """
-    Verifies reference_number + checkin_pin for reception desk check-in.
-    Only CONFIRMED bookings with credentials can pass this check.
-    """
     reference_number = serializers.CharField()
     checkin_pin      = serializers.CharField(max_length=4, min_length=4)
 
     def validate(self, data):
-        # reference_number is only set on CONFIRMED bookings
         try:
             booking = Booking.objects.select_related("room").get(
                 reference_number=data["reference_number"]
@@ -310,8 +334,6 @@ class CheckInVerifySerializer(serializers.Serializer):
         except Booking.DoesNotExist:
             raise serializers.ValidationError({"reference_number": "Booking not found."})
 
-        # Enforce: credentials only exist for CONFIRMED bookings (enforced by model),
-        # but double-check status here for a clear error message.
         if booking.status != BookingStatus.CONFIRMED:
             raise serializers.ValidationError(
                 {"status": f"Booking must be CONFIRMED before check-in (current: '{booking.status}')."}
@@ -335,8 +357,6 @@ class CheckInVerifySerializer(serializers.Serializer):
         return data
 
 
-# ─── Cancellation ─────────────────────────────────────────────────────────────
-
 class BookingCancelSerializer(serializers.Serializer):
     reason = serializers.CharField(required=False, allow_blank=True)
 
@@ -355,7 +375,6 @@ class BookingCancelSerializer(serializers.Serializer):
         user       = request.user if request else None
         old_status = booking.status
 
-        # Refund only applies if payment was received (i.e. CONFIRMED or later)
         pct, amount = booking.compute_refund()
 
         booking.status              = BookingStatus.CANCELLED
@@ -382,14 +401,9 @@ class BookingCancelSerializer(serializers.Serializer):
             note       = self.validated_data.get("reason", "Cancelled."),
         )
 
-        # Sync Payment record and create Refund entry if applicable
         if amount > 0:
             try:
-                from payments.models import (  # noqa
-                    Payment,
-                    PaymentStatus as PStatus,
-                    Refund,
-                )
+                from payments.models import Payment, PaymentStatus as PStatus, Refund  # noqa
                 paid_payment = (
                     booking.payments
                     .filter(status=PStatus.PAID)
@@ -406,7 +420,6 @@ class BookingCancelSerializer(serializers.Serializer):
                     )
                     paid_payment.status = PStatus.REFUNDED
                     paid_payment.save(update_fields=["status", "updated_at"])
-
             except Exception as exc:
                 import logging
                 logging.getLogger(__name__).warning(
