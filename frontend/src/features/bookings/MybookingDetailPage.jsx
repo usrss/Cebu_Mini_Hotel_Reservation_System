@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Calendar, Users, Hash, Key, Clock,
-  CreditCard, AlertCircle, CheckCircle2, XCircle, ChevronDown, ChevronUp,
+  CreditCard, AlertCircle, CheckCircle2, XCircle, ChevronDown, ChevronUp, Tag,
 } from 'lucide-react';
 import { useBookingDetail, useCancelBooking } from '../hooks/useBookings';
 import './MyBookingDetailPage.css';
@@ -50,11 +50,19 @@ export default function MyBookingDetailPage() {
     );
   }
 
-  const statusCfg  = STATUS_CONFIG[booking.status] || STATUS_CONFIG.pending_payment;
+  const statusCfg        = STATUS_CONFIG[booking.status] || STATUS_CONFIG.pending_payment;
   const isPendingPayment = booking.status === 'pending_payment';
+  const isConfirmed      = booking.status === 'confirmed';
   const hasCredentials   = booking.has_credentials;
-  const canCancel  = CANCELLABLE_STATUSES.includes(booking.status);
-  const refundPct  = parseFloat(booking.refund_percentage || 0);
+  const canCancel        = CANCELLABLE_STATUSES.includes(booking.status);
+  const refundPct        = parseFloat(booking.refund_percentage || 0);
+
+  // Deposit state
+  const total            = Number(booking.total_price || 0);
+  const amountPaid       = Number(booking.amount_paid  || 0);
+  const amountDue        = Number(booking.amount_due   || 0);
+  const depositPaid      = booking.payment_type_used === 'deposit' && amountPaid > 0;
+  const balancePending   = isConfirmed && depositPaid && amountDue > 0;
 
   const handleCancel = async () => {
     const updated = await cancelBooking(id, cancelReason);
@@ -66,7 +74,6 @@ export default function MyBookingDetailPage() {
 
   return (
     <div className="booking-detail-page">
-      {/* Nav — identical to room-detail-nav */}
       <div className="booking-detail-nav">
         <div className="nav-container">
           <Link to="/bookings/my" className="back-link">
@@ -118,9 +125,20 @@ export default function MyBookingDetailPage() {
                   <span>This booking expired without payment. No credentials were issued.</span>
                 </div>
               )}
+
+              {/* Deposit status banner */}
+              {depositPaid && (
+                <div className="deposit-paid-banner">
+                  <CheckCircle2 size={15} />
+                  <div className="deposit-banner-text">
+                    <strong>30% deposit paid</strong>
+                    <span>₱{formatPrice(amountPaid)} received · Balance of ₱{formatPrice(amountDue)} due at check-in</span>
+                  </div>
+                </div>
+              )}
             </div>
 
-            {/* Check-in PIN — only shown when credentials exist (CONFIRMED+) */}
+            {/* Check-in PIN */}
             {hasCredentials && booking.checkin_pin && booking.status !== 'cancelled' && (
               <div className="detail-card pin-card">
                 <h3 className="card-title">
@@ -177,8 +195,10 @@ export default function MyBookingDetailPage() {
                 </h3>
                 <div className="info-rows">
                   {booking.cancelled_at && (
-                    <InfoRow label={booking.status === 'expired' ? 'Expired at' : 'Cancelled at'}
-                             value={new Date(booking.cancelled_at).toLocaleString()} />
+                    <InfoRow
+                      label={booking.status === 'expired' ? 'Expired at' : 'Cancelled at'}
+                      value={new Date(booking.cancelled_at).toLocaleString()}
+                    />
                   )}
                   {booking.cancellation_reason && (
                     <InfoRow label="Reason" value={booking.cancellation_reason} />
@@ -230,8 +250,9 @@ export default function MyBookingDetailPage() {
             )}
           </div>
 
-          {/* ── Right sidebar — matches room-detail-sidebar ──────────────── */}
+          {/* ── Right sidebar ─────────────────────────────────────────── */}
           <div className="booking-detail-sidebar">
+
             {/* Price summary */}
             <div className="sidebar-card">
               <h3 className="sidebar-title">Price Summary</h3>
@@ -240,7 +261,6 @@ export default function MyBookingDetailPage() {
                   label={`₱${formatPrice(booking.room_price_snapshot)} × ${booking.nights} night${booking.nights !== 1 ? 's' : ''}`}
                   value={`₱${formatPrice(booking.subtotal)}`}
                 />
-                {/* Discount savings row — shown when backend reports a discount_amount */}
                 {Number(booking.discount_amount) > 0 && (
                   <PriceRow
                     label={`Discount (${booking.discount_percentage}% off)`}
@@ -252,9 +272,24 @@ export default function MyBookingDetailPage() {
                 <PriceRow label="Service fee (5%)" value={`₱${formatPrice(booking.service_fee)}`} />
                 <div className="price-total-row">
                   <span>Total</span>
-                  <span className="price-total-amount">₱{formatPrice(booking.total_price)}</span>
+                  <span className="price-total-amount">₱{formatPrice(total)}</span>
                 </div>
+
+                {/* Deposit/payment breakdown */}
+                {depositPaid && (
+                  <div className="deposit-breakdown-box">
+                    <div className="deposit-breakdown-row deposit-row-paid">
+                      <span><CheckCircle2 size={13} /> Deposit paid (30%)</span>
+                      <span>₱{formatPrice(amountPaid)}</span>
+                    </div>
+                    <div className="deposit-breakdown-row deposit-row-due">
+                      <span><Clock size={13} /> Balance due at check-in</span>
+                      <span>₱{formatPrice(amountDue)}</span>
+                    </div>
+                  </div>
+                )}
               </div>
+
               <div className="payment-status-row">
                 <span>Payment</span>
                 <span className={`payment-badge payment-${booking.payment_status}`}>
@@ -265,13 +300,27 @@ export default function MyBookingDetailPage() {
 
             {/* Actions */}
 
-            {/* Pay Now — show if not yet paid and not cancelled */}
-             {isPendingPayment && !booking.is_expired && (
-               <Link to={`/payments/${booking.id}`} className="btn btn-primary btn-full">
-                 <CreditCard size={16} />
-                 Complete Payment
-               </Link>
-             )}
+            {/* Complete initial payment — pending_payment state */}
+            {isPendingPayment && !booking.is_expired && (
+              <Link to={`/payments/${booking.id}`} className="btn btn-primary btn-full">
+                <CreditCard size={16} />
+                Complete Payment
+              </Link>
+            )}
+
+            {/* Pay remaining balance — confirmed + deposit paid */}
+            {balancePending && (
+              <Link
+                to={`/payments/${booking.id}`}
+                state={{ payment_type: 'balance_payment' }}
+                className="btn btn-secondary btn-full"
+              >
+                <CreditCard size={16} />
+                Pay Remaining Balance (₱{formatPrice(amountDue)})
+              </Link>
+            )}
+
+            {/* Cancel */}
             {canCancel && !showCancelConfirm && (
               <button
                 onClick={() => setShowCancelConfirm(true)}
@@ -282,25 +331,39 @@ export default function MyBookingDetailPage() {
               </button>
             )}
 
-            {/* Cancel confirmation */}
             {showCancelConfirm && (
               <div className="cancel-confirm-card">
                 <h4 className="cancel-confirm-title">
                   <AlertCircle size={16} />
                   Confirm Cancellation
                 </h4>
-                {refundPct > 0 && (
+
+                {/* Partial refund notice for deposit-paid bookings */}
+                {depositPaid && (
+                  <div className="cancel-deposit-warning">
+                    <AlertCircle size={14} />
+                    <p>
+                      You paid a 30% deposit of ₱{formatPrice(amountPaid)}.
+                      {refundPct > 0
+                        ? ` You are eligible for a ${refundPct}% partial refund (₱${formatPrice(booking.refund_amount)}).`
+                        : ' Based on current policy, this cancellation is not eligible for a refund.'}
+                    </p>
+                  </div>
+                )}
+
+                {!depositPaid && refundPct > 0 && (
                   <p className="cancel-refund-info">
                     You are eligible for a <strong>{refundPct}% refund</strong> (₱{formatPrice(booking.refund_amount)}).
                   </p>
                 )}
-                {refundPct === 0 && (
+                {!depositPaid && refundPct === 0 && (
                   <p className="cancel-refund-info cancel-no-refund">
                     {isPendingPayment
                       ? 'No charge was made — your booking will be cancelled at no cost.'
                       : 'This cancellation is not eligible for a refund based on current policy.'}
                   </p>
                 )}
+
                 <textarea
                   placeholder="Reason for cancellation (optional)"
                   value={cancelReason}

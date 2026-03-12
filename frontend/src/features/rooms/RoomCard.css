@@ -1,39 +1,53 @@
-/* Room Card Component Styles */
+/* ============================================================
+   RoomCard.css — Cebu Mini Hotel · Luxury Dark Theme
+   ============================================================ */
 
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Raleway:wght@300;400;500;600;700&display=swap');
+
+:root {
+  --navy:        #0A0E1A;
+  --navy-mid:    #0F1729;
+  --navy-card:   #111827;
+  --gold:        #C9A84C;
+  --gold-l:      #E2C97E;
+  --gold-dim:    rgba(201,168,76,0.10);
+  --gold-border: rgba(201,168,76,0.22);
+  --white:       #F8F6F0;
+  --white-dim:   rgba(248,246,240,0.55);
+}
+
+/* ── Card ──────────────────────────────────────────────────── */
 .room-card {
-  position: relative;
-  background: white;
-  border-radius: 16px;
+  background: var(--navy-card);
+  border: 1px solid var(--gold-border);
   overflow: hidden;
-  border: 1px solid #f3f4f6;
-  transition: all 0.3s ease;
+  position: relative;
+  transition: border-color 0.25s, transform 0.25s, box-shadow 0.25s;
+  display: flex;
+  flex-direction: column;
 }
-
 .room-card:hover {
-  border-color: #e5e7eb;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-  transform: translateY(-2px);
+  border-color: var(--gold);
+  transform: translateY(-4px);
+  box-shadow: 0 16px 40px rgba(0,0,0,0.5);
 }
 
-/* Image Section */
+/* ── Image ─────────────────────────────────────────────────── */
 .room-card-image-wrapper {
-  position: relative;
   display: block;
-  height: 260px;
+  position: relative;
   overflow: hidden;
-  background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
+  height: 220px;
+  text-decoration: none;
 }
-
 .room-card-image {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transition: transform 0.7s ease;
+  display: block;
+  transition: transform 0.45s ease;
 }
-
-.room-card:hover .room-card-image {
-  transform: scale(1.1);
-}
+.room-card:hover .room-card-image { transform: scale(1.06); }
 
 .room-card-image-placeholder {
   width: 100%;
@@ -41,190 +55,185 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #d1d5db;
+  background: var(--navy-mid);
+  color: var(--gold-border);
 }
 
+/* ── Overlay ────────────────────────────────────────────────── */
 .room-card-overlay {
   position: absolute;
   inset: 0;
-  background: linear-gradient(to top, rgba(0, 0, 0, 0.2), transparent);
-  opacity: 0;
-  transition: opacity 0.3s ease;
+  background: linear-gradient(to bottom, transparent 55%, rgba(10,14,26,0.65));
+  pointer-events: none;
 }
 
-.room-card:hover .room-card-overlay {
-  opacity: 1;
-}
-
-/* Badges */
-.room-card-number {
-  position: absolute;
-  top: 16px;
-  left: 16px;
-  padding: 6px 12px;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(8px);
-  border-radius: 20px;
-  font-size: 12px;
-  font-weight: 700;
-  color: #111827;
-}
-
+/* ── Badges ────────────────────────────────────────────────── */
 .room-card-status {
   position: absolute;
-  top: 16px;
-  right: 16px;
-  padding: 6px 12px;
-  border-radius: 20px;
-  font-size: 12px;
+  top: 12px;
+  right: 12px;
+  font-family: 'Raleway', sans-serif;
+  font-size: 10px;
   font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 4px 10px;
 }
-
 .room-card-status.status-available {
-  background: rgba(16, 185, 129, 0.1);
-  color: #059669;
-  border: 1px solid rgba(16, 185, 129, 0.2);
+  background: rgba(16,185,129,0.14);
+  border: 1px solid rgba(16,185,129,0.35);
+  color: #6EE7B7;
 }
-
+.room-card-status.status-occupied {
+  background: var(--gold-dim);
+  border: 1px solid var(--gold-border);
+  color: var(--gold);
+}
 .room-card-status.status-maintenance {
-  background: rgba(245, 158, 11, 0.1);
-  color: #d97706;
-  border: 1px solid rgba(245, 158, 11, 0.2);
+  background: rgba(248,246,240,0.05);
+  border: 1px solid rgba(248,246,240,0.15);
+  color: var(--white-dim);
 }
 
-.room-card-status.status-disabled {
-  background: rgba(107, 114, 128, 0.1);
-  color: #6b7280;
-  border: 1px solid rgba(107, 114, 128, 0.2);
+.room-card-discount-badge {
+  position: absolute;
+  bottom: 14px;
+  left: 12px;
+  background: var(--gold);
+  color: var(--navy);
+  font-family: 'Raleway', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  padding: 4px 9px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
-/* 360° Available Badge */
 .room-card-360-badge {
   position: absolute;
-  bottom: 16px;
-  left: 16px;
-  padding: 6px 12px;
-  background: rgba(99, 102, 241, 0.95);
+  bottom: 14px;
+  right: 12px;
+  background: rgba(10,14,26,0.82);
+  border: 1px solid var(--gold-border);
+  color: var(--gold-l);
+  font-family: 'Raleway', sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  padding: 4px 9px;
   backdrop-filter: blur(8px);
-  border-radius: 20px;
-  font-size: 11px;
-  font-weight: 700;
-  color: white;
-  letter-spacing: 0.5px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
-/* Content Section */
+/* ── Content ───────────────────────────────────────────────── */
 .room-card-content {
-  padding: 24px;
-}
-
-.room-card-title {
-  font-size: 20px;
-  font-weight: 700;
-  color: #111827;
-  margin-bottom: 12px;
-  transition: color 0.2s ease;
-}
-
-.room-card:hover .room-card-title {
-  color: #4f46e5;
-}
-
-/* Specs */
-.room-card-specs {
+  padding: 22px 22px 20px;
   display: flex;
-  align-items: center;
-  gap: 16px;
-  margin-bottom: 16px;
-  font-size: 14px;
-  color: #6b7280;
+  flex-direction: column;
+  flex: 1;
 }
 
-.room-spec {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.room-spec svg {
-  color: #9ca3af;
-  flex-shrink: 0;
-}
-
-/* Footer */
-.room-card-footer {
+/* ── Title + Rating Row ─────────────────────────────────────── */
+.room-card-title-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-top: 16px;
-  border-top: 1px solid #f3f4f6;
+  gap: 10px;
+  margin-bottom: 14px;
 }
 
-.room-card-price {
+.room-card-title-row .room-card-title {
+  margin: 0;
+}
+
+.room-card-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 18px;
+  color: var(--white);
+  margin: 0 0 14px;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+a:hover .room-card-title { color: var(--gold-l); }
+
+/* ── Rating Badge ───────────────────────────────────────────── */
+.room-card-rating {
+  font-family: 'Raleway', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--white-dim);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ── Specs ─────────────────────────────────────────────────── */
+.room-card-specs {
   display: flex;
-  flex-direction: column;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
 }
+.room-spec {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-family: 'Raleway', sans-serif;
+  font-size: 12px;
+  color: var(--white-dim);
+  letter-spacing: 0.3px;
+}
+.room-spec svg { color: var(--gold); flex-shrink: 0; }
 
+/* ── Footer ────────────────────────────────────────────────── */
+.room-card-footer {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin-top: auto;
+  padding-top: 16px;
+  border-top: 1px solid var(--gold-border);
+}
+.room-card-price { line-height: 1.2; }
+.price-original {
+  font-family: 'Raleway', sans-serif;
+  font-size: 12px;
+  color: var(--white-dim);
+  text-decoration: line-through;
+  margin-bottom: 2px;
+}
 .price-amount {
-  font-size: 28px;
-  font-weight: 700;
-  color: #111827;
-  line-height: 1;
+  font-family: 'Playfair Display', serif;
+  font-size: 22px;
+  color: var(--gold);
 }
-
 .price-label {
-  font-size: 14px;
-  color: #6b7280;
-  margin-top: 4px;
+  font-family: 'Raleway', sans-serif;
+  font-size: 11px;
+  color: var(--white-dim);
+  letter-spacing: 0.5px;
 }
 
-/* Button */
-.room-card .btn {
+/* ── CTA ───────────────────────────────────────────────────── */
+.btn.btn-primary {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 16px;
-  font-size: 14px;
+  gap: 7px;
+  background: none;
+  border: 1px solid var(--gold-border);
+  color: var(--gold);
+  font-family: 'Raleway', sans-serif;
+  font-size: 11px;
   font-weight: 600;
-  border-radius: 12px;
-  transition: all 0.2s ease;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  padding: 9px 10px !important;
   text-decoration: none;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
 }
-
-.room-card .btn-primary {
-  background: #4f46e5;
-  color: white;
-}
-
-.room-card .btn-primary:hover {
-  background: #4338ca;
-  transform: translateX(2px);
-}
-
-.room-card .btn-primary svg {
-  transition: transform 0.2s ease;
-}
-
-.room-card .btn-primary:hover svg {
-  transform: translateX(4px);
-}
-
-/* Responsive */
-@media (max-width: 768px) {
-  .room-card-image-wrapper {
-    height: 220px;
-  }
-
-  .room-card-content {
-    padding: 20px;
-  }
-
-  .room-card-title {
-    font-size: 18px;
-  }
-
-  .price-amount {
-    font-size: 24px;
-  }
+.btn.btn-primary:hover {
+  background: var(--gold-dim);
+  border-color: var(--gold);
 }

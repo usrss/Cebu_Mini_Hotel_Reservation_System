@@ -1,235 +1,299 @@
-/* MyBookingDetailPage.css */
-/* Mirrors RoomDetailPage.css: same nav, same two-column grid, same sidebar-card gradient */
+/* ============================================================
+   MyBookingDetailPage.css — Cebu Mini Hotel · Luxury Dark
+   ============================================================ */
 
-.booking-detail-page {
-  min-height: 100vh;
-  background: linear-gradient(135deg, #f9fafb 0%, rgba(249, 250, 251, 0.5) 100%);
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Raleway:wght@300;400;500;600;700&display=swap');
+
+:root {
+  --navy:        #0A0E1A;
+  --navy-mid:    #0F1729;
+  --navy-card:   #111827;
+  --navy-light:  #162040;
+  --gold:        #C9A84C;
+  --gold-l:      #E2C97E;
+  --gold-dim:    rgba(201,168,76,0.10);
+  --gold-border: rgba(201,168,76,0.22);
+  --white:       #F8F6F0;
+  --white-dim:   rgba(248,246,240,0.55);
+  --white-faint: rgba(248,246,240,0.06);
+  --white-sub:   rgba(248,246,240,0.30);
+  --success:     #6EE7B7;
+  --warn:        #FCD34D;
 }
 
-/* ── Nav — identical to .room-detail-nav ────────────────────────────────────── */
+/* ── Page ──────────────────────────────────────────────────── */
+.booking-detail-page {
+  min-height: 100vh;
+  background: var(--navy);
+  font-family: 'Raleway', sans-serif;
+  color: var(--white);
+}
 
+/* ── Nav ───────────────────────────────────────────────────── */
 .booking-detail-nav {
   position: sticky;
   top: 0;
-  z-index: 10;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(8px);
-  border-bottom: 1px solid #e5e7eb;
-  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+  z-index: 50;
+  background: rgba(10,14,26,0.97);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--gold-border);
 }
 
 .booking-detail-nav .nav-container {
-  max-width: 1280px;
+  max-width: 1100px;
   margin: 0 auto;
-  padding: 16px;
+  padding: 0 40px;
+  height: 52px;
+  display: flex;
+  align-items: center;
 }
 
 .back-link {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  color: #6b7280;
-  font-weight: 500;
+  gap: 7px;
+  color: var(--white-dim);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
   text-decoration: none;
-  transition: color 0.2s ease;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  transition: color 0.2s;
 }
 
-.back-link:hover { color: #111827; }
+.back-link:hover          { color: var(--gold); }
+.back-link:hover svg      { transform: translateX(-3px); }
+.back-link svg            { transition: transform 0.2s; }
 
-.back-link svg {
-  transition: transform 0.2s ease;
-}
-
-.back-link:hover svg {
-  transform: translateX(-4px);
-}
-
-/* ── Container — identical to .room-detail-container ───────────────────────── */
-
+/* ── Container ─────────────────────────────────────────────── */
 .booking-detail-container {
-  max-width: 1280px;
+  max-width: 1100px;
   margin: 0 auto;
-  padding: 32px 16px;
+  padding: 36px 40px 80px;
 }
 
 .booking-detail-layout {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 32px;
+  gap: 24px;
 }
-
-/* ── Main column ────────────────────────────────────────────────────────────── */
 
 .booking-detail-main {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 16px;
 }
 
-/* ── Cards — mirrors .info-card / .amenities-card from RoomDetailPage.css ────── */
-
+/* ── Base card ─────────────────────────────────────────────── */
 .detail-card {
-  background: white;
-  border-radius: 16px;
-  border: 1px solid #f3f4f6;
-  padding: 32px;
-  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+  background: var(--navy-card);
+  border: 1px solid var(--gold-border);
+  position: relative;
+  overflow: hidden;
+}
+
+.detail-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, var(--gold), transparent);
+}
+
+/* Card header row — used for titled sections */
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--gold-border);
 }
 
 .card-title {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 2.5px;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: #6b7280;
-  margin: 0 0 20px 0;
+  color: var(--gold);
+  margin: 0;
 }
 
-/* ── Reference card ─────────────────────────────────────────────────────────── */
+.card-title svg { opacity: 0.75; color: var(--gold); }
 
+.card-body { padding: 20px; }
+
+/* ── Reference card ────────────────────────────────────────── */
 .reference-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 16px;
+  gap: 14px;
+  padding: 20px;
 }
 
 .reference-eyebrow {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 2.5px;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: #9ca3af;
-  margin: 0 0 6px 0;
+  color: var(--gold);
+  opacity: 0.7;
+  margin: 0 0 7px;
 }
 
 .reference-number {
-  font-size: 28px;
-  font-weight: 700;
-  color: #111827;
   font-family: 'Courier New', monospace;
-  letter-spacing: 0.04em;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--white);
+  letter-spacing: 0.06em;
   margin: 0;
   line-height: 1.1;
 }
 
-/* ── Status badges — mirror .room-card-status style ─────────────────────────── */
-
+/* ── Status badges ─────────────────────────────────────────── */
 .booking-status-badge {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 14px;
-  border-radius: 20px;
-  font-size: 13px;
-  font-weight: 600;
+  padding: 5px 12px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
   white-space: nowrap;
+  border: 1px solid;
 }
 
-.status-awaiting  { background: rgba(245, 158, 11, 0.1);  color: #d97706; border: 1px solid rgba(245, 158, 11, 0.2); }
-.status-confirmed { background: rgba(16, 185, 129, 0.1);  color: #059669; border: 1px solid rgba(16, 185, 129, 0.2); }
-.status-checkedin { background: rgba(79, 70, 229, 0.1);   color: #4f46e5; border: 1px solid rgba(79, 70, 229, 0.2); }
-.status-checkedout { background: rgba(107, 114, 128, 0.1); color: #6b7280; border: 1px solid rgba(107, 114, 128, 0.2); }
-.status-cancelled { background: rgba(239, 68, 68, 0.1);   color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.2); }
-.status-noshow    { background: rgba(107, 114, 128, 0.1); color: #6b7280; border: 1px solid rgba(107, 114, 128, 0.2); }
+.status-awaiting  { background: rgba(252,211,77,0.07);  color: var(--warn);    border-color: rgba(252,211,77,0.25); }
+.status-confirmed { background: rgba(110,231,183,0.07); color: var(--success); border-color: rgba(110,231,183,0.25); }
+.status-checkedin { background: var(--gold-dim);        color: var(--gold);    border-color: var(--gold-border); }
+.status-checkedout{ background: var(--white-faint);     color: var(--white-dim); border-color: rgba(248,246,240,0.12); }
+.status-cancelled { background: var(--white-faint);     color: var(--white-dim); border-color: rgba(248,246,240,0.12); }
+.status-noshow    { background: var(--white-faint);     color: var(--white-dim); border-color: rgba(248,246,240,0.12); }
 
-/* ── Notices ─────────────────────────────────────────────────────────────────── */
-
+/* ── Notices ───────────────────────────────────────────────── */
 .payment-notice,
 .expired-notice {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 10px;
-  margin-top: 20px;
-  padding: 14px 16px;
-  border-radius: 12px;
-  font-size: 14px;
-  line-height: 1.5;
+  margin: 0 20px 16px;
+  padding: 12px 14px;
+  font-size: 12px;
+  line-height: 1.55;
+  border: 1px solid;
 }
 
 .payment-notice {
-  background: rgba(245, 158, 11, 0.08);
-  border: 1px solid rgba(245, 158, 11, 0.2);
-  color: #92400e;
+  background: rgba(252,211,77,0.05);
+  border-color: rgba(252,211,77,0.2);
+  color: var(--warn);
 }
+
+.payment-notice svg { color: var(--warn); flex-shrink: 0; margin-top: 1px; }
 
 .expired-notice {
-  background: rgba(239, 68, 68, 0.08);
-  border: 1px solid rgba(239, 68, 68, 0.2);
-  color: #991b1b;
+  background: var(--white-faint);
+  border-color: rgba(248,246,240,0.12);
+  color: var(--white-dim);
 }
 
-/* ── PIN card ────────────────────────────────────────────────────────────────── */
+.expired-notice svg { color: var(--white-dim); flex-shrink: 0; margin-top: 1px; }
 
+/* Deposit paid banner */
+.deposit-paid-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0 20px 16px;
+  padding: 12px 14px;
+  background: rgba(110,231,183,0.05);
+  border: 1px solid rgba(110,231,183,0.2);
+  color: var(--success);
+  font-size: 12px;
+}
+
+.deposit-paid-banner svg { flex-shrink: 0; margin-top: 1px; }
+
+.deposit-banner-text       { display: flex; flex-direction: column; gap: 2px; }
+.deposit-banner-text strong { font-size: 12px; font-weight: 700; }
+.deposit-banner-text span   { font-size: 11px; opacity: 0.75; }
+
+/* ── PIN card ──────────────────────────────────────────────── */
 .pin-display {
   display: flex;
-  gap: 10px;
-  margin-bottom: 12px;
+  gap: 7px;
+  margin-bottom: 14px;
 }
 
 .pin-digit {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 56px;
-  height: 64px;
-  background: #eef2ff;
-  border: 2px solid #4f46e5;
-  border-radius: 12px;
-  font-size: 28px;
+  width: 48px; height: 56px;
+  background: var(--gold-dim);
+  border: 1px solid var(--gold-border);
+  font-family: 'Playfair Display', serif;
+  font-size: 24px;
   font-weight: 700;
-  color: #4f46e5;
+  color: var(--gold);
 }
 
 .pin-note {
-  font-size: 14px;
-  color: #6b7280;
+  font-size: 12px;
+  color: var(--white-dim);
   margin: 0;
-  line-height: 1.5;
+  line-height: 1.55;
 }
 
-/* ── Info rows — identical to RoomDetailPage.css .info-rows ─────────────────── */
-
+/* ── Info rows — table style ───────────────────────────────── */
 .info-rows {
   display: flex;
   flex-direction: column;
-  gap: 16px;
 }
 
 .info-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--gold-border);
+  gap: 16px;
 }
 
+.info-row:last-child { border-bottom: none; }
+
 .info-label {
-  color: #6b7280;
-  font-size: 15px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--white-dim);
+  flex-shrink: 0;
 }
 
 .info-value {
+  font-size: 13px;
   font-weight: 600;
-  font-size: 15px;
-  color: #111827;
+  color: var(--white);
   text-align: right;
 }
 
-/* ── Cancelled card ──────────────────────────────────────────────────────────── */
+/* ── Cancelled card ────────────────────────────────────────── */
+.cancelled-card { border-color: rgba(248,246,240,0.15); }
 
-.cancelled-card {
-  border-color: rgba(239, 68, 68, 0.2);
-  background: rgba(239, 68, 68, 0.02);
-}
-
-/* ── Status history ──────────────────────────────────────────────────────────── */
-
+/* ── Status history timeline ───────────────────────────────── */
 .history-toggle {
   display: flex;
   align-items: center;
@@ -239,327 +303,440 @@
   border: none;
   padding: 0;
   cursor: pointer;
-  color: #6b7280;
-  transition: color 0.2s ease;
+  color: var(--gold);
+  transition: color 0.2s;
 }
 
-.history-toggle:hover {
-  color: #111827;
-}
+.history-toggle:hover          { color: var(--gold-l); }
+.history-toggle .card-title    { margin: 0; }
 
 .history-list {
-  margin-top: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  padding-left: 12px;
-  border-left: 2px solid #e5e7eb;
+  padding: 20px 20px 4px;
+  position: relative;
+}
+
+/* vertical line */
+.history-list::before {
+  content: '';
+  position: absolute;
+  left: 32px;
+  top: 28px;
+  bottom: 20px;
+  width: 1px;
+  background: linear-gradient(to bottom, var(--gold), rgba(201,168,76,0.08));
 }
 
 .history-item {
+  position: relative;
   display: flex;
-  gap: 12px;
-  align-items: flex-start;
+  gap: 16px;
+  padding-bottom: 18px;
 }
 
+.history-item:last-child { padding-bottom: 0; }
+
+/* dot + connector */
 .history-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: #4f46e5;
   flex-shrink: 0;
-  margin-top: 3px;
-  margin-left: -7px;
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: var(--navy-card);
+  border: 2px solid var(--gold-border);
+  margin-top: 4px;
+  position: relative;
+  z-index: 1;
+  transition: border-color 0.2s;
+}
+
+.history-item:first-child .history-dot {
+  background: var(--gold);
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px rgba(201,168,76,0.15);
 }
 
 .history-content {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
+  padding: 2px 0 0;
 }
 
 .history-transition {
-  font-size: 14px;
-  font-weight: 600;
-  color: #111827;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--white);
   text-transform: capitalize;
+  letter-spacing: 0.2px;
 }
 
 .history-note {
-  font-size: 13px;
-  color: #374151;
+  font-size: 11px;
+  color: var(--white-dim);
+  line-height: 1.5;
 }
 
 .history-time {
-  font-size: 12px;
-  color: #9ca3af;
+  font-size: 10px;
+  color: var(--white-sub);
+  letter-spacing: 0.3px;
+  margin-top: 1px;
 }
 
-/* ── Sidebar — identical to RoomDetailPage.css sidebar-card ────────────────── */
-
-.booking-detail-sidebar {
-  display: none;
-}
+/* ── Sidebar ───────────────────────────────────────────────── */
+.booking-detail-sidebar { display: none; }
 
 .sidebar-card {
   position: sticky;
-  top: 96px;
-  background: linear-gradient(135deg, #4338ca 0%, #4f46e5 100%);
-  border-radius: 16px;
-  padding: 32px;
-  color: white;
-  box-shadow: 0 20px 25px -5px rgba(79, 70, 229, 0.2);
+  top: 68px;
+  background: var(--navy-card);
+  border: 1px solid var(--gold-border);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.sidebar-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--gold), var(--gold-l), var(--gold));
 }
 
 .sidebar-title {
-  font-size: 20px;
+  font-family: 'Playfair Display', serif;
+  font-size: 15px;
   font-weight: 700;
-  margin: 0 0 24px 0;
-  color: white;
+  color: var(--white);
+  margin: 0;
+  padding: 18px 20px 16px;
+  border-bottom: 1px solid var(--gold-border);
 }
 
-/* ── Price rows ──────────────────────────────────────────────────────────────── */
-
+/* ── Price rows ────────────────────────────────────────────── */
 .price-rows {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  margin-bottom: 20px;
+  gap: 0;
 }
 
 .price-row {
   display: flex;
   justify-content: space-between;
-  font-size: 14px;
-  color: rgba(255, 255, 255, 0.85);
+  align-items: center;
+  font-size: 12px;
+  color: var(--white-dim);
+  padding: 9px 20px;
+  border-bottom: 1px solid var(--gold-border);
 }
+
+.price-row:last-child { border-bottom: none; }
+.price-row-discount span:last-child { color: var(--success); }
 
 .price-total-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding-top: 16px;
-  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 14px 20px;
+  border-top: 1px solid var(--gold-border);
+  border-bottom: 1px solid var(--gold-border);
+}
+
+.price-total-row > span:first-child {
+  font-size: 10px;
   font-weight: 700;
-  font-size: 20px;
-  color: white;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--white-dim);
 }
 
 .price-total-amount {
-  color: white;
+  font-family: 'Playfair Display', serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--gold);
 }
 
+/* Deposit breakdown */
+.deposit-breakdown-box {
+  border-bottom: 1px solid var(--gold-border);
+}
+
+.deposit-breakdown-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  padding: 8px 20px;
+  gap: 8px;
+  border-bottom: 1px solid var(--gold-border);
+}
+
+.deposit-breakdown-row:last-child { border-bottom: none; }
+.deposit-breakdown-row svg { flex-shrink: 0; }
+.deposit-row-paid     { color: var(--success); }
+.deposit-row-paid svg { color: var(--success); }
+.deposit-row-due      { color: var(--warn); }
+.deposit-row-due svg  { color: var(--warn); }
+
+/* Payment status row */
 .payment-status-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding-top: 16px;
-  margin-top: 4px;
-  border-top: 1px solid rgba(255, 255, 255, 0.15);
-  font-size: 14px;
-  color: rgba(255, 255, 255, 0.75);
-}
-
-/* ── Payment badges ──────────────────────────────────────────────────────────── */
-
-.payment-badge {
-  padding: 4px 12px;
-  border-radius: 20px;
-  font-size: 12px;
+  padding: 10px 20px;
+  font-size: 11px;
   font-weight: 600;
+  letter-spacing: 0.5px;
+  color: var(--white-dim);
+  border-bottom: 1px solid var(--gold-border);
 }
 
-.payment-unpaid              { background: rgba(239, 68, 68, 0.2);  color: #fca5a5; }
-.payment-paid                { background: rgba(16, 185, 129, 0.2); color: #6ee7b7; }
-.payment-refunded            { background: rgba(167, 139, 250, 0.2); color: #c4b5fd; }
-.payment-partially_refunded  { background: rgba(245, 158, 11, 0.2); color: #fcd34d; }
-.payment-failed              { background: rgba(239, 68, 68, 0.2);  color: #fca5a5; }
+/* ── Payment badges ────────────────────────────────────────── */
+.payment-badge {
+  padding: 3px 9px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  border: 1px solid;
+}
 
-/* ── Cancel confirm card ─────────────────────────────────────────────────────── */
+.payment-unpaid             { color: var(--white-dim); background: var(--white-faint); border-color: rgba(248,246,240,0.12); }
+.payment-paid               { color: var(--success);   background: rgba(110,231,183,0.07); border-color: rgba(110,231,183,0.25); }
+.payment-refunded           { color: #c4b5fd; background: rgba(167,139,250,0.07); border-color: rgba(167,139,250,0.25); }
+.payment-partially_refunded { color: var(--warn);      background: rgba(252,211,77,0.07);  border-color: rgba(252,211,77,0.25); }
+.payment-failed             { color: var(--white-dim); background: var(--white-faint);     border-color: rgba(248,246,240,0.12); }
 
+/* ── Action buttons ────────────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 13px 20px;
+  font-family: 'Raleway', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-decoration: none;
+  border-radius: 0;
+  width: 100%;
+  margin: 0;
+}
+
+/* Complete Payment — gold primary */
+.btn-primary {
+  background: linear-gradient(135deg, var(--gold) 0%, var(--gold-l) 100%);
+  color: var(--navy);
+  border-bottom: 1px solid var(--gold-border);
+}
+
+.btn-primary:hover {
+  opacity: 0.9;
+  box-shadow: 0 4px 20px rgba(201,168,76,0.18);
+}
+
+/* Pay Balance — outlined gold */
+.btn-secondary {
+  background: transparent;
+  color: var(--gold);
+  border: 1px solid var(--gold-border);
+  border-left: none; border-right: none;
+}
+
+.btn-secondary:hover {
+  background: var(--gold-dim);
+  border-color: var(--gold);
+}
+
+/* Cancel — white text, dark outlined, no red */
+.btn-danger {
+  background: transparent;
+  color: var(--white);
+  border: 1px solid var(--gold-border);
+  border-left: none; border-right: none; border-bottom: none;
+  opacity: 0.7;
+}
+
+.btn-danger:hover   { opacity: 1; background: var(--white-faint); }
+.btn-danger:disabled { opacity: 0.3; cursor: not-allowed; }
+
+/* Keep Booking — subtle */
+.btn-outline {
+  background: transparent;
+  color: var(--white-dim);
+  border: 1px solid var(--gold-border);
+}
+
+.btn-outline:hover {
+  color: var(--white);
+  border-color: var(--gold);
+  background: var(--white-faint);
+}
+
+.btn-full { width: 100%; }
+
+/* ── Cancel confirm card ───────────────────────────────────── */
 .cancel-confirm-card {
-  background: rgba(239, 68, 68, 0.08);
-  border: 1px solid rgba(239, 68, 68, 0.25);
-  border-radius: 16px;
-  padding: 24px;
+  background: var(--navy-mid);
+  border: 1px solid var(--gold-border);
+  padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  margin-top: 16px;
+  gap: 0;
+  overflow: hidden;
 }
 
 .cancel-confirm-title {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 16px;
+  font-size: 10px;
   font-weight: 700;
-  color: #ef4444;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--white-dim);
   margin: 0;
+  padding: 13px 20px;
+  border-bottom: 1px solid var(--gold-border);
 }
 
 .cancel-refund-info {
-  font-size: 14px;
-  color: rgba(255, 255, 255, 0.85);
+  font-size: 12px;
+  color: var(--white-dim);
   margin: 0;
+  padding: 12px 20px;
+  line-height: 1.55;
+  border-bottom: 1px solid var(--gold-border);
+}
+
+.cancel-no-refund { color: var(--white-dim); }
+
+.cancel-deposit-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px 20px;
+  background: rgba(252,211,77,0.04);
+  border-bottom: 1px solid rgba(252,211,77,0.15);
+  font-size: 12px;
+  color: var(--warn);
   line-height: 1.5;
 }
 
-.cancel-no-refund {
-  color: #fca5a5;
-}
+.cancel-deposit-warning svg { flex-shrink: 0; margin-top: 1px; color: var(--warn); }
+.cancel-deposit-warning p   { margin: 0; }
 
 .cancel-reason-input {
   width: 100%;
-  padding: 10px 12px;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 12px;
-  font-size: 14px;
-  color: white;
+  padding: 12px 20px;
+  background: var(--navy);
+  border: none;
+  border-bottom: 1px solid var(--gold-border);
+  color: var(--white);
+  font-family: 'Raleway', sans-serif;
+  font-size: 12px;
   resize: vertical;
   outline: none;
-  font-family: inherit;
   box-sizing: border-box;
-  transition: all 0.2s ease;
+  transition: background 0.2s;
+  border-radius: 0;
+  min-height: 72px;
 }
 
-.cancel-reason-input::placeholder {
-  color: rgba(255, 255, 255, 0.4);
-}
-
-.cancel-reason-input:focus {
-  border-color: rgba(255, 255, 255, 0.5);
-  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.1);
-}
-
-.cancel-confirm-actions {
-  display: flex;
-  gap: 8px;
-}
+.cancel-reason-input::placeholder { color: rgba(248,246,240,0.18); }
+.cancel-reason-input:focus        { background: var(--navy-mid); }
 
 .booking-api-error {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 13px;
-  color: #fca5a5;
+  font-size: 11px;
+  color: var(--white-dim);
+  padding: 10px 20px;
+  background: var(--white-faint);
+  border-bottom: 1px solid var(--gold-border);
 }
 
-/* ── Buttons — match .btn / .btn-primary from RoomDetailPage.css ─────────────── */
+.cancel-confirm-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
 
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 12px 24px;
-  font-size: 15px;
-  font-weight: 600;
-  border-radius: 12px;
+/* inside cancel card the buttons need no extra border */
+.cancel-confirm-actions .btn {
+  border-radius: 0;
   border: none;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  text-decoration: none;
+  border-top: 1px solid var(--gold-border);
 }
 
-.btn-full { width: 100%; }
-
-.btn-primary {
-  background: white;
-  color: #4f46e5;
-  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.15);
+.cancel-confirm-actions .btn + .btn {
+  border-left: 1px solid var(--gold-border);
 }
 
-.btn-primary:hover {
-  background: #f5f3ff;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.15);
-  transform: translateY(-1px);
-}
-
-.btn-danger {
-  background: rgba(239, 68, 68, 0.15);
-  color: #fca5a5;
-  border: 1px solid rgba(239, 68, 68, 0.3);
-}
-
-.btn-danger:hover {
-  background: rgba(239, 68, 68, 0.25);
-}
-
-.btn-danger:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-outline {
-  background: rgba(255, 255, 255, 0.1);
-  color: rgba(255, 255, 255, 0.9);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-.btn-outline:hover {
-  background: rgba(255, 255, 255, 0.2);
-}
-
-/* ── Error page ──────────────────────────────────────────────────────────────── */
-
+/* ── Error page ────────────────────────────────────────────── */
 .booking-detail-error-container {
   min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f9fafb;
-  padding: 32px 16px;
+  background: var(--navy);
+  padding: 32px;
 }
 
-.error-content { text-align: center; max-width: 480px; }
+.error-content   { text-align: center; max-width: 420px; }
 
 .error-heading {
-  font-size: 24px;
-  font-weight: 700;
-  color: #111827;
-  margin: 0 0 8px 0;
+  font-family: 'Playfair Display', serif;
+  font-size: 22px;
+  color: var(--white);
+  margin: 0 0 8px;
 }
 
 .error-message {
-  color: #6b7280;
-  margin: 0 0 24px 0;
-  font-size: 16px;
+  font-size: 13px;
+  color: var(--white-dim);
+  margin: 0 0 24px;
 }
 
-/* ── Skeleton — identical animation and classes to RoomDetailPage.css ────────── */
-
+/* ── Skeleton ──────────────────────────────────────────────── */
 .skeleton {
-  background: #e5e7eb;
-  border-radius: 8px;
-  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  background: var(--navy-light);
+  animation: bdd-pulse 1.8s ease-in-out infinite;
 }
 
-@keyframes pulse {
+@keyframes bdd-pulse {
   0%, 100% { opacity: 1; }
-  50%       { opacity: 0.5; }
+  50%       { opacity: 0.3; }
 }
 
-.skeleton-back        { height: 24px; width: 128px; }
-.skeleton-card-lg     { height: 200px; border-radius: 16px; }
-.skeleton-card-md     { height: 140px; border-radius: 16px; }
-.skeleton-sidebar-card { height: 400px; border-radius: 16px; }
+.skeleton-back         { height: 16px; width: 110px; }
+.skeleton-card-lg      { height: 180px; }
+.skeleton-card-md      { height: 130px; }
+.skeleton-sidebar-card { height: 420px; }
 
-/* ── Responsive — mirrors RoomDetailPage.css breakpoints ────────────────────── */
-
+/* ── Responsive ────────────────────────────────────────────── */
 @media (min-width: 1024px) {
-  .booking-detail-layout {
-    grid-template-columns: 1fr 384px;
-  }
+  .booking-detail-layout  { grid-template-columns: 1fr 320px; }
+  .booking-detail-sidebar { display: block; }
+}
 
-  .booking-detail-sidebar {
-    display: block;
-  }
+@media (max-width: 1023px) {
+  .booking-detail-container                { padding: 28px 24px 60px; }
+  .booking-detail-nav .nav-container       { padding: 0 24px; }
 }
 
 @media (max-width: 768px) {
-  .reference-number { font-size: 22px; }
-  .pin-digit { width: 48px; height: 56px; font-size: 24px; }
-  .detail-card { padding: 24px; }
+  .booking-detail-container                { padding: 20px 16px 48px; }
+  .booking-detail-nav .nav-container       { padding: 0 16px; }
+  .reference-number                        { font-size: 18px; }
+  .pin-digit                               { width: 42px; height: 50px; font-size: 20px; }
+  .cancel-confirm-actions                  { grid-template-columns: 1fr; }
+  .cancel-confirm-actions .btn + .btn      { border-left: none; border-top: 1px solid var(--gold-border); }
 }

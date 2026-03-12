@@ -1,3 +1,4 @@
+# bookings/models.py
 import random
 from datetime import timedelta
 from django.db import models

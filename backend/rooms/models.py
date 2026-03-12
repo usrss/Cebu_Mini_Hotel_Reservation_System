@@ -1,3 +1,5 @@
+
+# rooms/models.py
 from django.db import models
 from django.conf import settings
 from django.core.validators import MinValueValidator,MaxValueValidator
@@ -30,10 +32,7 @@ class RoomStatus(models.TextChoices):
     OCCUPIED = "occupied", "Occupied"
     MAINTENANCE = "maintenance", "Under Maintenance"
     RESERVED = "reserved", "Reserved"
-
-# ============================================================================
-#  VIEW TYPE ENUM (Add this near the top with other enums)
-# ============================================================================
+    CLEANING = "cleaning", "Cleaning"
 
 class RoomViewType(models.TextChoices):
     NONE = "none", "No Specific View"

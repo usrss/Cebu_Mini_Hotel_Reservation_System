@@ -12,6 +12,7 @@ export default function ReviewForm({ booking, onClose, onSubmit }) {
   const [reviewText, setReviewText] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
+  const [submitted, setSubmitted] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -30,13 +31,29 @@ export default function ReviewForm({ booking, onClose, onSubmit }) {
         rating,
         review_text: reviewText
       });
-      onClose();
+      setSubmitted(true);
+      setTimeout(() => onClose(), 2500);
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to submit review');
+      setError(err.response?.data?.detail || err.response?.data?.non_field_errors?.[0] || 'Failed to submit review');
     } finally {
       setSubmitting(false);
     }
   };
+
+  if (submitted) {
+    return (
+      <div className="review-form-modal" onClick={onClose}>
+        <div className="review-form-container" onClick={(e) => e.stopPropagation()}
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '220px' }}>
+          <div style={{ textAlign: 'center', padding: '2rem' }}>
+            <div style={{ fontSize: '3rem', marginBottom: '0.75rem' }}>⭐</div>
+            <h3 style={{ margin: '0 0 0.4rem', fontSize: '1.2rem', fontWeight: 600 }}>Thank You!</h3>
+            <p style={{ margin: 0, color: '#888', fontSize: '0.9rem' }}>Your review has been submitted successfully.</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="review-form-modal" onClick={onClose}>

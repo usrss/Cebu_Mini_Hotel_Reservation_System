@@ -1,0 +1,117 @@
+/* ============================================================
+   NotificationItem.css
+   Single row in the notification panel list
+   ============================================================ */
+
+.notif-item {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 18px;
+  cursor: pointer;
+  border-bottom: 1px solid #f1f5f9;
+  background: #fff;
+  transition: background 0.15s;
+  outline: none;
+}
+
+.notif-item:last-child {
+  border-bottom: none;
+}
+
+.notif-item:hover,
+.notif-item:focus-visible {
+  background: #f8faff;
+}
+
+/* ── Unread variant ── */
+.notif-item--unread {
+  background: #fafbff;
+}
+
+.notif-item--unread:hover,
+.notif-item--unread:focus-visible {
+  background: #f0f4ff;
+}
+
+/* Left accent bar for unread items */
+.notif-item-bar {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  border-radius: 0 2px 2px 0;
+  background: var(--accent, #4f46e5);
+}
+
+/* ── Icon bubble ── */
+.notif-item-icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  margin-top: 1px;
+}
+
+/* ── Content ── */
+.notif-item-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.notif-item-title {
+  margin: 0 0 3px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #111827;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.notif-item--unread .notif-item-title {
+  color: #1e1b4b;
+}
+
+.notif-item-desc {
+  margin: 0 0 5px;
+  font-size: 12.5px;
+  color: #6b7280;
+  line-height: 1.45;
+  /* Allow up to 2 lines */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.notif-item-time {
+  font-size: 11px;
+  color: #9ca3af;
+  font-weight: 500;
+}
+
+/* ── Unread dot ── */
+.notif-item-dot {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-top: 6px;
+}
+
+/* ── Link wrapper (when item has a booking_id) ── */
+.notif-item-link {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  text-decoration: none;
+  color: inherit;
+}

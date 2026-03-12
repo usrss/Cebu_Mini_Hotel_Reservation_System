@@ -1,3 +1,4 @@
+# bookings/views.py
 from django.utils import timezone
 from django.db import transaction
 from rest_framework import generics, status, filters
@@ -7,6 +8,12 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
 
 from rooms.permissions import IsStaffOrAdmin
+from bookings.permissions import (
+    CanViewAllBookings,
+    CanConfirmCancelBookings,
+    CanHandleCheckInOut,
+    IsAdminOnlyBooking,
+)
 from .models import Booking, BookingStatus, BookingStatusHistory, BLOCKING_STATUSES
 from .serializers import (
     BookingListSerializer,
@@ -89,7 +96,7 @@ class BookingConfirmView(APIView):
     This is the sole entry-point for credential generation.
     Requires IsStaffOrAdmin or a dedicated payments service permission.
     """
-    permission_classes = [IsStaffOrAdmin]
+    permission_classes = [CanConfirmCancelBookings]
 
     def post(self, request, pk):
         try:
@@ -175,7 +182,7 @@ class ReceptionBookingListView(generics.ListAPIView):
     All bookings. Filterable by status, dates, room, guest name/email.
     """
     serializer_class   = BookingListSerializer
-    permission_classes = [IsStaffOrAdmin]
+    permission_classes = [CanViewAllBookings]
     filter_backends    = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class    = BookingFilter
     search_fields      = ["reference_number", "full_name", "email"]
@@ -192,7 +199,7 @@ class ReceptionBookingDetailView(generics.RetrieveAPIView):
     Full booking detail including status history.
     """
     serializer_class   = BookingDetailSerializer
-    permission_classes = [IsStaffOrAdmin]
+    permission_classes = [CanViewAllBookings]
     queryset           = (
         Booking.objects
         .select_related("room")
@@ -207,7 +214,7 @@ class ReceptionBookingStatusView(APIView):
     NOTE: To confirm after payment use /admin/<id>/confirm/ instead.
     Body: { "status": "checked_in", "note": "optional note" }
     """
-    permission_classes = [IsStaffOrAdmin]
+    permission_classes = [CanConfirmCancelBookings]
 
     def patch(self, request, pk):
         try:
@@ -232,7 +239,7 @@ class ReceptionCheckInVerifyView(APIView):
     Only CONFIRMED bookings with valid credentials can pass.
     Body: { "reference_number": "CMH-2026-000001", "checkin_pin": "4821" }
     """
-    permission_classes = [IsStaffOrAdmin]
+    permission_classes = [CanHandleCheckInOut]
 
     def post(self, request):
         serializer = CheckInVerifySerializer(data=request.data)
@@ -257,7 +264,7 @@ class ReceptionCancelBookingView(APIView):
     Staff cancels a booking with optional reason.
     Works for both PENDING_PAYMENT and CONFIRMED bookings.
     """
-    permission_classes = [IsStaffOrAdmin]
+    permission_classes = [CanConfirmCancelBookings]
 
     def post(self, request, pk):
         try:
@@ -284,7 +291,7 @@ class ExpireBookingsView(APIView):
     Intended to be called by Celery beat or a cron job.
     No reference_number or PIN was ever generated for these bookings.
     """
-    permission_classes = [IsStaffOrAdmin]
+    permission_classes = [IsAdminOnlyBooking]
 
     def post(self, request):
         count = expire_unpaid_bookings()

@@ -1,3 +1,5 @@
+# payments/models.py
+
 import random
 import string
 from decimal import Decimal

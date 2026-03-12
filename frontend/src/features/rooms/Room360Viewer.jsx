@@ -1,51 +1,37 @@
+// src/features/rooms/Room360Viewer.jsx
 import { useEffect, useRef, useState } from 'react';
 import { X, Maximize2, RotateCw, Loader2 } from 'lucide-react';
 import './Room360Viewer.css';
 
 /**
- * 360° Panorama Viewer Component
- *
- * Uses Pannellum library for equirectangular panorama display
- * Lazy loads only when modal opens
- * Supports mouse drag, touch swipe, zoom, and fullscreen
+ * 360° Panorama Viewer
+ * Uses Pannellum for equirectangular panorama display.
+ * Logic unchanged — only UI/CSS updated.
  */
 export default function Room360Viewer({ imageUrl, roomName, onClose }) {
-  const viewerRef = useRef(null);
+  const viewerRef    = useRef(null);
   const pannellumRef = useRef(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [loading, setLoading]         = useState(true);
+  const [error, setError]             = useState(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   useEffect(() => {
-    // Prevent body scroll when modal is open
     document.body.style.overflow = 'hidden';
-
-    // Load Pannellum library dynamically
     loadPannellum();
-
-    // Cleanup
     return () => {
       document.body.style.overflow = '';
       if (pannellumRef.current) {
-        try {
-          pannellumRef.current.destroy();
-        } catch (e) {
-          console.error('Error destroying viewer:', e);
-        }
+        try { pannellumRef.current.destroy(); } catch {}
       }
     };
   }, []);
 
-  // Handle ESC key to close
   useEffect(() => {
-    const handleEsc = (e) => {
-      if (e.key === 'Escape') onClose();
-    };
+    const handleEsc = (e) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', handleEsc);
     return () => window.removeEventListener('keydown', handleEsc);
   }, [onClose]);
 
-  // Handle fullscreen change
   useEffect(() => {
     const handleFullscreenChange = () => {
       setIsFullscreen(!!document.fullscreenElement);
@@ -56,80 +42,59 @@ export default function Room360Viewer({ imageUrl, roomName, onClose }) {
 
   const loadPannellum = async () => {
     try {
-      // Check if already loaded
-      if (window.pannellum) {
-        initViewer();
-        return;
-      }
+      if (window.pannellum) { initViewer(); return; }
 
-      // Load CSS
       const link = document.createElement('link');
-      link.rel = 'stylesheet';
-      link.href = 'https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.css';
+      link.rel   = 'stylesheet';
+      link.href  = 'https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.css';
       document.head.appendChild(link);
 
-      // Load JS
-      const script = document.createElement('script');
-      script.src = 'https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.js';
-      script.onload = initViewer;
-      script.onerror = () => setError('Failed to load 360° viewer');
+      const script    = document.createElement('script');
+      script.src      = 'https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.js';
+      script.onload   = initViewer;
+      script.onerror  = () => setError('Failed to load 360° viewer');
       document.head.appendChild(script);
-    } catch (err) {
+    } catch {
       setError('Failed to initialize viewer');
-      console.error(err);
     }
   };
 
   const initViewer = () => {
     if (!viewerRef.current || !window.pannellum) return;
-
     try {
       pannellumRef.current = window.pannellum.viewer(viewerRef.current, {
         type: 'equirectangular',
         panorama: imageUrl,
         autoLoad: true,
-        showControls: false, // We'll use custom controls
+        showControls: false,
         mouseZoom: true,
         doubleClickZoom: false,
         draggable: true,
         keyboardZoom: true,
         friction: 0.15,
-        hfov: 100, // Horizontal field of view
+        hfov: 100,
         minHfov: 50,
         maxHfov: 120,
         pitch: 0,
         yaw: 0,
       });
-
-      // Handle load complete
-      pannellumRef.current.on('load', () => {
-        setLoading(false);
-      });
-
-      // Handle errors
-      pannellumRef.current.on('error', () => {
-        setError('Failed to load panorama image');
-        setLoading(false);
-      });
-    } catch (err) {
+      pannellumRef.current.on('load',  () => setLoading(false));
+      pannellumRef.current.on('error', () => { setError('Failed to load panorama image'); setLoading(false); });
+    } catch {
       setError('Failed to initialize viewer');
       setLoading(false);
-      console.error(err);
     }
   };
 
   const toggleFullscreen = async () => {
     if (!viewerRef.current) return;
-
     try {
       if (!document.fullscreenElement) {
         await viewerRef.current.requestFullscreen();
       } else {
         await document.exitFullscreen();
       }
-    } catch (err) {
-      console.error('Fullscreen error:', err);
-    }
+    } catch {}
   };
 
   const resetView = () => {
@@ -144,14 +109,19 @@ export default function Room360Viewer({ imageUrl, roomName, onClose }) {
     <div className="room-360-modal" onClick={onClose}>
       <div className="room-360-overlay" />
 
-      {/* Viewer Container */}
       <div className="room-360-container" onClick={(e) => e.stopPropagation()}>
-        {/* Header */}
+
+        {/* ── Header ── */}
         <div className="room-360-header">
           <div className="room-360-title">
-            <RotateCw size={20} className="rotate-icon" />
-            <span>{roomName || 'Room'} - 360° Virtual Tour</span>
+            <RotateCw size={16} className="rotate-icon" />
+            <div className="room-360-title-sep" />
+            <div>
+              <p className="room-360-title-eyebrow">Virtual Tour</p>
+              <p className="room-360-title-name">{roomName || 'Room'} · 360°</p>
+            </div>
           </div>
+
           <div className="room-360-actions">
             <button
               onClick={resetView}
@@ -159,51 +129,47 @@ export default function Room360Viewer({ imageUrl, roomName, onClose }) {
               title="Reset view"
               disabled={loading}
             >
-              <RotateCw size={18} />
+              <RotateCw size={15} />
             </button>
             <button
               onClick={toggleFullscreen}
               className="room-360-btn"
-              title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+              title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
               disabled={loading}
             >
-              <Maximize2 size={18} />
+              <Maximize2 size={15} />
             </button>
             <button onClick={onClose} className="room-360-btn close" title="Close">
-              <X size={18} />
+              <X size={15} />
             </button>
           </div>
         </div>
 
-        {/* Viewer */}
+        {/* ── Viewer ── */}
         <div className="room-360-viewer-wrapper">
           <div ref={viewerRef} className="room-360-viewer" />
 
-          {/* Loading State */}
           {loading && (
             <div className="room-360-loading">
-              <Loader2 size={40} className="spin-icon" />
-              <p>Loading 360° view...</p>
+              <div className="r360-spinner" />
+              <p>Loading panorama</p>
             </div>
           )}
 
-          {/* Error State */}
           {error && (
             <div className="room-360-error">
               <p>{error}</p>
-              <button onClick={onClose} className="error-close-btn">
-                Close
-              </button>
+              <button onClick={onClose} className="error-close-btn">Close</button>
             </div>
           )}
 
-          {/* Instructions */}
           {!loading && !error && (
             <div className="room-360-instructions">
-              <p>💡 Drag to rotate • Scroll to zoom • Click fullscreen for immersive view</p>
+              <p>Drag to rotate · Scroll to zoom · Click fullscreen for immersive view</p>
             </div>
           )}
         </div>
+
       </div>
     </div>
   );

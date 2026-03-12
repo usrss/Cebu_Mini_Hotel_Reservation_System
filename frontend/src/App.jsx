@@ -13,6 +13,7 @@ import AdminRoomsPage    from './features/rooms/AdminRoomsPage';
 import { bookingRoutes } from './features/bookings/BookingRoutes';
 import { paymentRoutes } from './features/payments/PaymentRoutes.jsx';
 import HotelHomepage from "./features/home/HotelHomepage.jsx";
+import { notificationRoutes } from './features/notifications/NotificationRoutes';
 
 import './App.css';
 
@@ -55,6 +56,7 @@ function App() {
         {/* ── Bookings & Payments ──────────────────────────────────────── */}
         {bookingRoutes}
         {paymentRoutes}
+        {notificationRoutes} 
 
         {/* ── Default & 404 ────────────────────────────────────────────── */}
         <Route path="/" element={<HotelHomepage />} />

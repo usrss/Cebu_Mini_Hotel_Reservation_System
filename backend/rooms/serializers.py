@@ -468,11 +468,11 @@ class RoomReviewCreateSerializer(serializers.ModelSerializer):
         booking = data.get('booking')
 
         # Check if booking belongs to user
-        if booking.guest != request.user:
+        if booking.user != request.user:
             raise serializers.ValidationError("You can only review your own bookings.")
 
-        # Check if booking is completed
-        if booking.status != 'completed':
+        # Check if booking is checked out
+        if booking.status != 'checked_out':
             raise serializers.ValidationError("You can only review completed bookings.")
 
         # Check if review already exists
@@ -548,4 +548,3 @@ class PriceCalculationResponseSerializer(serializers.Serializer):
     breakdown = serializers.ListField(
         child=serializers.DictField()
     )
-

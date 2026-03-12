@@ -1,48 +1,141 @@
-/* ── PaymentCancelPage.css ───────────────────────────────────────────────── */
+/* ============================================================
+   PaymentCancelPage.css — Cebu Mini Hotel · Luxury Dark Theme
+   ============================================================ */
 
-.cancel-page { min-height: 100vh; background: #f8fafc; }
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700&family=Raleway:wght@300;400;500;600;700&display=swap');
 
-.cancel-nav {
-  background: #fff;
-  border-bottom: 1px solid #e2e8f0;
-  padding: 12px 0;
-}
-.cancel-nav .nav-container {
-  max-width: 640px; margin: 0 auto; padding: 0 24px;
-}
-.cancel-nav .back-link {
-  display: inline-flex; align-items: center; gap: 6px;
-  color: #64748b; text-decoration: none; font-size: 14px; font-weight: 500;
-}
-.cancel-nav .back-link:hover { color: #0f172a; }
-
-.cancel-container {
-  max-width: 500px; margin: 0 auto; padding: 64px 24px 80px; text-align: center;
+:root {
+  --navy:        #0A0E1A;
+  --navy-mid:    #0F1729;
+  --navy-card:   #111827;
+  --gold:        #C9A84C;
+  --gold-l:      #E2C97E;
+  --gold-dim:    rgba(201,168,76,0.10);
+  --gold-border: rgba(201,168,76,0.22);
+  --white:       #F8F6F0;
+  --white-dim:   rgba(248,246,240,0.55);
+  --error:       #F87171;
 }
 
-.cancel-card {
-  background: #fff; border: 1px solid #e2e8f0; border-radius: 20px; padding: 48px 36px;
+.payment-cancel-page {
+  min-height: 100vh;
+  background: var(--navy);
+  font-family: 'Raleway', sans-serif;
+  color: var(--white);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
 }
 
-.cancel-icon {
-  width: 80px; height: 80px;
-  background: #fff7ed; color: #ea580c;
-  border-radius: 50%; display: flex; align-items: center; justify-content: center;
-  margin: 0 auto 24px;
+.confirm-card {
+  background: var(--navy-card);
+  border: 1px solid var(--gold-border);
+  width: 100%;
+  max-width: 560px;
+  overflow: hidden;
+}
+.confirm-card::before {
+  content: '';
+  display: block;
+  height: 2px;
+  background: linear-gradient(90deg, var(--error), rgba(248,113,113,0.4), var(--error));
 }
 
-.cancel-title    { font-size: 24px; font-weight: 700; color: #0f172a; margin: 0 0 12px; }
-.cancel-subtitle { font-size: 15px; color: #475569; line-height: 1.6; margin: 0 0 32px; }
-
-.cancel-actions { display: flex; flex-direction: column; gap: 12px; }
-
-.btn {
-  display: inline-flex; align-items: center; justify-content: center;
-  gap: 8px; padding: 12px 24px; border-radius: 10px;
-  font-size: 15px; font-weight: 600; text-decoration: none;
-  border: none; cursor: pointer; transition: all 0.2s;
+.confirm-icon-wrap {
+  padding: 40px 40px 0;
+  display: flex;
+  justify-content: center;
 }
-.btn-primary  { background: #2563eb; color: #fff; }
-.btn-primary:hover { background: #1d4ed8; }
-.btn-outline  { background: #fff; color: #374151; border: 1.5px solid #d1d5db; }
-.btn-outline:hover { background: #f9fafb; }
+.confirm-icon {
+  width: 72px;
+  height: 72px;
+  border: 1px solid;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.confirm-icon-cancel {
+  border-color: rgba(248,113,113,0.4);
+  background: rgba(248,113,113,0.06);
+  color: var(--error);
+}
+
+.confirm-body {
+  padding: 28px 40px 36px;
+  text-align: center;
+}
+.confirm-eyebrow {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  color: var(--error);
+  margin-bottom: 10px;
+}
+.confirm-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--white);
+  margin: 0 0 12px;
+}
+.confirm-subtitle {
+  font-size: 14px;
+  color: var(--white-dim);
+  margin: 0 0 28px;
+  line-height: 1.7;
+}
+.confirm-divider {
+  height: 1px;
+  background: var(--gold-border);
+  margin: 0 0 24px;
+}
+
+.confirm-actions {
+  display: flex;
+  gap: 12px;
+  flex-direction: column;
+}
+.confirm-btn-primary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: linear-gradient(135deg, var(--gold), var(--gold-l));
+  border: none;
+  color: var(--navy);
+  font-family: 'Raleway', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  padding: 14px 24px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: opacity 0.2s;
+}
+.confirm-btn-primary:hover { opacity: 0.88; }
+.confirm-btn-secondary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: none;
+  border: 1px solid var(--gold-border);
+  color: var(--gold);
+  font-family: 'Raleway', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  padding: 13px 24px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.2s;
+}
+.confirm-btn-secondary:hover {
+  background: var(--gold-dim);
+  border-color: var(--gold);
+}

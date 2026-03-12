@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Calendar, Users, User, Mail, Phone, CreditCard, AlertCircle, Clock } from 'lucide-react';
+import { Calendar, Users, User, Mail, Phone, CreditCard, AlertCircle, Clock, Tag } from 'lucide-react';
 import { useCreateBooking, useCurrentUser } from '../hooks/useBookings';
 import './BookingForm.css';
+
+const DEPOSIT_PCT = 0.30;
 
 const getTodayDate = () => new Date().toISOString().split('T')[0];
 
@@ -19,8 +21,6 @@ function formatPrice(amount) {
 export default function BookingForm({ room, prefillCheckIn, prefillCheckOut }) {
   const navigate = useNavigate();
   const { createBooking, loading, error } = useCreateBooking();
-
-  // Fetch logged-in user internally
   const { user, loading: userLoading } = useCurrentUser();
 
   const [form, setForm] = useState({
@@ -33,7 +33,6 @@ export default function BookingForm({ room, prefillCheckIn, prefillCheckOut }) {
   });
   const [fieldErrors, setFieldErrors] = useState({});
 
-  // Auto-fill guest fields once user data loads
   useEffect(() => {
     if (user) {
       setForm((prev) => ({
@@ -45,15 +44,20 @@ export default function BookingForm({ room, prefillCheckIn, prefillCheckOut }) {
     }
   }, [user]);
 
-  const nights         = calculateNights(form.check_in, form.check_out);
-  const effectiveRate  = Number(room.discounted_price ?? room.price_per_night);
-  const subtotal       = nights * effectiveRate;
-  const tax            = subtotal * 0.12;
-  const fee            = subtotal * 0.05;
-  const total          = subtotal + tax + fee;
-  const hasDiscount    = Number(room.discount_percentage) > 0;
+  const nights           = calculateNights(form.check_in, form.check_out);
+  const effectiveRate    = Number(room.discounted_price ?? room.price_per_night);
+  const subtotal         = nights * effectiveRate;
+  const tax              = subtotal * 0.12;
+  const fee              = subtotal * 0.05;
+  const total            = subtotal + tax + fee;
+
+  const hasDiscount      = Number(room.discount_percentage) > 0;
   const originalSubtotal = nights * Number(room.price_per_night);
-  const savedAmount    = originalSubtotal - subtotal;
+  const savedAmount      = originalSubtotal - subtotal;
+
+  // Deposit breakdown
+  const depositAmount    = total * DEPOSIT_PCT;
+  const balanceAmount    = total - depositAmount;
 
   const update = (key, value) => {
     setForm((prev) => {
@@ -94,8 +98,6 @@ export default function BookingForm({ room, prefillCheckIn, prefillCheckOut }) {
 
     const booking = await createBooking(payload);
     if (booking) {
-      // Phase 1 complete: booking is PENDING_PAYMENT.
-      // Navigate to payment page — confirmation page is only shown after payment.
       navigate(`/payments/${booking.id}`, { state: { booking } });
     }
   };
@@ -138,7 +140,7 @@ export default function BookingForm({ room, prefillCheckIn, prefillCheckOut }) {
         )}
       </FormSection>
 
-      {/* Number of Guests */}
+      {/* Guests */}
       <FormSection title="Guests" icon={<Users size={16} />}>
         <div className="booking-guest-wrapper">
           <input
@@ -224,15 +226,16 @@ export default function BookingForm({ room, prefillCheckIn, prefillCheckOut }) {
             Price Breakdown
           </h5>
           <div className="breakdown-rows">
-            {/* Discount badge — only shown when a discount is active */}
+            {/* Discount badge */}
             {hasDiscount && (
               <div className="breakdown-discount-badge">
+                <Tag size={12} />
                 {Number(room.discount_percentage)}% discount applied
               </div>
             )}
+
             <div className="breakdown-row">
               <span>
-                {/* Show strikethrough original rate when discounted */}
                 {hasDiscount && (
                   <span className="breakdown-original-price">
                     ₱{formatPrice(room.price_per_night)}
@@ -242,13 +245,14 @@ export default function BookingForm({ room, prefillCheckIn, prefillCheckOut }) {
               </span>
               <span>₱{formatPrice(subtotal)}</span>
             </div>
-            {/* Savings row — only shown when a discount is active */}
+
             {hasDiscount && nights > 0 && (
               <div className="breakdown-row breakdown-savings">
                 <span>You save</span>
                 <span>−₱{formatPrice(savedAmount)}</span>
               </div>
             )}
+
             <div className="breakdown-row">
               <span>Tax (12%)</span>
               <span>₱{formatPrice(tax)}</span>
@@ -260,6 +264,24 @@ export default function BookingForm({ room, prefillCheckIn, prefillCheckOut }) {
             <div className="breakdown-row breakdown-total">
               <span>Total</span>
               <span>₱{formatPrice(total)}</span>
+            </div>
+
+            {/* Deposit split info */}
+            <div className="breakdown-deposit-info">
+              <div className="deposit-info-row">
+                <span className="deposit-info-label">
+                  <Clock size={13} />
+                  Deposit now (30%)
+                </span>
+                <span className="deposit-info-amount deposit-now">₱{formatPrice(depositAmount)}</span>
+              </div>
+              <div className="deposit-info-row">
+                <span className="deposit-info-label">Balance on check-in (70%)</span>
+                <span className="deposit-info-amount">₱{formatPrice(balanceAmount)}</span>
+              </div>
+              <p className="deposit-info-note">
+                You may also choose to pay in full on the next step.
+              </p>
             </div>
           </div>
         </div>
@@ -295,7 +317,7 @@ export default function BookingForm({ room, prefillCheckIn, prefillCheckOut }) {
 
       <p className="booking-disclaimer">
         <Clock size={12} style={{ display: 'inline', marginRight: 4 }} />
-        Your room will be held for {30} minutes while you complete payment.
+        Your room will be held for 30 minutes while you complete payment.
         Reference number and check-in PIN are issued after payment is confirmed.
       </p>
     </div>

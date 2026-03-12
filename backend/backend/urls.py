@@ -28,7 +28,9 @@ urlpatterns = [
     path("api/bookings/", include("bookings.urls")),
     path('api/payments/', include('payments.urls', namespace='payments')),
     path('api/payments/webhooks/paymongo/', PayMongoWebhookView.as_view(), name='paymongo-webhook'),
-
+    path('api/notifications/', include('notifications.urls', namespace='notifications')),
+    path("api/staff/", include("staff.urls", namespace="staff")),
+    path("api/admin/", include("admin_panel.urls", namespace="admin_panel")),
 
 
 ]

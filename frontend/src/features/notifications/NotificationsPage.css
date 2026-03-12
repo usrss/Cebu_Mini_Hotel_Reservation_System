@@ -1,0 +1,267 @@
+/* ============================================================
+   NotificationsPage.css
+   Mirrors MyBookingsPage.css patterns for visual consistency
+   ============================================================ */
+
+.notif-page {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #f9fafb 0%, rgba(249,250,251,0.5) 100%);
+}
+
+/* ── Hero — matches room-list-hero / my-bookings-hero ── */
+.notif-page-hero {
+  position: relative;
+  background: linear-gradient(135deg, #4338ca 0%, #4f46e5 50%, #6366f1 100%);
+  overflow: hidden;
+}
+
+.notif-page-hero .hero-background {
+  position: absolute;
+  inset: 0;
+  opacity: 0.1;
+}
+
+.notif-page-hero .hero-background::before,
+.notif-page-hero .hero-background::after {
+  content: '';
+  position: absolute;
+  width: 384px;
+  height: 384px;
+  background: white;
+  border-radius: 50%;
+  filter: blur(80px);
+}
+
+.notif-page-hero .hero-background::before { top: 0; left: 0; transform: translate(-50%,-50%); }
+.notif-page-hero .hero-background::after  { bottom: 0; right: 0; transform: translate(50%,50%); }
+
+.notif-page-hero .hero-content {
+  position: relative;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 64px 16px 56px;
+  text-align: center;
+}
+
+.notif-page-hero .hero-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  background: rgba(255,255,255,0.15);
+  border-radius: 16px;
+  color: #fff;
+  margin-bottom: 16px;
+}
+
+.notif-page-hero .hero-title {
+  font-size: clamp(28px, 4vw, 40px);
+  font-weight: 800;
+  color: #fff;
+  margin: 0 0 8px;
+}
+
+.notif-page-hero .hero-subtitle {
+  font-size: 16px;
+  color: rgba(255,255,255,0.85);
+  margin: 0;
+}
+
+/* ── Container ── */
+.notif-page-container {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 32px 16px 64px;
+}
+
+/* ── Toolbar ── */
+.notif-page-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.notif-filter-pills {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.filter-icon {
+  color: #9ca3af;
+}
+
+.notif-filter-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 16px;
+  border-radius: 20px;
+  border: 1.5px solid #e5e7eb;
+  background: #fff;
+  color: #6b7280;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.notif-filter-pill:hover {
+  border-color: #a5b4fc;
+  color: #4f46e5;
+}
+
+.notif-filter-pill.active {
+  border-color: #4f46e5;
+  background: #4f46e5;
+  color: #fff;
+}
+
+.pill-badge {
+  background: #ef4444;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 10px;
+  line-height: 1.4;
+}
+
+.notif-filter-pill.active .pill-badge {
+  background: rgba(255,255,255,0.3);
+}
+
+/* ── Mark all button ── */
+.notif-mark-all-page-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 16px;
+  border-radius: 8px;
+  border: 1.5px solid #a5b4fc;
+  background: #fff;
+  color: #4f46e5;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.notif-mark-all-page-btn:hover {
+  background: #4f46e5;
+  color: #fff;
+}
+
+/* ── Count ── */
+.notif-count {
+  font-size: 14px;
+  color: #6b7280;
+  margin: 0 0 12px;
+}
+
+.notif-count .count-number {
+  font-weight: 700;
+  color: #111827;
+  font-size: 16px;
+}
+
+/* ── List wrapper ── */
+.notif-page-list-wrapper {
+  background: #fff;
+  border-radius: 14px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  overflow: hidden;
+}
+
+.notif-page-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* ── Skeleton ── */
+.notif-skeleton-list {
+  background: #fff;
+  border-radius: 14px;
+  border: 1px solid #e5e7eb;
+  overflow: hidden;
+}
+
+.notif-skeleton-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.skeleton {
+  background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+  border-radius: 6px;
+}
+
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.notif-sk-icon  { width: 38px; height: 38px; border-radius: 50%; flex-shrink: 0; }
+.notif-sk-body  { flex: 1; }
+.notif-sk-title { height: 14px; width: 55%; margin-bottom: 8px; }
+.notif-sk-desc  { height: 12px; width: 80%; }
+
+/* ── Empty & Error ── */
+.notif-empty-page,
+.notif-error-page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 64px 24px;
+  text-align: center;
+  color: #6b7280;
+  background: #fff;
+  border-radius: 14px;
+  border: 1px solid #e5e7eb;
+}
+
+.notif-empty-icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: #f1f5f9;
+  color: #9ca3af;
+  margin-bottom: 4px;
+}
+
+.notif-empty-page h3,
+.notif-error-page h3 {
+  font-size: 18px;
+  font-weight: 700;
+  color: #111827;
+  margin: 0;
+}
+
+.notif-empty-page p,
+.notif-error-page p {
+  font-size: 14px;
+  margin: 0;
+  max-width: 380px;
+}
+
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 10px 22px;
+       border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;
+       border: none; text-decoration: none; transition: all 0.15s; }
+.btn-primary { background: #4f46e5; color: #fff; }
+.btn-primary:hover { background: #4338ca; }

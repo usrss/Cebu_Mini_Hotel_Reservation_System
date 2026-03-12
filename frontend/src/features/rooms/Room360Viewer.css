@@ -1,5 +1,21 @@
-/* Room 360 Viewer Styles */
+/* ============================================================
+   Room360Viewer.css — Cebu Mini Hotel · Luxury Dark Theme
+   ============================================================ */
 
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&family=Raleway:wght@400;500;600;700&display=swap');
+
+:root {
+  --navy:        #0A0E1A;
+  --navy-mid:    #0F1729;
+  --gold:        #C9A84C;
+  --gold-l:      #E2C97E;
+  --gold-dim:    rgba(201,168,76,0.10);
+  --gold-border: rgba(201,168,76,0.22);
+  --white:       #F8F6F0;
+  --white-dim:   rgba(248,246,240,0.55);
+}
+
+/* ── Backdrop ──────────────────────────────────────────────── */
 .room-360-modal {
   position: fixed;
   inset: 0;
@@ -7,57 +23,105 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 20px;
-  animation: fadeIn 0.3s ease;
+  padding: 32px;
+  animation: r360-fadein 0.25s ease;
+}
+
+@keyframes r360-fadein {
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 
 .room-360-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.95);
-  backdrop-filter: blur(4px);
+  background: rgba(5, 8, 16, 0.94);
+  backdrop-filter: blur(10px);
 }
 
+/* ── Main container ────────────────────────────────────────── */
 .room-360-container {
   position: relative;
   width: 100%;
-  max-width: 1400px;
-  height: 90vh;
-  max-height: 900px;
-  background: #111;
-  border-radius: 16px;
-  overflow: hidden;
+  max-width: 1300px;
+  height: 88vh;
+  max-height: 860px;
+  background: var(--navy);
+  border: 1px solid var(--gold-border);
   display: flex;
   flex-direction: column;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-  animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+  animation: r360-slideup 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  /* Sharp corners — matches hotel aesthetic */
+  border-radius: 0;
 }
 
-/* Header */
+/* Gold top accent line */
+.room-360-container::before {
+  content: '';
+  display: block;
+  height: 2px;
+  background: linear-gradient(90deg, var(--gold), var(--gold-l), var(--gold));
+  flex-shrink: 0;
+}
+
+@keyframes r360-slideup {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Header ────────────────────────────────────────────────── */
 .room-360-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 20px;
-  background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 14px 22px;
+  background: var(--navy-mid);
+  border-bottom: 1px solid var(--gold-border);
+  flex-shrink: 0;
 }
 
 .room-360-title {
   display: flex;
   align-items: center;
-  gap: 10px;
-  color: white;
-  font-size: 16px;
+  gap: 12px;
+}
+
+.room-360-title-eyebrow {
+  font-family: 'Raleway', sans-serif;
+  font-size: 10px;
   font-weight: 600;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
+.room-360-title-name {
+  font-family: 'Playfair Display', serif;
+  font-size: 15px;
+  color: var(--white);
+  margin: 2px 0 0;
+}
+
+.room-360-title-sep {
+  width: 1px;
+  height: 28px;
+  background: var(--gold-border);
 }
 
 .rotate-icon {
-  animation: rotate 3s linear infinite;
+  color: var(--gold);
+  animation: r360-rotate 6s linear infinite;
+}
+@keyframes r360-rotate {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
 }
 
+/* ── Action buttons ────────────────────────────────────────── */
 .room-360-actions {
   display: flex;
+  align-items: center;
   gap: 8px;
 }
 
@@ -65,36 +129,37 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 8px;
-  color: white;
+  width: 36px;
+  height: 36px;
+  background: none;
+  border: 1px solid var(--gold-border);
+  color: var(--white-dim);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.18s;
+  border-radius: 0;
 }
-
 .room-360-btn:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.2);
-  border-color: rgba(255, 255, 255, 0.3);
+  color: var(--gold);
+  background: var(--gold-dim);
+  border-color: var(--gold);
 }
-
 .room-360-btn:disabled {
-  opacity: 0.5;
+  opacity: 0.35;
   cursor: not-allowed;
 }
 
+/* Close button — subtle red tint */
 .room-360-btn.close {
-  background: rgba(239, 68, 68, 0.2);
-  border-color: rgba(239, 68, 68, 0.3);
+  border-color: rgba(248,113,113,0.3);
+  color: rgba(248,113,113,0.7);
 }
-
 .room-360-btn.close:hover {
-  background: rgba(239, 68, 68, 0.3);
+  background: rgba(248,113,113,0.08);
+  border-color: #F87171;
+  color: #F87171;
 }
 
-/* Viewer Wrapper */
+/* ── Viewer wrapper ────────────────────────────────────────── */
 .room-360-viewer-wrapper {
   position: relative;
   flex: 1;
@@ -107,7 +172,7 @@
   height: 100%;
 }
 
-/* Loading State */
+/* ── Loading ───────────────────────────────────────────────── */
 .room-360-loading {
   position: absolute;
   inset: 0;
@@ -115,21 +180,37 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: #000;
-  color: white;
-  gap: 16px;
+  background: var(--navy);
+  gap: 20px;
+  z-index: 2;
 }
 
+.r360-spinner {
+  width: 40px;
+  height: 40px;
+  border: 2px solid var(--gold-border);
+  border-top-color: var(--gold);
+  border-radius: 50%;
+  animation: r360-spin 0.9s linear infinite;
+}
+@keyframes r360-spin { to { transform: rotate(360deg); } }
+
 .spin-icon {
-  animation: spin 1s linear infinite;
+  color: var(--gold);
+  animation: r360-spin 1s linear infinite;
 }
 
 .room-360-loading p {
-  font-size: 14px;
-  color: rgba(255, 255, 255, 0.7);
+  font-family: 'Raleway', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--white-dim);
+  margin: 0;
 }
 
-/* Error State */
+/* ── Error ─────────────────────────────────────────────────── */
 .room-360-error {
   position: absolute;
   inset: 0;
@@ -137,142 +218,80 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: #000;
-  color: white;
-  gap: 16px;
-  padding: 20px;
+  background: var(--navy);
+  gap: 18px;
+  z-index: 2;
+  padding: 24px;
 }
-
 .room-360-error p {
+  font-family: 'Raleway', sans-serif;
   font-size: 14px;
-  color: rgba(255, 255, 255, 0.8);
+  color: #F87171;
   text-align: center;
+  margin: 0;
 }
-
 .error-close-btn {
-  padding: 10px 20px;
-  background: rgba(239, 68, 68, 0.2);
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  border-radius: 8px;
-  color: white;
-  font-size: 14px;
+  background: none;
+  border: 1px solid rgba(248,113,113,0.4);
+  color: #F87171;
+  font-family: 'Raleway', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  padding: 10px 22px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background 0.2s;
 }
+.error-close-btn:hover { background: rgba(248,113,113,0.08); }
 
-.error-close-btn:hover {
-  background: rgba(239, 68, 68, 0.3);
-}
-
-/* Instructions */
+/* ── Instructions pill ─────────────────────────────────────── */
 .room-360-instructions {
   position: absolute;
-  bottom: 20px;
+  bottom: 24px;
   left: 50%;
   transform: translateX(-50%);
-  padding: 12px 20px;
-  background: rgba(0, 0, 0, 0.8);
-  backdrop-filter: blur(8px);
-  border-radius: 100px;
+  padding: 10px 20px;
+  background: rgba(10,14,26,0.88);
+  border: 1px solid var(--gold-border);
+  backdrop-filter: blur(10px);
   pointer-events: none;
-  animation: fadeIn 0.5s ease 1s both;
-}
-
-.room-360-instructions p {
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.9);
-  margin: 0;
+  animation: r360-fadein 0.5s ease 1.2s both;
   white-space: nowrap;
 }
-
-/* Animations */
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+.room-360-instructions p {
+  font-family: 'Raleway', sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.8px;
+  color: var(--white-dim);
+  margin: 0;
 }
 
-@keyframes slideUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@keyframes rotate {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-/* Responsive */
+/* ── Responsive ────────────────────────────────────────────── */
 @media (max-width: 768px) {
-  .room-360-modal {
-    padding: 0;
-  }
-
+  .room-360-modal { padding: 0; }
   .room-360-container {
-    height: 100vh;
+    height: 100dvh;
     max-height: none;
-    border-radius: 0;
+    border: none;
   }
-
-  .room-360-header {
-    padding: 12px 16px;
-  }
-
-  .room-360-title {
-    font-size: 14px;
-  }
-
-  .room-360-title span {
-    max-width: 180px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .room-360-btn {
-    width: 36px;
-    height: 36px;
-  }
-
+  .room-360-container::before { display: none; }
+  .room-360-header { padding: 12px 16px; }
+  .room-360-title-name { font-size: 13px; }
   .room-360-instructions {
-    bottom: 80px;
-    left: 16px;
-    right: 16px;
+    bottom: 72px;
+    left: 16px; right: 16px;
     transform: none;
     text-align: center;
-  }
-
-  .room-360-instructions p {
-    font-size: 11px;
     white-space: normal;
   }
 }
 
-/* Fullscreen mode adjustments */
+/* ── Fullscreen ────────────────────────────────────────────── */
 .room-360-container:fullscreen {
   max-width: none;
   max-height: none;
+  border: none;
   border-radius: 0;
 }

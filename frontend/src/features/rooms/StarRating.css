@@ -1,0 +1,27 @@
+.star-rating {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.star {
+  color: #d1d5db;
+  transition: color 0.15s, transform 0.1s;
+}
+
+.star.filled {
+  color: #f59e0b;
+}
+
+.star-rating.interactive .star:hover {
+  transform: scale(1.15);
+}
+
+.star-rating.interactive .star {
+  color: #f59e0b;
+  opacity: 0.35;
+}
+
+.star-rating.interactive .star.filled {
+  opacity: 1;
+}

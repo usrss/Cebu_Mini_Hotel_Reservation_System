@@ -1,3 +1,4 @@
+# rooms/views.py
 from django.utils import timezone
 from datetime import timedelta
 from rest_framework import generics, status, filters
@@ -6,12 +7,12 @@ from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 from rest_framework.parsers import MultiPartParser, FormParser
 from .models import ReviewHelpfulness
+from rooms.permissions import IsAdminRoomManager, IsAdminOrManagerRoom
 
 from .serializers import (
     PriceCalculationRequestSerializer,
     PriceCalculationResponseSerializer,
 )
-
 
 from django_filters.rest_framework import DjangoFilterBackend
 
@@ -219,13 +220,14 @@ class RoomLockReleaseView(APIView):
 
 # ─── Admin / Staff Views ──────────────────────────────────────────────────────
 
+from rest_framework.permissions import IsAuthenticated
+from rooms.permissions import IsAdminRoomManager, IsAdminOrManagerRoom
+
 class AdminRoomListCreateView(generics.ListCreateAPIView):
     """
-    GET  /api/admin/rooms/         — list all rooms (including inactive)
-    POST /api/admin/rooms/         — create a new room
-    Staff/Admin only.
+    GET  /api/admin/rooms/  — list all rooms (Admin or Manager)
+    POST /api/admin/rooms/  — create a new room (Admin only)
     """
-    permission_classes = [IsStaffOrAdmin]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter, filters.SearchFilter]
     filterset_class = RoomFilter
     ordering_fields = ["price_per_night", "capacity", "floor", "room_number"]
@@ -239,6 +241,13 @@ class AdminRoomListCreateView(generics.ListCreateAPIView):
     def get_queryset(self):
         return Room.objects.all().prefetch_related("images", "amenity_assignments__amenity")
 
+    def get_permissions(self):
+        if self.request.method == "POST":
+            # Only Admin can create
+            return [IsAuthenticated(), IsAdminRoomManager()]
+        # Admin or Manager can list
+        return [IsAuthenticated(), IsAdminOrManagerRoom()]
+
 
 class AdminRoomDetailView(generics.RetrieveUpdateDestroyAPIView):
     """
@@ -248,7 +257,7 @@ class AdminRoomDetailView(generics.RetrieveUpdateDestroyAPIView):
     DELETE /api/admin/rooms/<id>/  — soft delete (sets is_active=False)
     Staff/Admin only.
     """
-    permission_classes = [IsStaffOrAdmin]
+    permission_classes = [IsAdminRoomManager]
     queryset = Room.objects.all().prefetch_related("images", "amenity_assignments__amenity")
 
     def get_serializer_class(self):
@@ -272,7 +281,7 @@ class AdminRoomStatusView(APIView):
     PATCH /api/admin/rooms/<id>/status/
     Quick endpoint to update room status (available, maintenance, etc.).
     """
-    permission_classes = [IsStaffOrAdmin]
+    permission_classes = [IsAdminOrManagerRoom ]
 
     def patch(self, request, pk):
         try:
@@ -301,7 +310,7 @@ class AdminRoomImageUploadView(APIView):
     POST /api/admin/rooms/<id>/images/
     Upload one or more images for a room.
     """
-    permission_classes = [IsStaffOrAdmin]
+    permission_classes = [IsAdminRoomManager]
     parser_classes = [MultiPartParser, FormParser]
 
     def post(self, request, pk):
@@ -345,7 +354,7 @@ class AdminRoomPriceHistoryView(generics.ListAPIView):
     GET /api/admin/rooms/<id>/price-history/
     Returns historical price changes for a specific room.
     """
-    permission_classes = [IsStaffOrAdmin]
+    permission_classes = [IsAdminOrManagerRoom ]
     serializer_class = RoomPriceHistorySerializer
 
     def get_queryset(self):
@@ -410,24 +419,31 @@ class GuestPendingReviewsView(APIView):
         except ImportError:
             return Response({"detail": "Booking module not available"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
-        # Get completed bookings without reviews
+        # Get checked-out bookings without reviews
+        # Use exclude with hasattr-safe pattern for reverse OneToOne
+        reviewed_booking_ids = RoomReview.objects.values_list('booking_id', flat=True)
         pending = Booking.objects.filter(
-            guest=request.user,
-            status='completed'
+            user=request.user,
+            status='checked_out',
         ).exclude(
-            review__isnull=False  # Exclude bookings that already have reviews
+            id__in=reviewed_booking_ids
         ).select_related('room').order_by('-check_out')[:5]
 
-        data = [
-            {
+        data = []
+        for b in pending:
+            try:
+                room_number = b.room.room_number
+                room_type = b.room.get_room_type_display()
+            except Exception:
+                room_number = 'N/A'
+                room_type = 'N/A'
+            data.append({
                 'booking_id': b.id,
-                'room_number': b.room.room_number,
-                'room_type': b.room.get_room_type_display(),
-                'check_out': b.check_out,
+                'room_number': room_number,
+                'room_type': room_type,
+                'check_out': str(b.check_out),
                 'can_review': True
-            }
-            for b in pending
-        ]
+            })
 
         return Response(data)
 

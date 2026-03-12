@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useRoomDetail } from '../hooks/useRooms';
 import BookingForm from '../bookings/BookingForm';
+import RoomReviews from './RoomReviews';
 import './RoomDetailPage.css';
 
 // NEW: Lazy load 360 viewer - only loads when button is clicked
@@ -198,9 +199,17 @@ export default function RoomDetailPage() {
                 </div>
               </div>
             )}
+            {/* Ratings & Reviews */}
+            <div className="amenities-card">
+              <h2 className="amenities-title">Ratings &amp; Reviews</h2>
+              <RoomReviews
+                reviews={room.reviews || []}
+                averageRating={room.average_rating}
+                reviewCount={room.review_count}
+                ratingBreakdown={room.rating_breakdown}
+              />
+            </div>
           </div>
-
-          {/* Right Column - Sticky Sidebar */}
           <div className="room-detail-sidebar">
             <div className="sidebar-card">
               <h3 className="sidebar-title">Room Information</h3>

@@ -1,0 +1,55 @@
+/* ============================================================
+   NotificationBell.css
+   Bell button + badge that sits in the nav-bar
+   ============================================================ */
+
+.notif-bell-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* ── Bell button ── */
+.notif-bell-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: #6b7280;
+  cursor: pointer;
+  transition: background 0.18s, color 0.18s;
+}
+
+.notif-bell-btn:hover {
+  background: rgba(99, 102, 241, 0.08);
+  color: #4f46e5;
+}
+
+.notif-bell-btn:focus-visible {
+  outline: 2px solid #4f46e5;
+  outline-offset: 2px;
+}
+
+/* ── Unread count badge ── */
+.notif-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #ef4444;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 17px;
+  text-align: center;
+  pointer-events: none;
+  box-shadow: 0 0 0 2px #fff;
+}
