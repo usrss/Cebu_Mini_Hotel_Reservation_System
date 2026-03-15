@@ -1,11 +1,16 @@
 // src/features/auth/Login.jsx
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { loginUser } from '../../services/api';
+import { loginUser, getStoredUser } from '../../services/api';
 import { Eye, EyeOff, Mail, Lock } from 'lucide-react';
 import { useGoogleLogin } from '@react-oauth/google';
 import axios from 'axios';
 import './AuthModern.css';
+
+function getPostLoginRoute() {
+  const user = getStoredUser();
+  return user?.is_staff === true ? '/admin/dashboard' : '/dashboard';  // ← fixed
+}
 
 export default function Login() {
   const navigate = useNavigate();
@@ -23,28 +28,21 @@ export default function Login() {
     setError('');
   };
 
-  // Google OAuth Login
   const googleLogin = useGoogleLogin({
     onSuccess: async (tokenResponse) => {
       setLoading(true);
       setError('');
-
       try {
-        // Get user info from Google
         const { data } = await axios.get(
           'https://www.googleapis.com/oauth2/v3/userinfo',
           { headers: { Authorization: `Bearer ${tokenResponse.access_token}` } }
         );
-
-        // Login with Google credentials
         await loginUser({
           email: data.email,
           auth_provider: 'google',
           access_token: tokenResponse.access_token
         });
-
-        navigate('/dashboard');
-
+        navigate(getPostLoginRoute());
       } catch (err) {
         console.error('Google sign-in error:', err);
         const errorMsg = err.response?.data?.detail ||
@@ -69,16 +67,13 @@ export default function Login() {
     e.preventDefault();
     setError('');
     setLoading(true);
-
     try {
       await loginUser(formData);
-      navigate('/dashboard');
+      navigate(getPostLoginRoute());
     } catch (err) {
       console.error('Login error:', err);
-
       if (err.response?.data) {
         const errorData = err.response.data;
-
         if (errorData.email) {
           setError(Array.isArray(errorData.email) ? errorData.email[0] : errorData.email);
         } else if (errorData.password) {
@@ -100,7 +95,6 @@ export default function Login() {
 
   return (
     <div className="auth-modern-container">
-      {/* Left Side - Image */}
       <div className="auth-modern-image">
         <div className="auth-modern-overlay">
           <div className="auth-modern-branding">
@@ -114,23 +108,19 @@ export default function Login() {
         </div>
       </div>
 
-      {/* Right Side - Form */}
       <div className="auth-modern-form-section">
         <div className="auth-modern-form-container">
-          {/* Header */}
           <div className="auth-modern-header">
             <h2>Sign In</h2>
             <p>Welcome back! Please sign in to continue</p>
           </div>
 
-          {/* Error Alert */}
           {error && (
             <div className="alert-modern alert-error">
               <span>{error}</span>
             </div>
           )}
 
-          {/* Google Sign In - For users who registered with Google */}
           <div className="auth-modern-social">
             <button
               type="button"
@@ -148,14 +138,11 @@ export default function Login() {
             </button>
           </div>
 
-          {/* Divider */}
           <div className="auth-modern-divider">
             <span>or sign in with email</span>
           </div>
 
-          {/* Login Form */}
           <form onSubmit={handleSubmit} className="auth-modern-form">
-            {/* Email Field */}
             <div className="form-group-modern">
               <label htmlFor="email">
                 <Mail size={16} />
@@ -174,7 +161,6 @@ export default function Login() {
               />
             </div>
 
-            {/* Password Field */}
             <div className="form-group-modern">
               <label htmlFor="password">
                 <Lock size={16} />
@@ -203,7 +189,6 @@ export default function Login() {
               </div>
             </div>
 
-            {/* Forgot Password */}
             <div className="form-options-modern">
               <button
                 type="button"
@@ -214,7 +199,6 @@ export default function Login() {
               </button>
             </div>
 
-            {/* Submit Button */}
             <button
               type="submit"
               className="btn-modern btn-primary"
@@ -231,7 +215,6 @@ export default function Login() {
             </button>
           </form>
 
-          {/* Footer */}
           <div className="auth-modern-footer">
             <p>
               Don't have an account?{' '}

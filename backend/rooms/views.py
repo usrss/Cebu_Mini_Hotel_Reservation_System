@@ -5,7 +5,7 @@ from rest_framework import generics, status, filters
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
-from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from .models import ReviewHelpfulness
 from rooms.permissions import IsAdminRoomManager, IsAdminOrManagerRoom
 
@@ -228,6 +228,7 @@ class AdminRoomListCreateView(generics.ListCreateAPIView):
     GET  /api/admin/rooms/  — list all rooms (Admin or Manager)
     POST /api/admin/rooms/  — create a new room (Admin only)
     """
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter, filters.SearchFilter]
     filterset_class = RoomFilter
     ordering_fields = ["price_per_night", "capacity", "floor", "room_number"]
@@ -257,6 +258,7 @@ class AdminRoomDetailView(generics.RetrieveUpdateDestroyAPIView):
     DELETE /api/admin/rooms/<id>/  — soft delete (sets is_active=False)
     Staff/Admin only.
     """
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
     permission_classes = [IsAdminRoomManager]
     queryset = Room.objects.all().prefetch_related("images", "amenity_assignments__amenity")
 

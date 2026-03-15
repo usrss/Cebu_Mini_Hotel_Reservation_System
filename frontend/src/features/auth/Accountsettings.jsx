@@ -1,6 +1,6 @@
 // src/features/auth/AccountSettings.jsx
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getCurrentUser, getStoredUser } from '../../services/api';
 import { User, Mail, Lock, Shield, LogOut, ChevronRight, Check, X, Eye, EyeOff, ArrowLeft, Smartphone } from 'lucide-react';
 import axios from 'axios';
@@ -9,8 +9,6 @@ import './AccountSettings.css';
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/auth';
 
 function getToken() {
-  // 'accessToken' = camelCase key used by api.js (primary)
-  // 'access_token' = snake_case fallback
   return (
     localStorage.getItem('accessToken') ||
     sessionStorage.getItem('accessToken') ||
@@ -38,7 +36,7 @@ function ProfileSection({ user, onSuccess }) {
     phone: user?.phone || '',
   });
   const [loading, setLoading] = useState(false);
-  const [status, setStatus] = useState(null); // 'success' | 'error'
+  const [status, setStatus] = useState(null);
   const [message, setMessage] = useState('');
 
   const handleChange = (e) => {
@@ -78,50 +76,30 @@ function ProfileSection({ user, onSuccess }) {
           <p>Update your name and contact details</p>
         </div>
       </div>
-
       <form onSubmit={handleSubmit} className="as-form">
         <div className="as-form-row">
           <div className="as-field">
             <label>First Name</label>
-            <input
-              name="first_name"
-              value={form.first_name}
-              onChange={handleChange}
-              placeholder="John"
-              className="as-input"
-            />
+            <input name="first_name" value={form.first_name} onChange={handleChange}
+              placeholder="John" className="as-input" />
           </div>
           <div className="as-field">
             <label>Last Name</label>
-            <input
-              name="last_name"
-              value={form.last_name}
-              onChange={handleChange}
-              placeholder="Doe"
-              className="as-input"
-            />
+            <input name="last_name" value={form.last_name} onChange={handleChange}
+              placeholder="Doe" className="as-input" />
           </div>
         </div>
-
         <div className="as-field">
           <label>Phone Number</label>
-          <input
-            name="phone"
-            value={form.phone}
-            onChange={handleChange}
-            placeholder="+63 912 345 6789"
-            className="as-input"
-            type="tel"
-          />
+          <input name="phone" value={form.phone} onChange={handleChange}
+            placeholder="+63 912 345 6789" className="as-input" type="tel" />
         </div>
-
         {status && (
           <div className={`as-alert ${status === 'success' ? 'as-alert-success' : 'as-alert-error'}`}>
             {status === 'success' ? <Check size={16} /> : <X size={16} />}
             <span>{message}</span>
           </div>
         )}
-
         <button type="submit" className="as-btn-primary" disabled={loading}>
           {loading ? <><span className="as-spinner" />Saving...</> : 'Save Changes'}
         </button>
@@ -132,7 +110,7 @@ function ProfileSection({ user, onSuccess }) {
 
 // ── Section: Change Email ─────────────────────────────────────────────────────
 function EmailSection({ user, onSuccess }) {
-  const [step, setStep] = useState(1); // 1 = request, 2 = verify
+  const [step, setStep] = useState(1);
   const [newEmail, setNewEmail] = useState('');
   const [password, setPassword] = useState('');
   const [code, setCode] = useState(['', '', '', '', '', '']);
@@ -194,13 +172,15 @@ function EmailSection({ user, onSuccess }) {
     setLoading(true);
     setStatus(null);
     try {
-      const { data } = await axios.post(`${API_BASE}/change-email/verify/`, { new_email: newEmail, code: full }, {
-        headers: getAuthHeaders(),
-      });
+      const { data } = await axios.post(`${API_BASE}/change-email/verify/`,
+        { new_email: newEmail, code: full }, { headers: getAuthHeaders() });
       setStatus('success');
       setMessage('Email updated successfully!');
       onSuccess(data.user);
-      setTimeout(() => { setStep(1); setCode(['','','','','','']); setNewEmail(''); setPassword(''); setStatus(null); }, 2500);
+      setTimeout(() => {
+        setStep(1); setCode(['','','','','','']);
+        setNewEmail(''); setPassword(''); setStatus(null);
+      }, 2500);
     } catch (err) {
       setStatus('error');
       setMessage(err.response?.data?.code?.[0] || err.response?.data?.detail || 'Verification failed.');
@@ -220,41 +200,28 @@ function EmailSection({ user, onSuccess }) {
           <p>Current: <strong>{user?.email}</strong></p>
         </div>
       </div>
-
       {step === 1 ? (
         <form onSubmit={handleRequest} className="as-form">
           <div className="as-field">
             <label>New Email Address</label>
-            <input
-              type="email"
-              value={newEmail}
+            <input type="email" value={newEmail}
               onChange={e => { setNewEmail(e.target.value); setStatus(null); }}
-              placeholder="newemail@example.com"
-              className="as-input"
-              required
-            />
+              placeholder="newemail@example.com" className="as-input" required />
           </div>
           <div className="as-field">
             <label>Confirm Your Password</label>
             <div className="as-input-icon">
-              <input
-                type={showPassword ? 'text' : 'password'}
-                value={password}
+              <input type={showPassword ? 'text' : 'password'} value={password}
                 onChange={e => { setPassword(e.target.value); setStatus(null); }}
-                placeholder="Enter your current password"
-                className="as-input"
-                required
-              />
+                placeholder="Enter your current password" className="as-input" required />
               <button type="button" onClick={() => setShowPassword(v => !v)} className="as-eye-btn">
                 {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
             </div>
           </div>
-
           {status === 'error' && (
             <div className="as-alert as-alert-error"><X size={16} /><span>{message}</span></div>
           )}
-
           <button type="submit" className="as-btn-primary" disabled={loading}>
             {loading ? <><span className="as-spinner" />Sending Code...</> : 'Send Verification Code'}
           </button>
@@ -263,47 +230,36 @@ function EmailSection({ user, onSuccess }) {
         <div className="as-form">
           <p className="as-verify-hint">
             A 6-digit code was sent to <strong>{newEmail}</strong>.
-            {countdown > 0 && <span className="as-countdown"> Expires in {Math.floor(countdown/60)}:{String(countdown%60).padStart(2,'0')}</span>}
+            {countdown > 0 && (
+              <span className="as-countdown">
+                {' '}Expires in {Math.floor(countdown/60)}:{String(countdown%60).padStart(2,'0')}
+              </span>
+            )}
           </p>
-
           <div className="as-code-group">
             {code.map((digit, i) => (
-              <input
-                key={i}
-                ref={el => inputRefs.current[i] = el}
-                type="text"
-                inputMode="numeric"
-                maxLength="1"
-                value={digit}
+              <input key={i} ref={el => inputRefs.current[i] = el}
+                type="text" inputMode="numeric" maxLength="1" value={digit}
                 onChange={e => handleCodeChange(i, e.target.value)}
                 onKeyDown={e => handleCodeKey(i, e)}
                 className={`as-code-input ${status === 'error' ? 'error' : ''} ${status === 'success' ? 'success' : ''}`}
-                disabled={loading || status === 'success'}
-              />
+                disabled={loading || status === 'success'} />
             ))}
           </div>
-
           {status && (
             <div className={`as-alert ${status === 'success' ? 'as-alert-success' : 'as-alert-error'}`}>
               {status === 'success' ? <Check size={16} /> : <X size={16} />}
               <span>{message}</span>
             </div>
           )}
-
           <div className="as-form-actions">
-            <button
-              type="button"
-              className="as-btn-ghost"
-              onClick={() => { setStep(1); setCode(['','','','','','']); setStatus(null); }}
-            >
+            <button type="button" className="as-btn-ghost"
+              onClick={() => { setStep(1); setCode(['','','','','','']); setStatus(null); }}>
               ← Back
             </button>
-            <button
-              type="button"
-              className="as-btn-primary"
+            <button type="button" className="as-btn-primary"
               disabled={loading || code.join('').length !== 6 || status === 'success'}
-              onClick={handleVerify}
-            >
+              onClick={handleVerify}>
               {loading ? <><span className="as-spinner" />Verifying...</> : 'Verify & Update'}
             </button>
           </div>
@@ -354,10 +310,7 @@ function PasswordSection({ user }) {
       await axios.post(`${API_BASE}/change-password/`, form, { headers: getAuthHeaders() });
       setStatus('success');
       setMessage('Password changed! You will be logged out.');
-      setTimeout(() => {
-        clearTokens();
-        navigate('/login');
-      }, 2000);
+      setTimeout(() => { clearTokens(); navigate('/login'); }, 2000);
     } catch (err) {
       setStatus('error');
       setMessage(
@@ -393,43 +346,26 @@ function PasswordSection({ user }) {
         <div className="as-section-icon"><Lock size={18} /></div>
         <div><h3>Change Password</h3><p>Use a strong, unique password</p></div>
       </div>
-
       <form onSubmit={handleSubmit} className="as-form">
-        {/* Current Password */}
         <div className="as-field">
           <label>Current Password</label>
           <div className="as-input-icon">
-            <input
-              name="current_password"
-              type={show.current ? 'text' : 'password'}
-              value={form.current_password}
-              onChange={handleChange}
-              placeholder="Enter current password"
-              className="as-input"
-              autoComplete="current-password"
-              required
-            />
+            <input name="current_password" type={show.current ? 'text' : 'password'}
+              value={form.current_password} onChange={handleChange}
+              placeholder="Enter current password" className="as-input"
+              autoComplete="current-password" required />
             <button type="button" onClick={() => setShow(s => ({ ...s, current: !s.current }))} className="as-eye-btn">
               {show.current ? <EyeOff size={18} /> : <Eye size={18} />}
             </button>
           </div>
         </div>
-
-        {/* New Password */}
         <div className="as-field">
           <label>New Password</label>
           <div className="as-input-icon">
-            <input
-              name="new_password"
-              type={show.new ? 'text' : 'password'}
-              value={form.new_password}
-              onChange={handleChange}
-              placeholder="Minimum 8 characters"
-              className="as-input"
-              autoComplete="new-password"
-              minLength={8}
-              required
-            />
+            <input name="new_password" type={show.new ? 'text' : 'password'}
+              value={form.new_password} onChange={handleChange}
+              placeholder="Minimum 8 characters" className="as-input"
+              autoComplete="new-password" minLength={8} required />
             <button type="button" onClick={() => setShow(s => ({ ...s, new: !s.new }))} className="as-eye-btn">
               {show.new ? <EyeOff size={18} /> : <Eye size={18} />}
             </button>
@@ -445,45 +381,29 @@ function PasswordSection({ user }) {
             </div>
           )}
         </div>
-
-        {/* Confirm Password */}
         <div className="as-field">
           <label>Confirm New Password</label>
           <div className="as-input-icon">
-            <input
-              name="confirm_password"
-              type={show.confirm ? 'text' : 'password'}
-              value={form.confirm_password}
-              onChange={handleChange}
+            <input name="confirm_password" type={show.confirm ? 'text' : 'password'}
+              value={form.confirm_password} onChange={handleChange}
               placeholder="Re-enter new password"
               className={`as-input ${passwordMatch === false ? 'as-input-error' : passwordMatch === true ? 'as-input-success' : ''}`}
-              autoComplete="new-password"
-              required
-            />
+              autoComplete="new-password" required />
             <button type="button" onClick={() => setShow(s => ({ ...s, confirm: !s.confirm }))} className="as-eye-btn">
               {show.confirm ? <EyeOff size={18} /> : <Eye size={18} />}
             </button>
           </div>
-          {passwordMatch === false && (
-            <span className="as-hint-error">Passwords do not match</span>
-          )}
-          {passwordMatch === true && (
-            <span className="as-hint-success"><Check size={13} /> Passwords match</span>
-          )}
+          {passwordMatch === false && <span className="as-hint-error">Passwords do not match</span>}
+          {passwordMatch === true  && <span className="as-hint-success"><Check size={13} /> Passwords match</span>}
         </div>
-
         {status && (
           <div className={`as-alert ${status === 'success' ? 'as-alert-success' : 'as-alert-error'}`}>
             {status === 'success' ? <Check size={16} /> : <X size={16} />}
             <span>{message}</span>
           </div>
         )}
-
-        <button
-          type="submit"
-          className="as-btn-primary"
-          disabled={loading || passwordMatch === false}
-        >
+        <button type="submit" className="as-btn-primary"
+          disabled={loading || passwordMatch === false}>
           {loading ? <><span className="as-spinner" />Changing Password...</> : 'Change Password'}
         </button>
       </form>
@@ -506,7 +426,6 @@ function SessionsSection() {
       clearTokens();
       setTimeout(() => navigate('/login'), 1500);
     } catch {
-      // Logout locally anyway
       clearTokens();
       navigate('/login');
     } finally {
@@ -520,7 +439,6 @@ function SessionsSection() {
         <div className="as-section-icon"><Smartphone size={18} /></div>
         <div><h3>Sessions &amp; Devices</h3><p>Manage where you're logged in</p></div>
       </div>
-
       <div className="as-session-current">
         <div className="as-session-dot" />
         <div>
@@ -528,15 +446,12 @@ function SessionsSection() {
           <p className="as-muted">This device · Active now</p>
         </div>
       </div>
-
       {done ? (
-        <div className="as-alert as-alert-success"><Check size={16} /><span>Logged out from all sessions. Redirecting...</span></div>
+        <div className="as-alert as-alert-success">
+          <Check size={16} /><span>Logged out from all sessions. Redirecting...</span>
+        </div>
       ) : (
-        <button
-          className="as-btn-danger"
-          onClick={handleLogoutAll}
-          disabled={loading}
-        >
+        <button className="as-btn-danger" onClick={handleLogoutAll} disabled={loading}>
           {loading ? <><span className="as-spinner" />Logging out...</> : <><LogOut size={16} />Logout All Devices</>}
         </button>
       )}
@@ -547,6 +462,9 @@ function SessionsSection() {
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function AccountSettings() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();          // ← moved here
+  const from = searchParams.get('from');             // ← moved here
+
   const [user, setUser] = useState(getStoredUser());
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('profile');
@@ -567,8 +485,8 @@ export default function AccountSettings() {
   const handleUserUpdate = (updatedUser) => setUser(updatedUser);
 
   const tabs = [
-    { id: 'profile', label: 'Profile', icon: <User size={16} /> },
-    { id: 'email', label: 'Email', icon: <Mail size={16} /> },
+    { id: 'profile',  label: 'Profile',  icon: <User size={16} /> },
+    { id: 'email',    label: 'Email',    icon: <Mail size={16} /> },
     { id: 'password', label: 'Password', icon: <Lock size={16} /> },
     { id: 'sessions', label: 'Sessions', icon: <Smartphone size={16} /> },
   ];
@@ -588,7 +506,10 @@ export default function AccountSettings() {
     <div className="as-page">
       {/* Top Nav */}
       <header className="as-topbar">
-        <button className="as-back-btn" onClick={() => navigate('/dashboard')}>
+        <button
+          className="as-back-btn"
+          onClick={() => navigate(from === 'admin' ? '/admin/dashboard' : '/dashboard')}
+        >
           <ArrowLeft size={18} />
           <span>Back to Dashboard</span>
         </button>
@@ -613,14 +534,11 @@ export default function AccountSettings() {
               <p className="as-sidebar-email">{user?.email}</p>
             </div>
           </div>
-
           <nav className="as-nav">
             {tabs.map(tab => (
-              <button
-                key={tab.id}
+              <button key={tab.id}
                 className={`as-nav-item ${activeTab === tab.id ? 'active' : ''}`}
-                onClick={() => setActiveTab(tab.id)}
-              >
+                onClick={() => setActiveTab(tab.id)}>
                 {tab.icon}
                 <span>{tab.label}</span>
                 <ChevronRight size={14} className="as-nav-arrow" />
@@ -631,8 +549,8 @@ export default function AccountSettings() {
 
         {/* Content */}
         <main className="as-content">
-          {activeTab === 'profile' && <ProfileSection user={user} onSuccess={handleUserUpdate} />}
-          {activeTab === 'email' && <EmailSection user={user} onSuccess={handleUserUpdate} />}
+          {activeTab === 'profile'  && <ProfileSection  user={user} onSuccess={handleUserUpdate} />}
+          {activeTab === 'email'    && <EmailSection    user={user} onSuccess={handleUserUpdate} />}
           {activeTab === 'password' && <PasswordSection user={user} />}
           {activeTab === 'sessions' && <SessionsSection />}
         </main>

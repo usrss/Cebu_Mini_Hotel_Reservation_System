@@ -1,33 +1,20 @@
 import axios from "axios";
 
-// ─── Vite env variable — set VITE_API_BASE_URL in your .env file ──────────────
-// .env: VITE_API_BASE_URL=http://localhost:8000/api
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api";
 
-/**
- * Shared axios instance for all rooms API calls.
- *
- * Token keys match exactly what loginUser() in your auth api.js stores:
- *   localStorage.setItem('access_token',  data.tokens.access)
- *   localStorage.setItem('refresh_token', data.tokens.refresh)
- *   localStorage.setItem('user',          JSON.stringify(data.user))
- */
 const api = axios.create({
   baseURL: BASE_URL,
   headers: { "Content-Type": "application/json" },
 });
 
-// ─── Attach JWT to every request ──────────────────────────────────────────────
+// ─── Attach JWT ───────────────────────────────────────────────────────────────
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem("access_token");
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
+  const token = localStorage.getItem("accessToken");
+  if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 
-// ─── Auto-refresh access token on 401 ────────────────────────────────────────
-// Calls POST /api/auth/token/refresh/ (CustomTokenRefreshView in your auth urls)
+// ─── Auto-refresh on 401 ──────────────────────────────────────────────────────
 api.interceptors.response.use(
   (res) => res,
   async (error) => {
@@ -35,23 +22,17 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && !original._retry) {
       original._retry = true;
       try {
-        const refresh = localStorage.getItem("refresh_token");
+        const refresh = localStorage.getItem("refreshToken");
         if (!refresh) throw new Error("No refresh token");
-
-        const { data } = await axios.post(
-          `${BASE_URL}/auth/token/refresh/`,
-          { refresh }
-        );
-
-        localStorage.setItem("access_token", data.access);
+        const { data } = await axios.post(`${BASE_URL}/auth/token/refresh/`, { refresh });
+        localStorage.setItem("accessToken", data.access);
         original.headers.Authorization = `Bearer ${data.access}`;
         return api(original);
       } catch {
-        // Clear auth state and redirect to login
-        localStorage.removeItem("access_token");
-        localStorage.removeItem("refresh_token");
+        localStorage.removeItem("accessToken");
+        localStorage.removeItem("refreshToken");
         localStorage.removeItem("user");
-        localStorage.removeItem("is_first_login");
+        localStorage.removeItem("isFirstLogin");
         window.location.href = "/login";
       }
     }
@@ -59,41 +40,67 @@ api.interceptors.response.use(
   }
 );
 
+// ─── Helper: build FormData when a File is present ───────────────────────────
+function toFormData(data) {
+  const fd = new FormData();
+  Object.entries(data).forEach(([k, v]) => {
+    if (v === null || v === undefined) return;
+    // Arrays (e.g. amenity_ids, inclusion_ids) must be appended individually
+    if (Array.isArray(v)) {
+      v.forEach(item => fd.append(k, item));
+    } else {
+      fd.append(k, v);
+    }
+  });
+  return fd;
+}
+
+function hasFile(data) {
+  return Object.values(data).some(v => v instanceof File);
+}
+
 // ─── Public Endpoints ─────────────────────────────────────────────────────────
-
-export const getRooms = (params = {}) =>
-  api.get("/rooms/", { params });
-
-export const getRoomDetail = (id) =>
-  api.get(`/rooms/${id}/`);
-
-export const checkAvailability = (payload) =>
-  api.post("/rooms/availability/", payload);
+export const getRooms       = (params = {}) => api.get("/rooms/", { params });
+export const getRoomDetail  = (id)          => api.get(`/rooms/${id}/`);
+export const checkAvailability = (payload)  => api.post("/rooms/availability/", payload);
 
 // ─── Booking Lock ─────────────────────────────────────────────────────────────
-
 export const lockRoom = (payload) =>
   api.post("/rooms/lock/", payload);
 
 export const releaseRoomLock = (roomId, sessionKey) =>
   api.post("/rooms/lock/release/", { room_id: roomId, session_key: sessionKey });
 
-// ─── Admin / Staff Endpoints ──────────────────────────────────────────────────
+// ─── Admin Endpoints ──────────────────────────────────────────────────────────
+export const adminGetRooms  = (params = {}) => api.get("/rooms/admin/", { params });
+export const adminGetRoom   = (id)          => api.get(`/rooms/admin/${id}/`);
 
-export const adminGetRooms = (params = {}) =>
-  api.get("/rooms/admin/", { params });
+export const adminCreateRoom = (data) => {
+  if (hasFile(data)) {
+    return api.post("/rooms/admin/", toFormData(data), {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+  }
+  return api.post("/rooms/admin/", data);
+};
 
-export const adminGetRoom = (id) =>
-  api.get(`/rooms/admin/${id}/`);
+export const adminUpdateRoom = (id, data) => {
+  if (hasFile(data)) {
+    return api.put(`/rooms/admin/${id}/`, toFormData(data), {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+  }
+  return api.put(`/rooms/admin/${id}/`, data);
+};
 
-export const adminCreateRoom = (data) =>
-  api.post("/rooms/admin/", data);
-
-export const adminUpdateRoom = (id, data) =>
-  api.put(`/rooms/admin/${id}/`, data);
-
-export const adminPatchRoom = (id, data) =>
-  api.patch(`/rooms/admin/${id}/`, data);
+export const adminPatchRoom = (id, data) => {
+  if (hasFile(data)) {
+    return api.patch(`/rooms/admin/${id}/`, toFormData(data), {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+  }
+  return api.patch(`/rooms/admin/${id}/`, data);
+};
 
 export const adminDeleteRoom = (id) =>
   api.delete(`/rooms/admin/${id}/`);

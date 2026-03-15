@@ -1,0 +1,105 @@
+/* PaymentModal.module.css — shared by Confirm and Refund modals */
+.overlay {
+  position: fixed; inset: 0;
+  background: rgba(15, 23, 42, 0.55);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+
+.modal {
+  background: #fff;
+  border-radius: 16px;
+  padding: 2rem;
+  width: 100%;
+  max-width: 460px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+  font-family: 'DM Sans', 'Segoe UI', sans-serif;
+}
+
+.modalTitle { font-size: 1.25rem; font-weight: 700; color: #0f172a; margin: 0 0 0.375rem; }
+.modalSub { color: #64748b; font-size: 0.875rem; margin: 0 0 1.25rem; }
+
+.paymentSummary {
+  background: #f8fafc;
+  border-radius: 10px;
+  padding: 1rem;
+  margin-bottom: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.summaryRow {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.875rem;
+  color: #475569;
+}
+.summaryRow strong { color: #0f172a; }
+
+.label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 1rem;
+}
+
+.input, .textarea {
+  padding: 0.55rem 0.875rem;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s;
+  resize: vertical;
+}
+.input:focus, .textarea:focus { border-color: #6366f1; }
+
+.error { color: #dc2626; font-size: 0.85rem; margin: 0 0 0.75rem; }
+
+.actions { display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 0.5rem; }
+
+.cancelBtn {
+  padding: 0.55rem 1.25rem;
+  border: 1.5px solid #e2e8f0;
+  background: #fff;
+  color: #475569;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.cancelBtn:hover { border-color: #94a3b8; }
+
+.confirmBtn {
+  padding: 0.55rem 1.25rem;
+  background: #16a34a;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.confirmBtn:hover { background: #15803d; }
+.confirmBtn:disabled, .refundBtn:disabled, .cancelBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.refundBtn {
+  padding: 0.55rem 1.25rem;
+  background: #dc2626;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.refundBtn:hover { background: #b91c1c; }

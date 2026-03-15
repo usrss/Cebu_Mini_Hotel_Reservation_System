@@ -1,0 +1,443 @@
+/* ============================================================
+   AnalyticsDashboard.css — Cebu Mini Hotel · Luxury Dark Theme
+   Analytics — refined, data-forward, gold on navy
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Raleway:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
+
+:root {
+  --navy:        #0A0E1A;
+  --navy-mid:    #0F1729;
+  --navy-card:   #111827;
+  --navy-deep:   #080C16;
+  --gold:        #C9A84C;
+  --gold-l:      #E2C97E;
+  --gold-dim:    rgba(201,168,76,0.10);
+  --gold-border: rgba(201,168,76,0.22);
+  --white:       #F8F6F0;
+  --white-dim:   rgba(248,246,240,0.55);
+  --white-faint: rgba(248,246,240,0.06);
+
+  /* Section accent colors */
+  --c-booking:      #60A5FA;
+  --c-occupancy:    #6EE7B7;
+  --c-guest:        #C4B5FD;
+  --c-room:         #C9A84C;
+  --c-cancel:       #F87171;
+  --c-review:       #FCD34D;
+  --c-staff:        #818CF8;
+
+  --radius:  2px;
+  --shadow:  0 8px 32px rgba(0,0,0,0.45);
+}
+
+/* ── Page ──────────────────────────────────────────────────── */
+.an-page {
+  padding: 36px 40px 80px;
+  max-width: 1400px;
+  margin: 0 auto;
+  font-family: 'Raleway', sans-serif;
+  color: var(--white);
+  background: var(--navy);
+  min-height: 100vh;
+}
+
+/* ── Header ── */
+.an-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.an-header-left {}
+.an-eyebrow {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin: 0 0 6px;
+}
+.an-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--white);
+  margin: 0 0 4px;
+  letter-spacing: -0.3px;
+}
+.an-subtitle {
+  font-size: 12px;
+  color: var(--white-dim);
+  margin: 0;
+  font-family: 'DM Mono', monospace;
+}
+.an-divider {
+  width: 44px;
+  height: 1px;
+  background: linear-gradient(90deg, var(--gold), transparent);
+  margin: 16px 0 28px;
+}
+
+/* Period selector */
+.an-period-selector {
+  display: flex;
+  gap: 4px;
+  background: var(--navy-card);
+  border: 1px solid var(--gold-border);
+  padding: 4px;
+  flex-shrink: 0;
+  align-self: flex-start;
+  margin-top: 4px;
+}
+.an-period-btn {
+  padding: 7px 16px;
+  background: none;
+  border: none;
+  color: var(--white-dim);
+  font-family: 'Raleway', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.an-period-btn:hover { color: var(--gold-l); background: var(--gold-dim); }
+.an-period-btn--active {
+  background: var(--gold-dim);
+  color: var(--gold);
+  border: 1px solid var(--gold-border);
+}
+
+/* ── KPI Cards ── */
+.an-kpis {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 12px;
+  margin-bottom: 32px;
+}
+.an-kpi-card {
+  background: var(--navy-card);
+  border: 1px solid var(--gold-border);
+  padding: 18px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.2s;
+  text-align: left;
+  width: 100%;
+  font-family: 'Raleway', sans-serif;
+  color: var(--white);
+}
+.an-kpi-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: var(--accent, var(--gold));
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+.an-kpi-card::after {
+  content: '';
+  position: absolute;
+  bottom: 0; right: 0;
+  width: 60px; height: 60px;
+  background: var(--accent, var(--gold));
+  opacity: 0.03;
+  border-radius: 50%;
+  transform: translate(20px, 20px);
+  transition: all 0.3s;
+}
+.an-kpi-card:hover {
+  border-color: var(--accent, var(--gold));
+  transform: translateY(-2px);
+  box-shadow: var(--shadow);
+}
+.an-kpi-card:hover::before { opacity: 1; }
+.an-kpi-card:hover::after { opacity: 0.07; transform: translate(10px, 10px) scale(1.2); }
+.an-kpi-card--active {
+  border-color: var(--accent, var(--gold));
+  background: rgba(255,255,255,0.03);
+}
+.an-kpi-card--active::before { opacity: 1; }
+
+.an-kpi-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.an-kpi-icon {
+  width: 32px; height: 32px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--gold-dim);
+  border: 1px solid var(--gold-border);
+  color: var(--accent, var(--gold));
+  flex-shrink: 0;
+}
+.an-kpi-trend {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  padding: 2px 6px;
+  border-radius: 2px;
+}
+.an-kpi-trend--up   { background: rgba(110,231,183,0.15); color: #6EE7B7; }
+.an-kpi-trend--down { background: rgba(248,113,113,0.15); color: #F87171; }
+.an-kpi-value {
+  font-family: 'Playfair Display', serif;
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--white);
+  line-height: 1;
+}
+.an-kpi-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--white-dim);
+}
+.an-kpi-sub {
+  font-size: 10px;
+  color: var(--accent, var(--gold));
+  opacity: 0.7;
+  font-family: 'DM Mono', monospace;
+}
+
+/* ── Section Tabs ── */
+.an-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--gold-border);
+  margin-bottom: 28px;
+  gap: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.an-tabs::-webkit-scrollbar { display: none; }
+.an-tab {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 12px 20px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--white-dim);
+  font-family: 'Raleway', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.15s;
+  margin-bottom: -1px;
+  white-space: nowrap;
+}
+.an-tab:hover { color: var(--gold-l); }
+.an-tab--active { color: var(--gold); border-bottom-color: var(--gold); }
+
+/* ── Cards ── */
+.an-card {
+  background: var(--navy-card);
+  border: 1px solid var(--gold-border);
+  padding: 22px 24px;
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius);
+}
+.an-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, var(--gold), transparent);
+}
+.an-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.an-card-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--white);
+  margin: 0;
+}
+.an-card-eyebrow {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin: 0 0 4px;
+}
+
+/* ── Grids ── */
+.an-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.an-grid-3 { display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; }
+.an-grid-4 { display: grid; grid-template-columns: repeat(4,1fr); gap: 16px; }
+.an-grid-chart-table { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.an-grid-chart-wide  { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; }
+
+/* ── Stat Box ── */
+.an-stat-box {
+  background: var(--navy-mid);
+  border: 1px solid var(--gold-border);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-radius: var(--radius);
+}
+.an-stat-box-label {
+  font-size: 10px; font-weight: 600;
+  letter-spacing: 1.5px; text-transform: uppercase;
+  color: var(--gold);
+}
+.an-stat-box-value {
+  font-family: 'Playfair Display', serif;
+  font-size: 24px; color: var(--white);
+  line-height: 1;
+}
+.an-stat-box-sub { font-size: 11px; color: var(--white-dim); font-family: 'DM Mono', monospace; }
+
+/* ── Alert ── */
+.an-alerts { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+.an-alert {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 16px;
+  border: 1px solid;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: var(--radius);
+  animation: an-fade-in 0.3s ease;
+}
+@keyframes an-fade-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+.an-alert--info    { border-color: rgba(96,165,250,0.3);  background: rgba(96,165,250,0.06);  color: #93C5FD; }
+.an-alert--warning { border-color: rgba(252,211,77,0.3);  background: rgba(252,211,77,0.06);  color: #FCD34D; }
+.an-alert--success { border-color: rgba(110,231,183,0.3); background: rgba(110,231,183,0.06); color: #6EE7B7; }
+.an-alert--danger  { border-color: rgba(248,113,113,0.3); background: rgba(248,113,113,0.06); color: #F87171; }
+
+/* ── Chart period row ── */
+.an-chart-period {
+  display: flex;
+  gap: 4px;
+  background: var(--navy-mid);
+  border: 1px solid var(--gold-border);
+  padding: 3px;
+  width: fit-content;
+}
+.an-chart-period-btn {
+  padding: 4px 12px;
+  background: none;
+  border: none;
+  color: var(--white-dim);
+  font-family: 'Raleway', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.an-chart-period-btn:hover { color: var(--gold); }
+.an-chart-period-btn--active { background: var(--gold-dim); color: var(--gold); border: 1px solid var(--gold-border); }
+
+/* ── Table ── */
+.an-table-wrap { overflow-x: auto; }
+.an-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.an-table thead th {
+  padding: 10px 14px;
+  text-align: left;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--gold);
+  background: var(--gold-dim);
+  border-bottom: 1px solid var(--gold-border);
+  white-space: nowrap;
+  font-family: 'DM Mono', monospace;
+}
+.an-table tbody tr {
+  border-bottom: 1px solid rgba(201,168,76,0.07);
+  transition: background 0.1s;
+}
+.an-table tbody tr:last-child { border-bottom: none; }
+.an-table tbody tr:hover { background: var(--white-faint); }
+.an-table td {
+  padding: 11px 14px;
+  color: var(--white-dim);
+  vertical-align: middle;
+  font-family: 'DM Mono', monospace;
+}
+.an-table td:first-child { color: var(--white); font-weight: 500; font-family: 'Raleway', sans-serif; }
+
+/* ── Loading / Empty ── */
+.an-loading {
+  display: flex; align-items: center; gap: 12px;
+  padding: 48px; color: var(--white-dim);
+  font-size: 11px; letter-spacing: 2px; text-transform: uppercase;
+}
+.an-spinner {
+  width: 18px; height: 18px;
+  border: 2px solid var(--gold-border);
+  border-top-color: var(--gold);
+  border-radius: 50%;
+  animation: an-spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+@keyframes an-spin { to { transform: rotate(360deg); } }
+.an-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 48px;
+  color: var(--white-dim);
+  font-size: 12px;
+  letter-spacing: 1px;
+  text-align: center;
+}
+.an-section { min-height: 400px; display: flex; flex-direction: column; gap: 20px; }
+.an-forbidden { text-align: center; padding: 6rem; color: var(--c-cancel); font-weight: 600; }
+
+/* ── Recharts overrides ── */
+.recharts-tooltip-wrapper .recharts-default-tooltip {
+  background: var(--navy-card) !important;
+  border: 1px solid var(--gold-border) !important;
+  border-radius: 0 !important;
+  font-family: 'Raleway', sans-serif !important;
+  font-size: 12px !important;
+  color: var(--white) !important;
+}
+.recharts-tooltip-label { color: var(--gold) !important; font-weight: 700 !important; }
+.recharts-legend-item-text { color: var(--white-dim) !important; font-size: 11px !important; }
+.recharts-cartesian-axis-tick-value { fill: var(--white-dim) !important; font-size: 10px !important; }
+.recharts-cartesian-grid-horizontal line,
+.recharts-cartesian-grid-vertical   line { stroke: rgba(201,168,76,0.08) !important; }
+
+/* ── Responsive ── */
+@media (max-width: 1200px) { .an-kpis { grid-template-columns: repeat(3,1fr); } }
+@media (max-width: 900px) {
+  .an-kpis { grid-template-columns: repeat(2,1fr); }
+  .an-grid-chart-wide, .an-grid-chart-table { grid-template-columns: 1fr; }
+  .an-grid-3, .an-grid-4 { grid-template-columns: repeat(2,1fr); }
+}
+@media (max-width: 600px) {
+  .an-page { padding: 20px 16px 60px; }
+  .an-kpis { grid-template-columns: 1fr 1fr; }
+  .an-grid-2, .an-grid-3, .an-grid-4 { grid-template-columns: 1fr; }
+  .an-title { font-size: 22px; }
+}

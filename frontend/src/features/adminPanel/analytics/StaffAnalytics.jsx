@@ -1,0 +1,134 @@
+import { useState, useEffect } from 'react';
+import {
+  PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend,
+} from 'recharts';
+import api from '../../../services/api';
+
+const ROLE_LABELS = {
+  admin:'Admin', manager:'Manager', receptionist:'Receptionist',
+  front_desk:'Front Desk', housekeeping:'Housekeeping',
+  maintenance:'Maintenance', security:'Security',
+};
+const ROLE_COLORS = ['#C9A84C','#60A5FA','#6EE7B7','#C4B5FD','#FCD34D','#F87171','#818CF8'];
+
+function CustomTooltip({ active, payload }) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div style={{ background:'var(--navy-card)', border:'1px solid var(--gold-border)', padding:'10px 14px', fontFamily:'Raleway,sans-serif', fontSize:12 }}>
+      {payload.map((p,i) => <p key={i} style={{ color:p.payload.fill, margin:'2px 0' }}>{p.name}: <strong>{p.value}</strong></p>)}
+    </div>
+  );
+}
+
+export default function StaffAnalytics({ dashboard }) {
+  const [monitoring, setMonitoring] = useState(null);
+
+  // Poll monitoring every 30s
+  useEffect(() => {
+    const load = () => api.get('/staff/monitoring/').then(r => setMonitoring(r.data)).catch(() => {});
+    load();
+    const interval = setInterval(load, 30_000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const s      = dashboard?.staff;
+  const byRole = monitoring?.by_role ?? {};
+
+  const donutData = Object.entries(byRole)
+    .filter(([, d]) => d.count > 0)
+    .map(([role, d], i) => ({
+      name:  ROLE_LABELS[role] ?? role,
+      value: d.count,
+      fill:  ROLE_COLORS[i % ROLE_COLORS.length],
+    }));
+
+  const statusData = s ? [
+    { name: 'Online',  value: s.online  ?? 0, fill: '#6EE7B7' },
+    { name: 'Idle',    value: s.idle    ?? 0, fill: '#FCD34D' },
+    { name: 'Offline', value: s.offline ?? 0, fill: 'rgba(248,246,240,0.2)' },
+  ].filter(d => d.value > 0) : [];
+
+  return (
+    <>
+      <div className="an-grid-4">
+        {[
+          { label: 'Total Active', value: s?.total,   color: 'var(--white)' },
+          { label: 'Online',       value: s?.online,  color: '#6EE7B7' },
+          { label: 'Idle',         value: s?.idle,    color: '#FCD34D' },
+          { label: 'Offline',      value: s?.offline, color: 'rgba(248,246,240,0.4)' },
+        ].map((k,i) => (
+          <div key={i} className="an-stat-box">
+            <span className="an-stat-box-label">{k.label}</span>
+            <span className="an-stat-box-value" style={{ color: k.color }}>{k.value ?? '—'}</span>
+          </div>
+        ))}
+      </div>
+
+      <div className="an-grid-chart-table">
+        {/* Status donut */}
+        <div className="an-card">
+          <p className="an-card-eyebrow">Presence</p>
+          <h3 className="an-card-title">Online Status</h3>
+          {statusData.length ? (
+            <ResponsiveContainer width="100%" height={220}>
+              <PieChart>
+                <Pie data={statusData} cx="50%" cy="50%" innerRadius={55} outerRadius={85}
+                  paddingAngle={4} dataKey="value">
+                  {statusData.map((d,i) => <Cell key={i} fill={d.fill} />)}
+                </Pie>
+                <Tooltip content={<CustomTooltip />} />
+                <Legend wrapperStyle={{ fontSize:10, color:'rgba(248,246,240,0.55)' }} />
+              </PieChart>
+            </ResponsiveContainer>
+          ) : <div className="an-empty">No status data.</div>}
+        </div>
+
+        {/* Role donut */}
+        <div className="an-card">
+          <p className="an-card-eyebrow">By Role</p>
+          <h3 className="an-card-title">Staff Distribution</h3>
+          {donutData.length ? (
+            <ResponsiveContainer width="100%" height={220}>
+              <PieChart>
+                <Pie data={donutData} cx="50%" cy="50%" innerRadius={55} outerRadius={85}
+                  paddingAngle={3} dataKey="value">
+                  {donutData.map((d,i) => <Cell key={i} fill={d.fill} />)}
+                </Pie>
+                <Tooltip content={<CustomTooltip />} />
+                <Legend wrapperStyle={{ fontSize:10, color:'rgba(248,246,240,0.55)' }} />
+              </PieChart>
+            </ResponsiveContainer>
+          ) : <div className="an-empty">No role data.</div>}
+        </div>
+      </div>
+
+      {dashboard?.recent_activity?.length > 0 && (
+        <div className="an-card">
+          <p className="an-card-eyebrow">Audit Trail</p>
+          <h3 className="an-card-title">Recent Staff Activity</h3>
+          <div className="an-table-wrap">
+            <table className="an-table">
+              <thead>
+                <tr><th>Staff</th><th>Action</th><th>Description</th><th>Time</th></tr>
+              </thead>
+              <tbody>
+                {dashboard.recent_activity.slice(0,15).map((log,i) => (
+                  <tr key={i}>
+                    <td>{log.staff_name ?? log.staff ?? '—'}</td>
+                    <td style={{ color:'var(--gold)', textTransform:'capitalize' }}>
+                      {log.action_type?.replace(/_/g,' ')}
+                    </td>
+                    <td style={{ maxWidth:240, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                      {log.description}
+                    </td>
+                    <td>{log.created_at ? new Date(log.created_at).toLocaleTimeString() : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}

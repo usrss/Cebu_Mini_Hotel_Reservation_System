@@ -39,9 +39,15 @@ def validate_password_strength(password):
 # ─── User Serializer ───────────────────────────────────────────────────────────
 
 class UserSerializer(serializers.ModelSerializer):
-    """Serializer for user data responses"""
+    """
+    Serializer for user data responses.
+    Includes staff_profile when the user is a staff member.
+    The staff_profile.effective_role field is what the frontend uses
+    for all role-based permission checks (respects temp_role overrides).
+    """
 
-    full_name = serializers.CharField(source='get_full_name', read_only=True)
+    full_name     = serializers.CharField(source='get_full_name', read_only=True)
+    staff_profile = serializers.SerializerMethodField()
 
     class Meta:
         model = CustomUser
@@ -58,8 +64,33 @@ class UserSerializer(serializers.ModelSerializer):
             'is_staff',
             'date_joined',
             'last_login',
+            'staff_profile',
         ]
         read_only_fields = ['id', 'date_joined', 'last_login', 'is_staff']
+
+    def get_staff_profile(self, obj):
+        """
+        Returns the nested staff profile dict if the user has one.
+        Uses the OneToOne reverse accessor defined in staff/models.py:
+            StaffProfile.user = OneToOneField(..., related_name='staff_profile')
+
+        effective_role is a @property on StaffProfile that returns
+        temp_role if it is currently active, otherwise falls back to role.
+        This is the value ProtectedRoute and useStaffRole read.
+        """
+        try:
+            profile = obj.staff_profile
+            return {
+                'id':             profile.id,
+                'role':           profile.role,
+                'effective_role': profile.effective_role,
+                'online_status':  profile.online_status,
+                'employee_id':    profile.employee_id or '',
+                'is_active':      profile.is_active,
+            }
+        except Exception:
+            # User has no StaffProfile (regular guest) — return None
+            return None
 
 
 # ─── Registration ──────────────────────────────────────────────────────────────

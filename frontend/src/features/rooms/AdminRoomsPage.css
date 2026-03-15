@@ -1,0 +1,384 @@
+/* ============================================================
+   AdminRoomsPage.css — Cebu Mini Hotel · Luxury Dark Theme
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&family=Raleway:wght@300;400;500;600;700&display=swap');
+
+:root {
+  --navy:        #0A0E1A;
+  --navy-mid:    #0F1729;
+  --navy-card:   #111827;
+  --gold:        #C9A84C;
+  --gold-l:      #E2C97E;
+  --gold-dim:    rgba(201,168,76,0.10);
+  --gold-border: rgba(201,168,76,0.22);
+  --white:       #F8F6F0;
+  --white-dim:   rgba(248,246,240,0.55);
+  --white-faint: rgba(248,246,240,0.06);
+  --red:         #F87171;
+  --green:       #6EE7B7;
+}
+
+/* ── Page ──────────────────────────────────────────────────── */
+.ar-page {
+  min-height: 100vh;
+  background: var(--navy);
+  font-family: 'Raleway', sans-serif;
+  color: var(--white);
+}
+
+/* ── Toast ─────────────────────────────────────────────────── */
+.ar-toast {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 20px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  animation: ar-slide-in 0.25s ease;
+  border: 1px solid;
+}
+.ar-toast--success {
+  background: rgba(16,185,129,0.15);
+  border-color: rgba(16,185,129,0.35);
+  color: var(--green);
+}
+.ar-toast--error {
+  background: rgba(248,113,113,0.12);
+  border-color: rgba(248,113,113,0.3);
+  color: var(--red);
+}
+@keyframes ar-slide-in {
+  from { transform: translateX(20px); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+
+/* ── Header ────────────────────────────────────────────────── */
+.ar-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: rgba(10,14,26,0.97);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--gold-border);
+  padding: 0 48px;
+  height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.ar-header-left h1 {
+  font-family: 'Playfair Display', serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--white);
+  margin: 0 0 2px;
+}
+.ar-header-left p {
+  font-size: 12px;
+  color: var(--white-dim);
+  margin: 0;
+  letter-spacing: 0.3px;
+}
+.ar-add-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 22px;
+  background: var(--gold-dim);
+  border: 1px solid var(--gold-border);
+  color: var(--gold);
+  font-family: 'Raleway', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.ar-add-btn:hover {
+  background: rgba(201,168,76,0.18);
+  border-color: var(--gold);
+  color: var(--gold-l);
+}
+
+/* ── Body ──────────────────────────────────────────────────── */
+.ar-body {
+  max-width: 1300px;
+  margin: 0 auto;
+  padding: 36px 48px 80px;
+}
+
+/* ── Stats row ─────────────────────────────────────────────── */
+.ar-stats {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 14px;
+  margin-bottom: 32px;
+}
+.ar-stat-btn {
+  background: var(--navy-card);
+  border: 1px solid var(--gold-border);
+  padding: 16px;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.18s;
+  position: relative;
+  overflow: hidden;
+}
+.ar-stat-btn::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, var(--gold), transparent);
+  opacity: 0;
+  transition: opacity 0.18s;
+}
+.ar-stat-btn:hover,
+.ar-stat-btn--active {
+  border-color: var(--gold);
+  background: var(--gold-dim);
+}
+.ar-stat-btn:hover::before,
+.ar-stat-btn--active::before { opacity: 1; }
+.ar-stat-value {
+  font-family: 'Playfair Display', serif;
+  font-size: 26px;
+  color: var(--gold);
+  line-height: 1;
+  margin-bottom: 4px;
+}
+.ar-stat-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--white-dim);
+}
+
+/* ── Toolbar ───────────────────────────────────────────────── */
+.ar-toolbar {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+.ar-search-wrap {
+  flex: 1;
+  min-width: 200px;
+  position: relative;
+}
+.ar-search-icon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--white-dim);
+}
+.ar-search {
+  width: 100%;
+  padding: 10px 14px 10px 42px;
+  background: var(--navy-card);
+  border: 1px solid var(--gold-border);
+  color: var(--white);
+  font-family: 'Raleway', sans-serif;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.ar-search::placeholder { color: var(--white-dim); }
+.ar-search:focus { border-color: var(--gold); }
+.ar-select {
+  padding: 10px 16px;
+  background: var(--navy-card);
+  border: 1px solid var(--gold-border);
+  color: var(--white);
+  font-family: 'Raleway', sans-serif;
+  font-size: 13px;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.ar-select:focus { border-color: var(--gold); }
+.ar-select option { background: var(--navy-card); }
+
+/* ── Table ─────────────────────────────────────────────────── */
+.ar-table-wrap {
+  border: 1px solid var(--gold-border);
+  overflow-x: auto;
+}
+.ar-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.ar-table thead th {
+  padding: 12px 16px;
+  text-align: left;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--gold);
+  background: var(--gold-dim);
+  border-bottom: 1px solid var(--gold-border);
+  white-space: nowrap;
+}
+.ar-table tbody tr {
+  border-bottom: 1px solid rgba(201,168,76,0.07);
+  transition: background 0.12s;
+}
+.ar-table tbody tr:last-child { border-bottom: none; }
+.ar-table tbody tr:hover { background: var(--white-faint); }
+.ar-table td {
+  padding: 14px 16px;
+  color: var(--white-dim);
+  vertical-align: middle;
+}
+.ar-room-number {
+  font-family: 'Playfair Display', serif;
+  font-size: 15px;
+  color: var(--white);
+  font-weight: 700;
+}
+.ar-room-view {
+  font-size: 11px;
+  color: var(--gold);
+  text-transform: capitalize;
+  margin-top: 2px;
+}
+.ar-inactive-tag {
+  font-size: 10px;
+  color: var(--red);
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+.ar-type { color: var(--white); text-transform: capitalize; }
+.ar-price-original {
+  font-size: 11px;
+  color: var(--white-dim);
+  text-decoration: line-through;
+}
+.ar-price-discounted {
+  font-weight: 700;
+  color: var(--green);
+}
+.ar-price-discount-pct {
+  font-size: 10px;
+  color: var(--green);
+  opacity: 0.8;
+}
+.ar-price-base {
+  font-weight: 600;
+  color: var(--white);
+}
+.ar-capacity-main { color: var(--white); }
+.ar-capacity-sub { font-size: 11px; color: var(--white-dim); margin-top: 2px; }
+
+/* Status select */
+.ar-status-select {
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  font-family: 'Raleway', sans-serif;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  border: 1px solid;
+  background: transparent;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.15s;
+}
+.ar-status-select option { background: var(--navy-card); color: var(--white); }
+.ar-status--available  { border-color: rgba(110,231,183,0.4); color: #6EE7B7; }
+.ar-status--occupied   { border-color: rgba(248,113,113,0.4); color: #F87171; }
+.ar-status--maintenance{ border-color: rgba(251,191,36,0.4);  color: #FCD34D; }
+.ar-status--reserved   { border-color: rgba(96,165,250,0.4);  color: #93C5FD; }
+.ar-status--cleaning   { border-color: rgba(167,139,250,0.4); color: #C4B5FD; }
+
+/* Image count button */
+.ar-img-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: none;
+  border: 1px solid var(--gold-border);
+  color: var(--gold);
+  font-family: 'Raleway', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: all 0.15s;
+  letter-spacing: 0.3px;
+}
+.ar-img-btn:hover {
+  background: var(--gold-dim);
+  border-color: var(--gold);
+}
+
+/* Action buttons */
+.ar-actions { display: flex; gap: 6px; align-items: center; }
+.ar-action-btn {
+  width: 32px; height: 32px;
+  display: flex; align-items: center; justify-content: center;
+  background: none;
+  border: 1px solid var(--gold-border);
+  color: var(--white-dim);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.ar-action-btn:hover { border-color: var(--gold); color: var(--gold); background: var(--gold-dim); }
+.ar-action-btn--danger:hover { border-color: rgba(248,113,113,0.5); color: var(--red); background: rgba(248,113,113,0.08); }
+.ar-action-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Empty / loading */
+.ar-empty {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--white-dim);
+  font-size: 13px;
+  letter-spacing: 0.5px;
+}
+.ar-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 80px 20px;
+  color: var(--white-dim);
+  font-size: 12px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+.ar-spinner {
+  width: 30px; height: 30px;
+  border: 2px solid var(--gold-border);
+  border-top-color: var(--gold);
+  border-radius: 50%;
+  animation: ar-spin 0.8s linear infinite;
+}
+@keyframes ar-spin { to { transform: rotate(360deg); } }
+.ar-error {
+  text-align: center;
+  padding: 60px;
+  color: var(--red);
+  font-size: 13px;
+}
+
+/* ── Responsive ────────────────────────────────────────────── */
+@media (max-width: 1024px) {
+  .ar-stats { grid-template-columns: repeat(3, 1fr); }
+}
+@media (max-width: 768px) {
+  .ar-header { padding: 0 20px; height: 60px; }
+  .ar-body { padding: 24px 20px 60px; }
+  .ar-stats { grid-template-columns: repeat(2, 1fr); }
+}
