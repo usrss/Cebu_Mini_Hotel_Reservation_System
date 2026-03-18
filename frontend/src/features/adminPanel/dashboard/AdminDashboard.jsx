@@ -10,7 +10,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Users, CreditCard, Star, BarChart2,
   CheckCircle2, ArrowRight, TrendingUp, BedDouble,
-  LineChart,
+  LineChart, ClipboardList,
 } from 'lucide-react';
 import { getStoredUser } from '../../../services/api';
 import { guestApi, paymentApi, reviewApi } from '../../../services/adminApi';
@@ -61,6 +61,7 @@ export default function AdminDashboard() {
   const displayName = user?.first_name || user?.full_name?.split(' ')[0] || 'Staff';
 
   const isAdminOrManager  = ['admin', 'manager'].includes(role);
+  const isFrontDesk       = ['admin', 'manager', 'front_desk'].includes(role);
   const canViewGuests     = ['admin', 'manager', 'receptionist', 'front_desk'].includes(role);
   const canManagePayments = ['admin', 'manager', 'front_desk'].includes(role);
   const canManageReviews  = ['admin', 'manager'].includes(role);
@@ -125,7 +126,9 @@ export default function AdminDashboard() {
 
       {/* Header */}
       <div className="ad-header">
-        <p className="ad-eyebrow">Admin Panel</p>
+        <p className="ad-eyebrow">
+          {role === 'front_desk' ? 'Front Desk' : 'Admin Panel'}
+        </p>
         <h1 className="ad-title">{greeting}, {displayName}</h1>
         <p className="ad-subtitle">
           {ROLE_LABELS[role] ?? 'Staff'} · {new Date().toLocaleDateString('en-PH', {
@@ -179,72 +182,130 @@ export default function AdminDashboard() {
         )}
       </div>
 
-      {/* Quick Links */}
-      <div className="ad-section">
-        <div className="ad-section-head">
-          <p className="ad-section-eyebrow">Quick Actions</p>
-          <h2 className="ad-section-title">What would you like to do?</h2>
-        </div>
-
-        <div className="ad-quick-grid">
-          {isAdminOrManager && (
+      {/* ── Front Desk section — shown only for front_desk role ─────────────── */}
+      {role === 'front_desk' && (
+        <div className="ad-section">
+          <div className="ad-section-head">
+            <p className="ad-section-eyebrow">Front Desk Operations</p>
+            <h2 className="ad-section-title">Your tools</h2>
+          </div>
+          <div className="ad-quick-grid">
             <QuickLink
-              icon={<LineChart size={18} />}
-              label="Analytics"
-              to="/admin/analytics"
-              desc="Bookings, occupancy, guests, reviews"
+              icon={<ClipboardList size={18} />}
+              label="Front Desk Dashboard"
+              to="/staff/front-desk"
+              desc="Room stats, arrivals, quick actions"
             />
-          )}
-          {canViewGuests && (
             <QuickLink
-              icon={<Users size={18} />}
-              label="Manage Guests"
-              to="/admin/guests"
-              desc="View profiles, block accounts"
+              icon="✓"
+              label="Guest Check-In"
+              to="/staff/check-in"
+              desc="QR scan or manual reference entry"
             />
-          )}
-          {canManagePayments && (
+            <QuickLink
+              icon="📅"
+              label="Today's Arrivals"
+              to="/staff/front-desk/today"
+              desc="Check-ins and check-outs today"
+            />
+            <QuickLink
+              icon="🏨"
+              label="Room Status Board"
+              to="/staff/front-desk/rooms"
+              desc="Live view of all room statuses"
+            />
+            <QuickLink
+              icon="🚶"
+              label="Walk-In Booking"
+              to="/staff/front-desk/walk-in"
+              desc="Create a new booking at the desk"
+            />
             <QuickLink
               icon={<CreditCard size={18} />}
               label="Manage Payments"
               to="/admin/payments"
               desc="Confirm cash, view transactions"
             />
-          )}
-          {isAdminOrManager && (
-            <QuickLink
-              icon={<BarChart2 size={18} />}
-              label="Revenue Summary"
-              to="/admin/payments/revenue"
-              desc="Charts, trends, net revenue"
-            />
-          )}
-          {canManageReviews && (
-            <QuickLink
-              icon={<Star size={18} />}
-              label="Moderate Reviews"
-              to="/admin/reviews"
-              desc="Show, hide, filter reviews"
-            />
-          )}
-          {canManageReviews && (
-            <QuickLink
-              icon={<BarChart2 size={18} />}
-              label="Review Stats"
-              to="/admin/reviews/stats"
-              desc="Ratings breakdown, top rooms"
-            />
-          )}
-          {['admin', 'manager', 'housekeeping', 'maintenance'].includes(role) && (
-            <QuickLink
-              icon={<BedDouble size={18} />}
-              label="Manage Rooms"
-              to="/admin/rooms"
-              desc="Room status, availability"
-            />
-          )}
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* ── Quick Links — shown for all other roles ──────────────────────────── */}
+      {role !== 'front_desk' && (
+        <div className="ad-section">
+          <div className="ad-section-head">
+            <p className="ad-section-eyebrow">Quick Actions</p>
+            <h2 className="ad-section-title">What would you like to do?</h2>
+          </div>
+
+          <div className="ad-quick-grid">
+            {isAdminOrManager && (
+              <QuickLink
+                icon={<LineChart size={18} />}
+                label="Analytics"
+                to="/admin/analytics"
+                desc="Bookings, occupancy, guests, reviews"
+              />
+            )}
+            {canViewGuests && (
+              <QuickLink
+                icon={<Users size={18} />}
+                label="Manage Guests"
+                to="/admin/guests"
+                desc="View profiles, block accounts"
+              />
+            )}
+            {canManagePayments && (
+              <QuickLink
+                icon={<CreditCard size={18} />}
+                label="Manage Payments"
+                to="/admin/payments"
+                desc="Confirm cash, view transactions"
+              />
+            )}
+            {isAdminOrManager && (
+              <QuickLink
+                icon={<BarChart2 size={18} />}
+                label="Revenue Summary"
+                to="/admin/payments/revenue"
+                desc="Charts, trends, net revenue"
+              />
+            )}
+            {canManageReviews && (
+              <QuickLink
+                icon={<Star size={18} />}
+                label="Moderate Reviews"
+                to="/admin/reviews"
+                desc="Show, hide, filter reviews"
+              />
+            )}
+            {canManageReviews && (
+              <QuickLink
+                icon={<BarChart2 size={18} />}
+                label="Review Stats"
+                to="/admin/reviews/stats"
+                desc="Ratings breakdown, top rooms"
+              />
+            )}
+            {['admin', 'manager', 'housekeeping', 'maintenance'].includes(role) && (
+              <QuickLink
+                icon={<BedDouble size={18} />}
+                label="Manage Rooms"
+                to="/admin/rooms"
+                desc="Room status, availability"
+              />
+            )}
+            {isFrontDesk && (
+              <QuickLink
+                icon={<ClipboardList size={18} />}
+                label="Front Desk"
+                to="/staff/front-desk"
+                desc="Check-in, rooms, arrivals, walk-ins"
+              />
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Role info card */}
       <div className="ad-role-card">

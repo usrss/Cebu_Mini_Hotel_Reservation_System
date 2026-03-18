@@ -1,0 +1,634 @@
+/* ============================================================
+   CheckIn.css — Front Desk Check-In System
+   Extends Staff.css luxury dark gold theme
+   ============================================================ */
+
+/* ── Check-in page layout ────────────────────────────────────── */
+.ci-page {
+  min-height: 100vh;
+  background: var(--navy);
+  font-family: 'Raleway', sans-serif;
+  color: var(--white);
+}
+
+.ci-inner {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 44px 48px 80px;
+}
+
+/* ── Method selector tabs ────────────────────────────────────── */
+.ci-method-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 28px;
+}
+
+.ci-method-tab {
+  background: var(--navy-card);
+  border: 1px solid var(--gold-border);
+  padding: 22px 24px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  transition: all 0.22s;
+  position: relative;
+  overflow: hidden;
+}
+.ci-method-tab::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, var(--gold), transparent);
+  opacity: 0;
+  transition: opacity 0.22s;
+}
+.ci-method-tab:hover {
+  border-color: rgba(201,168,76,0.45);
+  background: rgba(201,168,76,0.04);
+}
+.ci-method-tab.active {
+  border-color: var(--gold);
+  background: var(--gold-dim);
+}
+.ci-method-tab.active::before { opacity: 1; }
+
+.ci-method-icon {
+  width: 48px; height: 48px;
+  background: var(--gold-dim);
+  border: 1px solid var(--gold-border);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--gold);
+  font-size: 20px;
+  flex-shrink: 0;
+  transition: background 0.22s;
+}
+.ci-method-tab.active .ci-method-icon {
+  background: rgba(201,168,76,0.20);
+}
+
+.ci-method-label {
+  font-family: 'Playfair Display', serif;
+  font-size: 17px;
+  color: var(--white);
+  margin: 0 0 4px;
+}
+.ci-method-sub {
+  font-size: 12px;
+  color: var(--white-dim);
+  margin: 0;
+}
+
+/* ── Cards ───────────────────────────────────────────────────── */
+.ci-card {
+  background: var(--navy-card);
+  border: 1px solid var(--gold-border);
+  padding: 26px 28px;
+  position: relative;
+  overflow: hidden;
+  margin-bottom: 18px;
+}
+.ci-card::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, var(--gold), transparent);
+}
+.ci-card-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin-bottom: 18px;
+}
+
+/* ── Step indicator ──────────────────────────────────────────── */
+.ci-steps {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin-bottom: 28px;
+}
+.ci-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+}
+.ci-step-dot {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--gold-border);
+  background: var(--navy-card);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--white-dim);
+  flex-shrink: 0;
+  transition: all 0.22s;
+}
+.ci-step.active .ci-step-dot {
+  background: var(--gold-dim);
+  border-color: var(--gold);
+  color: var(--gold);
+}
+.ci-step.done .ci-step-dot {
+  background: var(--green-bg);
+  border-color: var(--green-border);
+  color: var(--green);
+}
+.ci-step-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--white-dim);
+}
+.ci-step.active .ci-step-label { color: var(--gold); }
+.ci-step.done .ci-step-label   { color: var(--green); }
+.ci-step-line {
+  flex: 1;
+  height: 1px;
+  background: var(--gold-border);
+  margin: 0 8px;
+}
+
+/* ── Reference input ─────────────────────────────────────────── */
+.ci-ref-input-wrap {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+}
+.ci-ref-input-group {
+  flex: 1;
+}
+.ci-label {
+  display: block;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin-bottom: 8px;
+}
+.ci-input {
+  width: 100%;
+  background: var(--navy-mid);
+  border: 1px solid var(--gold-border);
+  color: var(--white);
+  font-family: 'Raleway', sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  padding: 12px 16px;
+  outline: none;
+  transition: border-color 0.18s;
+  box-sizing: border-box;
+}
+.ci-input::placeholder {
+  color: rgba(248,246,240,0.20);
+  font-weight: 400;
+  letter-spacing: 1px;
+  text-transform: none;
+}
+.ci-input:focus { border-color: var(--gold); }
+.ci-input.error { border-color: var(--red); }
+
+/* ── PIN input ───────────────────────────────────────────────── */
+.ci-pin-wrap {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin: 8px 0;
+}
+.ci-pin-digit {
+  width: 52px; height: 64px;
+  background: var(--navy-mid);
+  border: 1px solid var(--gold-border);
+  color: var(--white);
+  font-family: 'Playfair Display', serif;
+  font-size: 26px;
+  font-weight: 700;
+  text-align: center;
+  outline: none;
+  transition: border-color 0.18s;
+  caret-color: var(--gold);
+}
+.ci-pin-digit:focus { border-color: var(--gold); }
+.ci-pin-digit.filled { border-color: rgba(201,168,76,0.55); }
+.ci-pin-digit.error  { border-color: var(--red); }
+
+/* ── Buttons ─────────────────────────────────────────────────── */
+.ci-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: none;
+  border: 1px solid var(--gold-border);
+  color: var(--gold);
+  font-family: 'Raleway', sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  padding: 12px 24px;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.ci-btn:hover { background: var(--gold-dim); border-color: var(--gold); }
+.ci-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.ci-btn-primary {
+  background: var(--gold-dim);
+  border-color: var(--gold);
+  color: var(--gold);
+}
+.ci-btn-primary:hover { background: rgba(201,168,76,0.22); }
+
+.ci-btn-success {
+  background: var(--green-bg);
+  border-color: var(--green-border);
+  color: var(--green);
+  font-size: 11px;
+  padding: 14px 28px;
+}
+.ci-btn-success:hover { background: rgba(110,231,183,0.16); }
+
+.ci-btn-danger {
+  border-color: var(--red-border);
+  color: var(--red);
+}
+.ci-btn-danger:hover { background: var(--red-bg); }
+
+.ci-btn-amber {
+  border-color: var(--amber-border);
+  color: var(--amber);
+}
+.ci-btn-amber:hover { background: var(--amber-bg); }
+
+.ci-btn-full {
+  width: 100%;
+  padding: 14px;
+  font-size: 11px;
+}
+
+/* ── Booking details card ────────────────────────────────────── */
+.ci-booking-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 22px;
+  padding-bottom: 22px;
+  border-bottom: 1px solid var(--gold-border);
+}
+.ci-guest-name {
+  font-family: 'Playfair Display', serif;
+  font-size: 22px;
+  color: var(--white);
+  margin: 0 0 4px;
+}
+.ci-ref-num {
+  font-size: 11px;
+  letter-spacing: 2px;
+  color: var(--gold);
+  font-weight: 600;
+}
+.ci-booking-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+  margin-bottom: 20px;
+}
+.ci-booking-field dt {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--white-dim);
+  margin-bottom: 4px;
+}
+.ci-booking-field dd {
+  font-size: 14px;
+  color: var(--white);
+  font-weight: 600;
+  margin: 0;
+}
+
+/* ── Payment summary ─────────────────────────────────────────── */
+.ci-payment-summary {
+  background: var(--navy-mid);
+  border: 1px solid var(--gold-border);
+  padding: 18px 20px;
+  position: relative;
+}
+.ci-payment-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  font-size: 13px;
+}
+.ci-payment-row + .ci-payment-row {
+  border-top: 1px solid rgba(201,168,76,0.08);
+}
+.ci-payment-label { color: var(--white-dim); }
+.ci-payment-value { font-weight: 600; color: var(--white); }
+.ci-payment-value.gold   { color: var(--gold); }
+.ci-payment-value.green  { color: var(--green); }
+.ci-payment-value.red    { color: var(--red); }
+.ci-payment-value.amber  { color: var(--amber); }
+.ci-payment-total {
+  border-top: 1px solid var(--gold-border) !important;
+  margin-top: 4px;
+  padding-top: 10px !important;
+  font-size: 15px;
+}
+
+/* ── Notices / alerts ────────────────────────────────────────── */
+.ci-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid;
+  margin-bottom: 16px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.ci-notice-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+.ci-notice-error  { background: var(--red-bg);   border-color: var(--red-border);   color: var(--red);   }
+.ci-notice-success{ background: var(--green-bg); border-color: var(--green-border); color: var(--green); }
+.ci-notice-amber  { background: var(--amber-bg); border-color: var(--amber-border); color: var(--amber); }
+.ci-notice-blue   { background: var(--blue-bg);  border-color: var(--blue-border);  color: var(--blue);  }
+
+/* ── Badge ───────────────────────────────────────────────────── */
+.ci-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  padding: 3px 10px;
+  border: 1px solid;
+}
+.ci-badge-green { border-color: var(--green-border); color: var(--green); background: var(--green-bg); }
+.ci-badge-gold  { border-color: var(--gold-border);  color: var(--gold);  background: var(--gold-dim); }
+.ci-badge-amber { border-color: var(--amber-border); color: var(--amber); background: var(--amber-bg); }
+.ci-badge-red   { border-color: var(--red-border);   color: var(--red);   background: var(--red-bg); }
+.ci-badge-blue  { border-color: var(--blue-border);  color: var(--blue);  background: var(--blue-bg); }
+
+/* ── Payment method selector ─────────────────────────────────── */
+.ci-payment-methods {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-top: 10px;
+}
+.ci-pay-method-btn {
+  background: var(--navy-mid);
+  border: 1px solid var(--gold-border);
+  color: var(--white-dim);
+  font-family: 'Raleway', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  padding: 12px 8px;
+  cursor: pointer;
+  transition: all 0.18s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.ci-pay-method-btn:hover {
+  border-color: rgba(201,168,76,0.45);
+  color: var(--gold);
+  background: var(--gold-dim);
+}
+.ci-pay-method-btn.selected {
+  border-color: var(--gold);
+  color: var(--gold);
+  background: var(--gold-dim);
+}
+.ci-pay-method-icon { font-size: 20px; }
+
+/* ── QR scanner modal ────────────────────────────────────────── */
+.ci-qr-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 700;
+  background: rgba(0,0,0,0.80);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  backdrop-filter: blur(6px);
+  animation: ci-fade 0.18s ease;
+}
+@keyframes ci-fade { from { opacity: 0; } to { opacity: 1; } }
+
+.ci-qr-modal {
+  background: var(--navy-card);
+  border: 1px solid var(--gold-border);
+  width: 100%;
+  max-width: 480px;
+  position: relative;
+  animation: ci-slide 0.22s cubic-bezier(0.16,1,0.3,1);
+}
+@keyframes ci-slide {
+  from { opacity: 0; transform: translateY(-16px) scale(0.97); }
+  to   { opacity: 1; transform: none; }
+}
+.ci-qr-modal::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, var(--gold), transparent);
+}
+.ci-qr-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 22px;
+  border-bottom: 1px solid var(--gold-border);
+  background: var(--gold-dim);
+}
+.ci-qr-modal-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 17px;
+  color: var(--white);
+  margin: 0;
+}
+.ci-qr-modal-close {
+  background: none;
+  border: 1px solid var(--gold-border);
+  color: var(--gold);
+  width: 28px; height: 28px;
+  font-size: 18px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.18s;
+}
+.ci-qr-modal-close:hover { background: var(--gold-dim); }
+.ci-qr-modal-body { padding: 22px; }
+
+/* QR scanner viewfinder */
+.ci-scanner-viewport {
+  width: 100%;
+  aspect-ratio: 1;
+  background: #000;
+  position: relative;
+  overflow: hidden;
+}
+.ci-scanner-viewport video {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.ci-scanner-corners {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.ci-scanner-corner {
+  position: absolute;
+  width: 24px; height: 24px;
+  border-color: var(--gold);
+  border-style: solid;
+}
+.ci-scanner-corner.tl { top: 20px;    left: 20px;  border-width: 3px 0 0 3px; }
+.ci-scanner-corner.tr { top: 20px;    right: 20px; border-width: 3px 3px 0 0; }
+.ci-scanner-corner.bl { bottom: 20px; left: 20px;  border-width: 0 0 3px 3px; }
+.ci-scanner-corner.br { bottom: 20px; right: 20px; border-width: 0 3px 3px 0; }
+.ci-scanner-line {
+  position: absolute;
+  left: 20px; right: 20px;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--gold), transparent);
+  animation: ci-scan 2s ease-in-out infinite;
+}
+@keyframes ci-scan {
+  0%   { top: 20px;   }
+  50%  { top: calc(100% - 22px); }
+  100% { top: 20px;   }
+}
+.ci-scanner-status {
+  text-align: center;
+  padding: 12px;
+  font-size: 12px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--white-dim);
+  background: rgba(0,0,0,0.60);
+}
+
+/* ── Success screen ──────────────────────────────────────────── */
+.ci-success-screen {
+  text-align: center;
+  padding: 40px 20px;
+}
+.ci-success-icon {
+  width: 80px; height: 80px;
+  border-radius: 50%;
+  background: var(--green-bg);
+  border: 2px solid var(--green-border);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 36px;
+  margin: 0 auto 20px;
+  animation: ci-pop 0.4s cubic-bezier(0.34,1.56,0.64,1);
+}
+@keyframes ci-pop {
+  from { transform: scale(0); opacity: 0; }
+  to   { transform: scale(1); opacity: 1; }
+}
+.ci-success-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 28px;
+  color: var(--green);
+  margin: 0 0 8px;
+}
+.ci-success-sub {
+  font-size: 14px;
+  color: var(--white-dim);
+  margin: 0 0 24px;
+}
+.ci-success-details {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  max-width: 400px;
+  margin: 0 auto 28px;
+  text-align: left;
+}
+.ci-success-detail-item {
+  background: var(--navy-mid);
+  border: 1px solid var(--gold-border);
+  padding: 12px 14px;
+}
+.ci-success-detail-item dt {
+  font-size: 9px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--white-dim);
+  margin-bottom: 4px;
+}
+.ci-success-detail-item dd {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--white);
+  margin: 0;
+}
+
+/* ── Action buttons row ──────────────────────────────────────── */
+.ci-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.ci-actions-full {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* ── Receipt print ───────────────────────────────────────────── */
+@media print {
+  .ci-no-print { display: none !important; }
+  .ci-print-receipt {
+    color: #000 !important;
+    background: #fff !important;
+  }
+}
+
+/* ── Spinner inline ──────────────────────────────────────────── */
+.ci-spinner {
+  width: 16px; height: 16px;
+  border: 2px solid var(--gold-border);
+  border-top-color: var(--gold);
+  border-radius: 50%;
+  animation: sf-spin 0.8s linear infinite;
+  display: inline-block;
+}
+
+/* ── Responsive ──────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .ci-inner           { padding: 24px 16px 60px; }
+  .ci-method-tabs     { grid-template-columns: 1fr; }
+  .ci-booking-grid    { grid-template-columns: 1fr 1fr; }
+  .ci-payment-methods { grid-template-columns: repeat(2, 1fr); }
+  .ci-success-details { grid-template-columns: 1fr; }
+  .ci-pin-digit       { width: 44px; height: 56px; font-size: 22px; }
+}
+@media (max-width: 480px) {
+  .ci-booking-grid { grid-template-columns: 1fr; }
+  .ci-actions      { flex-direction: column; }
+}

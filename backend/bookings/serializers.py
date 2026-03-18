@@ -428,3 +428,5 @@ class BookingCancelSerializer(serializers.Serializer):
                 )
 
         return booking
+
+

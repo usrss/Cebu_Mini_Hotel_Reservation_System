@@ -40,7 +40,7 @@ EMAIL_HOST_USER     = config('EMAIL_HOST_USER')
 EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD')
 DEFAULT_FROM_EMAIL  = config('EMAIL_HOST_USER')
 # Used by confirmation email
-SITE_NAME           = 'CMH Hotel'
+SITE_NAME           = "Cebu Mini Hotel"
 SUPPORT_EMAIL       = config('EMAIL_HOST_USER')
 FRONTEND_URL        = 'http://localhost:5173'
 
@@ -111,6 +111,19 @@ PAYPAL_MODE             = config('PAYPAL_MODE', default='sandbox')
 
 FRONTEND_URL            = config('FRONTEND_URL', default='http://localhost:5173')
 HOTEL_NAME              = config('HOTEL_NAME',   default='CBM_Hotel')
+
+HOTEL_ADDRESS = "123 Sample Street, Cebu City, Philippines 6000"
+HOTEL_PHONE  = "+63 32 123 4567"
+SUPPORT_EMAIL = "support@cebuMinihotel.com"
+
+
+# Cancellation policy shown in every confirmation email
+CANCELLATION_POLICY = (
+    "Free cancellation 48+ hours before check-in (90% refund). "
+    "50% refund for cancellations within 48 hours of check-in. "
+    "No refund for same-day cancellations or no-shows."
+)
+
 
 
 # Database

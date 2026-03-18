@@ -2,34 +2,29 @@
 staff/views.py
 
 All Staff Management API views for the Cebu Mini Hotel System.
+Refactored to enforce strict RBAC per role definitions:
 
-Endpoint groups:
-  /api/staff/members/         — CRUD staff accounts (Admin only)
-  /api/staff/monitoring/      — Real-time presence & activity (Admin/Manager)
-  /api/staff/shifts/          — Shift scheduling (Admin/Manager)
-  /api/staff/activity-logs/   — Audit trail (Admin/Manager)
-  /api/staff/cleaning/        — Housekeeping tasks
-  /api/staff/maintenance/     — Maintenance tasks
-  /api/staff/incidents/       — Security incident logs
-  /api/staff/reports/         — Analytics & report generation
-  /api/staff/presence/        — Self-service heartbeat/status update
+  admin        — Full access.
+  manager      — Operational oversight. Cannot control staff accounts.
+  receptionist — Reservation management + own shifts + own activity log.
+  front_desk   — Check-in / check-out / walk-ins. Own shifts.
+  housekeeping — Own assigned cleaning tasks + own shifts.
+  maintenance  — Own assigned maintenance tasks + own shifts.
+  security     — Incident logs + own shifts.
 
-All views log significant actions via StaffActivityLog.
+All permission checks use effective_role (respects temp_role overrides).
 """
 
 import csv
-import io
 import logging
-from datetime import timedelta
 
 from django.contrib.auth import get_user_model
 from django.db import transaction
-from django.db.models import Count, Q, Avg, Sum
+from django.db.models import Sum
 from django.http import HttpResponse
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import generics, status, filters
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -47,7 +42,6 @@ from .models import (
     StaffRole,
     StaffOnlineStatus,
     StaffActivityLog,
-    StaffSession,
     Shift,
     CleaningTask,
     CleaningStatus,
@@ -56,18 +50,19 @@ from .models import (
     IncidentLog,
 )
 from .permissions import (
+    IsStaff,
     IsAdminStaff,
     IsAdminOrManager,
-    IsAdminOrManagerOrReceptionist,
+    CanManageReservations,
     CanHandleCheckInOut,
     CanManageHousekeeping,
-    IsHousekeepingStaff,
+    CanAccessCleaningTasks,
     CanManageMaintenance,
-    IsMaintenanceStaff,
-    IsSecurityStaff,
+    CanAccessMaintenanceTasks,
+    CanAccessIncidents,
+    CanCreateIncidents,
     CanViewReports,
     IsAssignedStaffOrAdmin,
-    IsStaff,
 )
 from .serializers import (
     StaffProfileListSerializer,
@@ -78,7 +73,6 @@ from .serializers import (
     StaffTempRoleSerializer,
     StaffDeactivateSerializer,
     StaffActivityLogSerializer,
-    StaffSessionSerializer,
     ShiftSerializer,
     ShiftCreateSerializer,
     CleaningTaskSerializer,
@@ -93,25 +87,25 @@ User = get_user_model()
 logger = logging.getLogger(__name__)
 
 
-# ─── Utility ──────────────────────────────────────────────────────────────────
+# ─── Utilities ────────────────────────────────────────────────────────────────
 
 def _log_action(request, action_type: str, description: str, **kwargs):
-    """Helper to create a StaffActivityLog entry from a view."""
+    """Create a StaffActivityLog entry from any view."""
     profile = getattr(request.user, "staff_profile", None)
-    ip      = (
+    ip = (
         request.META.get("HTTP_X_FORWARDED_FOR", "").split(",")[0].strip()
         or request.META.get("REMOTE_ADDR")
     )
     StaffActivityLog.objects.create(
-        staff       = profile,
-        action_type = action_type,
-        description = description,
-        ip_address  = ip or None,
+        staff=profile,
+        action_type=action_type,
+        description=description,
+        ip_address=ip or None,
         **kwargs,
     )
 
 
-def _get_profile_or_404(pk) -> StaffProfile:
+def _get_profile_or_404(pk):
     try:
         return StaffProfile.objects.select_related("user").get(pk=pk)
     except StaffProfile.DoesNotExist:
@@ -119,24 +113,26 @@ def _get_profile_or_404(pk) -> StaffProfile:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# ── STAFF MEMBER MANAGEMENT (Admin only) ──────────────────────────────────────
+# ── STAFF MEMBER MANAGEMENT
+# ── Admin only: create, delete, promote, deactivate, assign temp roles.
+# ── Manager:    read-only view of list and profiles.
 # ═══════════════════════════════════════════════════════════════════════════════
 
 class StaffListCreateView(generics.ListCreateAPIView):
     """
-    GET  /api/staff/members/  — List all staff (Admin/Manager)
+    GET  /api/staff/members/  — List all staff (Admin + Manager, read-only for Manager)
     POST /api/staff/members/  — Create a new staff account (Admin only)
     """
-    filter_backends  = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_class  = StaffProfileFilter
-    search_fields    = ["user__email", "user__first_name", "user__last_name", "employee_id"]
-    ordering_fields  = ["created_at", "user__email", "role", "online_status"]
-    ordering         = ["-created_at"]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_class = StaffProfileFilter
+    search_fields   = ["user__email", "user__first_name", "user__last_name", "employee_id"]
+    ordering_fields = ["created_at", "user__email", "role", "online_status"]
+    ordering        = ["-created_at"]
 
     def get_permissions(self):
         if self.request.method == "POST":
-            return [IsAdminStaff()]
-        return [IsAdminOrManager()]
+            return [IsAdminStaff()]       # Admin only — Manager cannot create staff
+        return [IsAdminOrManager()]       # Admin + Manager can view list
 
     def get_queryset(self):
         return StaffProfile.objects.select_related("user").all()
@@ -163,9 +159,9 @@ class StaffListCreateView(generics.ListCreateAPIView):
 
 class StaffDetailView(APIView):
     """
-    GET    /api/staff/members/<pk>/  — Full profile detail (Admin/Manager)
-    PATCH  /api/staff/members/<pk>/  — Update basic profile fields (Admin)
-    DELETE /api/staff/members/<pk>/  — Hard-delete staff account (Admin only)
+    GET    /api/staff/members/<pk>/  — Full profile (Admin + Manager)
+    PATCH  /api/staff/members/<pk>/  — Update basic fields (Admin only)
+    DELETE /api/staff/members/<pk>/  — Hard-delete account (Admin only)
     """
 
     def get_permissions(self):
@@ -186,7 +182,8 @@ class StaffDetailView(APIView):
         serializer = StaffUpdateSerializer(profile, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
-        _log_action(request, "update_staff", f"Updated profile for {profile.user.email}",
+        _log_action(request, "update_staff",
+                    f"Updated profile for {profile.user.email}",
                     target_user_id=profile.user_id)
         return Response(StaffProfileDetailSerializer(profile).data)
 
@@ -198,7 +195,7 @@ class StaffDetailView(APIView):
             return Response({"error": "You cannot delete your own account."},
                             status=status.HTTP_400_BAD_REQUEST)
         email = profile.user.email
-        profile.user.delete()  # CASCADE deletes the profile
+        profile.user.delete()   # CASCADE deletes the StaffProfile
         _log_action(request, "delete_staff", f"Deleted staff account: {email}")
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -206,8 +203,8 @@ class StaffDetailView(APIView):
 class StaffRoleChangeView(APIView):
     """
     POST /api/staff/members/<pk>/promote/
-    Promote or demote a staff member's primary role.
-    Admin only. Cannot demote self.
+    Admin only. Cannot change own role.
+    Manager cannot promote or demote anyone.
     """
     permission_classes = [IsAdminStaff]
 
@@ -236,9 +233,9 @@ class StaffRoleChangeView(APIView):
 
 class StaffTempRoleView(APIView):
     """
-    POST   /api/staff/members/<pk>/temp-role/  — Assign a temporary role override.
-    DELETE /api/staff/members/<pk>/temp-role/  — Remove the temp role.
-    Admin only.
+    POST   /api/staff/members/<pk>/temp-role/  — Assign temporary role override.
+    DELETE /api/staff/members/<pk>/temp-role/  — Remove temp role.
+    Admin only. Manager cannot assign temp roles.
     """
     permission_classes = [IsAdminStaff]
 
@@ -246,11 +243,9 @@ class StaffTempRoleView(APIView):
         profile = _get_profile_or_404(pk)
         if not profile:
             return Response({"error": "Staff member not found."}, status=status.HTTP_404_NOT_FOUND)
-
         serializer = StaffTempRoleSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         serializer.save(profile)
-
         _log_action(
             request, "assign_temp_role",
             f"Assigned temp role {profile.temp_role} to {profile.user.email} "
@@ -263,11 +258,9 @@ class StaffTempRoleView(APIView):
         profile = _get_profile_or_404(pk)
         if not profile:
             return Response({"error": "Staff member not found."}, status=status.HTTP_404_NOT_FOUND)
-
-        profile.temp_role           = None
+        profile.temp_role            = None
         profile.temp_role_expires_at = None
         profile.save(update_fields=["temp_role", "temp_role_expires_at", "updated_at"])
-
         _log_action(request, "remove_temp_role",
                     f"Removed temp role from {profile.user.email}",
                     target_user_id=profile.user_id)
@@ -277,7 +270,7 @@ class StaffTempRoleView(APIView):
 class StaffDeactivateView(APIView):
     """
     POST /api/staff/members/<pk>/deactivate/
-    Deactivate a staff account. Admin only.
+    Admin only. Manager cannot deactivate staff.
     """
     permission_classes = [IsAdminStaff]
 
@@ -291,11 +284,9 @@ class StaffDeactivateView(APIView):
         if not profile.is_active:
             return Response({"error": "Staff account is already deactivated."},
                             status=status.HTTP_400_BAD_REQUEST)
-
         serializer = StaffDeactivateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         serializer.save(profile, deactivated_by=request.user)
-
         _log_action(
             request, "deactivate_staff",
             f"Deactivated staff account: {profile.user.email}. "
@@ -308,7 +299,7 @@ class StaffDeactivateView(APIView):
 class StaffReactivateView(APIView):
     """
     POST /api/staff/members/<pk>/reactivate/
-    Re-activate a previously deactivated staff account. Admin only.
+    Admin only. Manager cannot reactivate staff.
     """
     permission_classes = [IsAdminStaff]
 
@@ -319,7 +310,6 @@ class StaffReactivateView(APIView):
         if profile.is_active:
             return Response({"error": "Staff account is already active."},
                             status=status.HTTP_400_BAD_REQUEST)
-
         with transaction.atomic():
             profile.is_active      = True
             profile.deactivated_at = None
@@ -327,7 +317,6 @@ class StaffReactivateView(APIView):
             profile.save(update_fields=["is_active", "deactivated_at", "deactivated_by", "updated_at"])
             profile.user.is_active = True
             profile.user.save(update_fields=["is_active"])
-
         _log_action(request, "reactivate_staff",
                     f"Reactivated staff account: {profile.user.email}",
                     target_user_id=profile.user_id)
@@ -335,36 +324,27 @@ class StaffReactivateView(APIView):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# ── STAFF MONITORING ──────────────────────────────────────────────────────────
+# ── MONITORING & PRESENCE
 # ═══════════════════════════════════════════════════════════════════════════════
 
 class StaffMonitoringView(generics.ListAPIView):
     """
     GET /api/staff/monitoring/
-    Real-time overview of all staff: online status, role, current task.
-    Supports filtering by role, online_status.
-    Admin / Manager only.
+    Real-time staff overview. Admin + Manager only.
     """
-    serializer_class = StaffProfileListSerializer
+    serializer_class   = StaffProfileListSerializer
     permission_classes = [IsAdminOrManager]
-    filter_backends  = [DjangoFilterBackend, filters.SearchFilter]
-    filterset_class  = StaffProfileFilter
-    search_fields    = ["user__email", "user__first_name", "user__last_name"]
+    filter_backends    = [DjangoFilterBackend, filters.SearchFilter]
+    filterset_class    = StaffProfileFilter
+    search_fields      = ["user__email", "user__first_name", "user__last_name"]
 
     def get_queryset(self):
-        # Auto-expire temp roles on read
-        qs = StaffProfile.objects.select_related("user").filter(is_active=True)
-        for profile in qs:
-            profile.clear_expired_temp_role()
-        return qs
+        return StaffProfile.objects.select_related("user").filter(is_active=True)
 
     def list(self, request, *args, **kwargs):
-        # Evaluate once into a Python list so we can iterate multiple times
-        # without hitting the DB again, and use len() instead of .count().
         profiles = list(self.filter_queryset(self.get_queryset()))
 
-        # Clear expired temp roles in bulk — only save when a change is needed
-        # to avoid an unconditional N saves per request.
+        # Clear expired temp roles in bulk
         now = timezone.now()
         to_clear = [
             p for p in profiles
@@ -375,7 +355,7 @@ class StaffMonitoringView(generics.ListAPIView):
             p.temp_role_expires_at = None
             p.save(update_fields=["temp_role", "temp_role_expires_at", "updated_at"])
 
-        by_role  = {}
+        by_role = {}
         for role_key, role_label in StaffRole.choices:
             members = [p for p in profiles if p.effective_role == role_key]
             by_role[role_key] = {
@@ -385,13 +365,9 @@ class StaffMonitoringView(generics.ListAPIView):
                 "members": StaffProfileListSerializer(members, many=True).data,
             }
 
-        total_online = sum(
-            1 for p in profiles if p.online_status == StaffOnlineStatus.ONLINE
-        )
-
         return Response({
             "total_active": len(profiles),
-            "total_online": total_online,
+            "total_online": sum(1 for p in profiles if p.online_status == StaffOnlineStatus.ONLINE),
             "by_role":      by_role,
         })
 
@@ -399,8 +375,8 @@ class StaffMonitoringView(generics.ListAPIView):
 class StaffPresenceUpdateView(APIView):
     """
     POST /api/staff/presence/
-    Staff heartbeat — updates their own online status.
-    Body: { "status": "online" | "idle" | "offline", "current_task": "..." }
+    Self-service heartbeat. Any active staff member can update their own status.
+    Body: { "status": "online|idle|offline", "current_task": "..." }
     """
     permission_classes = [IsStaff]
 
@@ -429,13 +405,15 @@ class StaffPresenceUpdateView(APIView):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# ── SHIFTS ────────────────────────────────────────────────────────────────────
+# ── SHIFTS
+# ── Admin + Manager: create, edit, delete, view all.
+# ── All staff:       view own shifts only (/staff/my-shifts/).
 # ═══════════════════════════════════════════════════════════════════════════════
 
 class ShiftListCreateView(generics.ListCreateAPIView):
     """
-    GET  /api/staff/shifts/   — List shifts (Admin/Manager)
-    POST /api/staff/shifts/   — Schedule a new shift (Admin/Manager)
+    GET  /api/staff/shifts/  — List all shifts (Admin + Manager)
+    POST /api/staff/shifts/  — Schedule a shift (Admin + Manager)
     """
     permission_classes = [IsAdminOrManager]
     filter_backends    = [DjangoFilterBackend, filters.OrderingFilter]
@@ -465,25 +443,40 @@ class ShiftListCreateView(generics.ListCreateAPIView):
 
 class ShiftDetailView(generics.RetrieveUpdateDestroyAPIView):
     """
-    GET    /api/staff/shifts/<pk>/  — Shift detail
-    PATCH  /api/staff/shifts/<pk>/  — Update shift
-    DELETE /api/staff/shifts/<pk>/  — Cancel shift
-    Admin/Manager only.
+    GET / PATCH / DELETE /api/staff/shifts/<pk>/
+    Admin + Manager only.
     """
     permission_classes = [IsAdminOrManager]
     serializer_class   = ShiftSerializer
     queryset           = Shift.objects.select_related("staff__user")
 
 
+class MyShiftView(generics.ListAPIView):
+    """
+    GET /api/staff/my-shifts/
+    Any active staff member views their own assigned shifts.
+    Receptionists, Front Desk, Housekeeping, Maintenance, Security all use this.
+    """
+    serializer_class   = ShiftSerializer
+    permission_classes = [IsStaff]
+
+    def get_queryset(self):
+        profile = getattr(self.request.user, "staff_profile", None)
+        if not profile:
+            return Shift.objects.none()
+        return Shift.objects.select_related("staff__user").filter(staff=profile).order_by("-start_time")
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
-# ── ACTIVITY LOGS ─────────────────────────────────────────════════════════════
+# ── ACTIVITY LOGS
+# ── Admin + Manager: full audit trail.
+# ── All staff:       own activity log only.
 # ═══════════════════════════════════════════════════════════════════════════════
 
 class StaffActivityLogListView(generics.ListAPIView):
     """
     GET /api/staff/activity-logs/
-    Full audit trail. Filterable by staff, action_type, date range.
-    Admin/Manager only.
+    Full audit trail. Admin + Manager only.
     """
     serializer_class   = StaffActivityLogSerializer
     permission_classes = [IsAdminOrManager]
@@ -500,7 +493,8 @@ class StaffActivityLogListView(generics.ListAPIView):
 class MyActivityLogView(generics.ListAPIView):
     """
     GET /api/staff/activity-logs/me/
-    A staff member's own activity log.
+    Any staff member views their own activity log.
+    Available to all roles including receptionist, security, etc.
     """
     serializer_class   = StaffActivityLogSerializer
     permission_classes = [IsStaff]
@@ -513,13 +507,16 @@ class MyActivityLogView(generics.ListAPIView):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# ── CLEANING TASKS ────────────────────────────────────────────────────────────
+# ── CLEANING TASKS
+# ── Admin + Manager:  create, assign, view all, update any.
+# ── Housekeeping:     view own assigned tasks only, update status on own tasks.
+# ── All other roles:  no access.
 # ═══════════════════════════════════════════════════════════════════════════════
 
 class CleaningTaskListCreateView(generics.ListCreateAPIView):
     """
-    GET  /api/staff/cleaning/  — List tasks (Admin/Manager/Housekeeping)
-    POST /api/staff/cleaning/  — Create task (Admin/Manager)
+    GET  /api/staff/cleaning/  — Admin/Manager: all tasks. Housekeeping: own tasks.
+    POST /api/staff/cleaning/  — Admin/Manager only. Housekeeping cannot create tasks.
     """
     serializer_class = CleaningTaskSerializer
     filter_backends  = [DjangoFilterBackend, filters.OrderingFilter]
@@ -529,15 +526,16 @@ class CleaningTaskListCreateView(generics.ListCreateAPIView):
 
     def get_permissions(self):
         if self.request.method == "POST":
-            return [CanManageHousekeeping()]
-        return [IsHousekeepingStaff()]
+            return [CanManageHousekeeping()]      # Admin + Manager only
+        return [CanAccessCleaningTasks()]         # Admin + Manager + Housekeeping
 
     def get_queryset(self):
         qs = CleaningTask.objects.select_related("room", "assigned_to__user")
         profile = getattr(self.request.user, "staff_profile", None)
+        # Housekeeping staff see only their own assigned tasks
         if profile and profile.effective_role == StaffRole.HOUSEKEEPING:
-            # Housekeeping sees only their own tasks
             return qs.filter(assigned_to=profile)
+        # Admin and Manager see all tasks
         return qs
 
     def perform_create(self, serializer):
@@ -551,22 +549,23 @@ class CleaningTaskListCreateView(generics.ListCreateAPIView):
 
 class CleaningTaskDetailView(generics.RetrieveUpdateAPIView):
     """
-    GET   /api/staff/cleaning/<pk>/  — Task detail
-    PATCH /api/staff/cleaning/<pk>/  — Update task fields (Admin/Manager)
+    GET   /api/staff/cleaning/<pk>/  — Admin/Manager/Housekeeping (own task).
+    PATCH /api/staff/cleaning/<pk>/  — Admin/Manager only (field updates).
+                                       Housekeeping uses /status/ endpoint instead.
     """
     serializer_class   = CleaningTaskSerializer
-    permission_classes = [IsHousekeepingStaff, IsAssignedStaffOrAdmin]
+    permission_classes = [CanAccessCleaningTasks, IsAssignedStaffOrAdmin]
     queryset           = CleaningTask.objects.select_related("room", "assigned_to__user")
 
 
 class CleaningTaskStatusView(APIView):
     """
     PATCH /api/staff/cleaning/<pk>/status/
-    Update the cleaning status with transition validation.
-    Housekeeping staff can only update their own tasks.
-    Admin/Manager can update any task.
+    Status transition with validation.
+    Housekeeping: own tasks only (dirty→cleaning→clean or cleaning→dirty).
+    Admin/Manager: any task.
     """
-    permission_classes = [IsHousekeepingStaff]
+    permission_classes = [CanAccessCleaningTasks]
 
     def patch(self, request, pk):
         try:
@@ -574,12 +573,14 @@ class CleaningTaskStatusView(APIView):
         except CleaningTask.DoesNotExist:
             return Response({"error": "Cleaning task not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        # Object-level: housekeeping staff can only update their own
         profile = getattr(request.user, "staff_profile", None)
-        if (profile and profile.effective_role == StaffRole.HOUSEKEEPING
-                and task.assigned_to != profile):
-            return Response({"error": "You can only update tasks assigned to you."},
-                            status=status.HTTP_403_FORBIDDEN)
+        # Housekeeping can only update tasks assigned to them
+        if profile and profile.effective_role == StaffRole.HOUSEKEEPING:
+            if task.assigned_to != profile:
+                return Response(
+                    {"error": "You can only update tasks assigned to you."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
 
         serializer = CleaningTaskStatusSerializer(
             data=request.data, context={"task": task}
@@ -596,13 +597,16 @@ class CleaningTaskStatusView(APIView):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# ── MAINTENANCE TASKS ─────────────────────────────────────────────────────────
+# ── MAINTENANCE TASKS
+# ── Admin + Manager:  create, assign, view all, update any.
+# ── Maintenance:      view own assigned tasks only, update status on own tasks.
+# ── All other roles:  no access.
 # ═══════════════════════════════════════════════════════════════════════════════
 
 class MaintenanceTaskListCreateView(generics.ListCreateAPIView):
     """
-    GET  /api/staff/maintenance/  — List tasks
-    POST /api/staff/maintenance/  — Create task (Admin/Manager)
+    GET  /api/staff/maintenance/  — Admin/Manager: all. Maintenance: own only.
+    POST /api/staff/maintenance/  — Admin/Manager only.
     """
     serializer_class = MaintenanceTaskSerializer
     filter_backends  = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -613,12 +617,13 @@ class MaintenanceTaskListCreateView(generics.ListCreateAPIView):
 
     def get_permissions(self):
         if self.request.method == "POST":
-            return [CanManageMaintenance()]
-        return [IsMaintenanceStaff()]
+            return [CanManageMaintenance()]           # Admin + Manager only
+        return [CanAccessMaintenanceTasks()]          # Admin + Manager + Maintenance
 
     def get_queryset(self):
         qs = MaintenanceTask.objects.select_related("room", "assigned_to__user")
         profile = getattr(self.request.user, "staff_profile", None)
+        # Maintenance staff see only their own assigned tasks
         if profile and profile.effective_role == StaffRole.MAINTENANCE:
             return qs.filter(assigned_to=profile)
         return qs
@@ -634,20 +639,21 @@ class MaintenanceTaskListCreateView(generics.ListCreateAPIView):
 
 class MaintenanceTaskDetailView(generics.RetrieveUpdateAPIView):
     """
-    GET   /api/staff/maintenance/<pk>/
-    PATCH /api/staff/maintenance/<pk>/
+    GET   /api/staff/maintenance/<pk>/  — Admin/Manager/Maintenance (own task).
+    PATCH /api/staff/maintenance/<pk>/  — Admin/Manager only.
     """
     serializer_class   = MaintenanceTaskSerializer
-    permission_classes = [IsMaintenanceStaff, IsAssignedStaffOrAdmin]
+    permission_classes = [CanAccessMaintenanceTasks, IsAssignedStaffOrAdmin]
     queryset           = MaintenanceTask.objects.select_related("room", "assigned_to__user")
 
 
 class MaintenanceTaskStatusView(APIView):
     """
     PATCH /api/staff/maintenance/<pk>/status/
-    Transition maintenance task status with validation.
+    Maintenance: own tasks only (pending→in_progress→completed or cancelled).
+    Admin/Manager: any task.
     """
-    permission_classes = [IsMaintenanceStaff]
+    permission_classes = [CanAccessMaintenanceTasks]
 
     def patch(self, request, pk):
         try:
@@ -656,10 +662,13 @@ class MaintenanceTaskStatusView(APIView):
             return Response({"error": "Maintenance task not found."}, status=status.HTTP_404_NOT_FOUND)
 
         profile = getattr(request.user, "staff_profile", None)
-        if (profile and profile.effective_role == StaffRole.MAINTENANCE
-                and task.assigned_to != profile):
-            return Response({"error": "You can only update tasks assigned to you."},
-                            status=status.HTTP_403_FORBIDDEN)
+        # Maintenance staff can only update tasks assigned to them
+        if profile and profile.effective_role == StaffRole.MAINTENANCE:
+            if task.assigned_to != profile:
+                return Response(
+                    {"error": "You can only update tasks assigned to you."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
 
         serializer = MaintenanceTaskStatusSerializer(
             data=request.data, context={"task": task}
@@ -676,19 +685,27 @@ class MaintenanceTaskStatusView(APIView):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# ── INCIDENT LOGS (Security) ──────────────────────────────────────────────────
+# ── INCIDENT LOGS
+# ── Admin:    full access (view + create + edit).
+# ── Manager:  view and monitor only (cannot create).
+# ── Security: create + view + edit/resolve their own logs.
+# ── All other roles: no access.
 # ═══════════════════════════════════════════════════════════════════════════════
 
 class IncidentLogListCreateView(generics.ListCreateAPIView):
     """
-    GET  /api/staff/incidents/  — List incidents (Admin/Security)
-    POST /api/staff/incidents/  — Log new incident (Security/Admin)
+    GET  /api/staff/incidents/  — Admin, Manager, Security.
+    POST /api/staff/incidents/  — Admin and Security only. Manager cannot create.
     """
-    serializer_class   = IncidentLogSerializer
-    permission_classes = [IsSecurityStaff]
-    filter_backends    = [DjangoFilterBackend, filters.OrderingFilter]
-    ordering_fields    = ["created_at", "severity", "incident_type"]
-    ordering           = ["-created_at"]
+    serializer_class = IncidentLogSerializer
+    filter_backends  = [DjangoFilterBackend, filters.OrderingFilter]
+    ordering_fields  = ["created_at", "severity", "incident_type"]
+    ordering         = ["-created_at"]
+
+    def get_permissions(self):
+        if self.request.method == "POST":
+            return [CanCreateIncidents()]      # Admin + Security only
+        return [CanAccessIncidents()]          # Admin + Manager + Security
 
     def get_queryset(self):
         return IncidentLog.objects.select_related("logged_by__user")
@@ -704,28 +721,35 @@ class IncidentLogListCreateView(generics.ListCreateAPIView):
 
 class IncidentLogDetailView(generics.RetrieveUpdateAPIView):
     """
-    GET   /api/staff/incidents/<pk>/
-    PATCH /api/staff/incidents/<pk>/  — Update resolution info
+    GET   /api/staff/incidents/<pk>/          — Admin, Manager, Security.
+    PATCH /api/staff/incidents/<pk>/          — Admin + Security only.
+                                                Manager cannot edit incidents.
     """
-    serializer_class   = IncidentLogSerializer
-    permission_classes = [IsSecurityStaff]
-    queryset           = IncidentLog.objects.select_related("logged_by__user")
+    serializer_class = IncidentLogSerializer
+    queryset         = IncidentLog.objects.select_related("logged_by__user")
+
+    def get_permissions(self):
+        if self.request.method in ("PATCH", "PUT"):
+            return [CanCreateIncidents()]      # Admin + Security can edit
+        return [CanAccessIncidents()]          # Admin + Manager + Security can view
 
     def perform_update(self, serializer):
         incident = serializer.save()
+        # Auto-set resolved_at when marking resolved
         if incident.resolved and not incident.resolved_at:
             incident.resolved_at = timezone.now()
             incident.save(update_fields=["resolved_at"])
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# ── DASHBOARD OVERVIEW (Admin/Manager) ───────────────────────────────────────
+# ── DASHBOARD OVERVIEW
+# ── Admin + Manager only.
 # ═══════════════════════════════════════════════════════════════════════════════
 
 class AdminDashboardView(APIView):
     """
     GET /api/staff/dashboard/
-    Real-time hotel operational overview for Admin and Manager.
+    Real-time hotel operational overview. Admin + Manager only.
     """
     permission_classes = [IsAdminOrManager]
 
@@ -733,8 +757,7 @@ class AdminDashboardView(APIView):
         now   = timezone.now()
         today = now.date()
 
-        # ── Rooms ──────────────────────────────────────────────────────────────
-        rooms        = Room.objects.all()
+        rooms = Room.objects.all()
         room_summary = {
             "total":       rooms.count(),
             "available":   rooms.filter(status=RoomStatus.AVAILABLE, is_active=True).count(),
@@ -743,46 +766,36 @@ class AdminDashboardView(APIView):
             "maintenance": rooms.filter(status=RoomStatus.MAINTENANCE).count(),
         }
 
-        # ── Bookings ───────────────────────────────────────────────────────────
         bookings_today = Booking.objects.filter(created_at__date=today)
         booking_summary = {
-            "pending_payment": Booking.objects.filter(status=BookingStatus.PENDING_PAYMENT).count(),
-            "confirmed":       Booking.objects.filter(status=BookingStatus.CONFIRMED).count(),
-            "checked_in":      Booking.objects.filter(status=BookingStatus.CHECKED_IN).count(),
+            "pending_payment":   Booking.objects.filter(status=BookingStatus.PENDING_PAYMENT).count(),
+            "confirmed":         Booking.objects.filter(status=BookingStatus.CONFIRMED).count(),
+            "checked_in":        Booking.objects.filter(status=BookingStatus.CHECKED_IN).count(),
             "checked_out_today": Booking.objects.filter(
                 status=BookingStatus.CHECKED_OUT, updated_at__date=today).count(),
-            "created_today":   bookings_today.count(),
+            "created_today":     bookings_today.count(),
         }
 
-        # ── Tasks ──────────────────────────────────────────────────────────────
         task_summary = {
-            "cleaning_dirty":    CleaningTask.objects.filter(status=CleaningStatus.DIRTY).count(),
-            "cleaning_in_progress": CleaningTask.objects.filter(status=CleaningStatus.CLEANING).count(),
-            "maintenance_pending": MaintenanceTask.objects.filter(status=MaintenanceStatus.PENDING).count(),
-            "maintenance_in_progress": MaintenanceTask.objects.filter(
-                status=MaintenanceStatus.IN_PROGRESS).count(),
+            "cleaning_dirty":          CleaningTask.objects.filter(status=CleaningStatus.DIRTY).count(),
+            "cleaning_in_progress":    CleaningTask.objects.filter(status=CleaningStatus.CLEANING).count(),
+            "maintenance_pending":     MaintenanceTask.objects.filter(status=MaintenanceStatus.PENDING).count(),
+            "maintenance_in_progress": MaintenanceTask.objects.filter(status=MaintenanceStatus.IN_PROGRESS).count(),
         }
 
-        # ── Staff ──────────────────────────────────────────────────────────────
         staff_summary = {
             "total":   StaffProfile.objects.filter(is_active=True).count(),
-            "online":  StaffProfile.objects.filter(
-                is_active=True, online_status=StaffOnlineStatus.ONLINE).count(),
-            "idle":    StaffProfile.objects.filter(
-                is_active=True, online_status=StaffOnlineStatus.IDLE).count(),
-            "offline": StaffProfile.objects.filter(
-                is_active=True, online_status=StaffOnlineStatus.OFFLINE).count(),
+            "online":  StaffProfile.objects.filter(is_active=True, online_status=StaffOnlineStatus.ONLINE).count(),
+            "idle":    StaffProfile.objects.filter(is_active=True, online_status=StaffOnlineStatus.IDLE).count(),
+            "offline": StaffProfile.objects.filter(is_active=True, online_status=StaffOnlineStatus.OFFLINE).count(),
         }
 
-        # ── Revenue today ──────────────────────────────────────────────────────
         revenue_today = (
-            Booking.objects.filter(
-                payment_status="paid", confirmed_at__date=today
-            ).aggregate(total=Sum("total_price"))["total"] or 0
+            Booking.objects.filter(payment_status="paid", confirmed_at__date=today)
+            .aggregate(total=Sum("total_price"))["total"] or 0
         )
 
-        # ── Recent activity ────────────────────────────────────────────────────
-        recent_logs = StaffActivityLog.objects.select_related("staff__user").all()[:15]
+        recent_logs    = StaffActivityLog.objects.select_related("staff__user").all()[:15]
         recent_activity = StaffActivityLogSerializer(recent_logs, many=True).data
 
         return Response({
@@ -797,22 +810,19 @@ class AdminDashboardView(APIView):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# ── REPORTS & ANALYTICS ───────────────────────────────────────────────────────
+# ── REPORTS & ANALYTICS
+# ── Admin + Manager only.
 # ═══════════════════════════════════════════════════════════════════════════════
 
 class ReportView(APIView):
     """
-    GET /api/staff/reports/?type=<report_type>&period=<daily|weekly|monthly|yearly>
-               &start_date=YYYY-MM-DD&end_date=YYYY-MM-DD&export=<csv|json>
+    GET /api/staff/reports/
+    ?type=bookings|revenue|occupancy|guests|staff
+    &period=daily|weekly|monthly|yearly
+    &start_date=YYYY-MM-DD&end_date=YYYY-MM-DD
+    &export=csv|json
 
-    Supported report types:
-      bookings  — booking counts, revenue, status breakdown
-      revenue   — total revenue, average booking value
-      occupancy — room utilization rates by room type
-      guests    — new registrations, repeat guests
-      staff     — task completions, check-ins handled per staff
-
-    Admin/Manager only.
+    Admin + Manager only. All other roles return 403.
     """
     permission_classes = [CanViewReports]
 
@@ -849,12 +859,12 @@ class ReportView(APIView):
             return _export_csv(data, filename=f"{report_type}_{period}.csv")
 
         return Response({
-            "report_type": report_type,
-            "period":      period,
-            "start_date":  start_date,
-            "end_date":    end_date,
+            "report_type":  report_type,
+            "period":       period,
+            "start_date":   start_date,
+            "end_date":     end_date,
             "generated_at": timezone.now(),
-            "data":        data,
+            "data":         data,
         })
 
 
@@ -862,11 +872,9 @@ def _export_csv(data: dict, filename: str) -> HttpResponse:
     """Convert a report dict to a CSV download response."""
     response = HttpResponse(content_type="text/csv")
     response["Content-Disposition"] = f'attachment; filename="{filename}"'
-
     rows = data.get("rows", [])
     if not rows:
         return response
-
     writer = csv.DictWriter(response, fieldnames=rows[0].keys())
     writer.writeheader()
     writer.writerows(rows)

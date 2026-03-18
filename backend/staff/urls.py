@@ -1,42 +1,16 @@
 """
-staff/urls.py
+staff/urls.py  — UPDATED version with activation routes added
+─────────────────────────────────────────────────────────────
+Two new patterns added at the bottom. All existing routes are unchanged.
 
-All staff-module endpoints namespaced under /api/staff/.
-
-URL Layout:
-  /api/staff/dashboard/                       — Admin/Manager operational overview
-  /api/staff/presence/                        — Self-service heartbeat
-
-  /api/staff/members/                         — List / create staff (Admin/Manager)
-  /api/staff/members/<pk>/                    — Retrieve / update / delete
-  /api/staff/members/<pk>/promote/            — Role change
-  /api/staff/members/<pk>/temp-role/          — Assign / remove temp role
-  /api/staff/members/<pk>/deactivate/         — Deactivate account
-  /api/staff/members/<pk>/reactivate/         — Reactivate account
-
-  /api/staff/monitoring/                      — Real-time staff overview
-  /api/staff/activity-logs/                   — Full audit trail
-  /api/staff/activity-logs/me/                — Own activity log
-
-  /api/staff/shifts/                          — List / create shifts
-  /api/staff/shifts/<pk>/                     — Detail / update / delete shift
-
-  /api/staff/cleaning/                        — List / create cleaning tasks
-  /api/staff/cleaning/<pk>/                   — Detail / update
-  /api/staff/cleaning/<pk>/status/            — Status transition
-
-  /api/staff/maintenance/                     — List / create maintenance tasks
-  /api/staff/maintenance/<pk>/                — Detail / update
-  /api/staff/maintenance/<pk>/status/         — Status transition
-
-  /api/staff/incidents/                       — List / create incident logs
-  /api/staff/incidents/<pk>/                  — Detail / update
-
-  /api/staff/reports/                         — Generate & export reports
+New endpoints:
+  GET  /api/staff/activate/<uidb64>/<token>/  — pre-check token validity
+  POST /api/staff/activate/<uidb64>/<token>/  — set password & activate account
 """
 
 from django.urls import path
 from . import views
+from .activation_views import StaffActivateView   # ← new import
 
 app_name = "staff"
 
@@ -138,4 +112,13 @@ urlpatterns = [
     path("reports/",
          views.ReportView.as_view(),
          name="reports"),
+
+    # ── Account activation (NEW) ──────────────────────────────────────────────
+    # GET  — pre-check: is the token still valid? (called on page load)
+    # POST — set password + activate account
+    path(
+        "activate/<str:uidb64>/<str:token>/",
+        StaffActivateView.as_view(),
+        name="staff-activate",
+    ),
 ]

@@ -33,6 +33,7 @@ urlpatterns = [
     path("api/admin/", include("admin_panel.urls", namespace="admin_panel")),
 
 
+
 ]
 
 if settings.DEBUG:

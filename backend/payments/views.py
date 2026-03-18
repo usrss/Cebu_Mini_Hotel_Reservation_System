@@ -31,9 +31,6 @@ logger = logging.getLogger(__name__)
 CHECKOUT_EXPIRES_MINUTES = 30
 
 
-
-
-
 # ─── User: initiate payment ───────────────────────────────────────────────────
 
 class InitiatePaymentView(APIView):
@@ -55,13 +52,13 @@ class InitiatePaymentView(APIView):
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        data          = serializer.validated_data
-        booking       = data["booking"]
-        payment_type  = data["payment_type"]
+        data           = serializer.validated_data
+        booking        = data["booking"]
+        payment_type   = data["payment_type"]
         payment_method = data["payment_method"]
-        provider      = data["provider"]
-        amount        = data["amount"]
-        user          = data["user"]
+        provider       = data["provider"]
+        amount         = data["amount"]
+        user           = data["user"]
 
         with transaction.atomic():
             payment = Payment.objects.create(
@@ -76,7 +73,7 @@ class InitiatePaymentView(APIView):
             )
 
         # ── Create provider checkout session ───────────────────────────────
-        checkout_url      = None
+        checkout_url        = None
         checkout_session_id = None
 
         try:
@@ -111,6 +108,26 @@ class InitiatePaymentView(APIView):
                 payment.checkout_session_id = checkout_session_id
                 payment.save(update_fields=["checkout_url", "checkout_session_id", "updated_at"])
 
+            # ── Send payment link email for online providers ───────────────
+            # Fires immediately when checkout_url is generated so the guest
+            # receives the payment link in their email right away.
+            # The booking confirmation email (with PIN + QR) is sent separately
+            # by payments/signals.py after the webhook confirms payment.
+            if checkout_url and provider in (PaymentProvider.PAYMONGO, PaymentProvider.PAYPAL):
+                try:
+                    from payments.signals import send_payment_link_email
+                    send_payment_link_email(
+                        payment      = payment,
+                        booking      = booking,
+                        checkout_url = checkout_url,
+                    )
+                except Exception as exc:
+                    # Never block the payment flow due to email failure
+                    logger.warning(
+                        "Payment link email failed for payment %s: %s",
+                        payment.pk, exc,
+                    )
+
         except Exception as exc:
             logger.exception("Failed to create checkout session for payment %s: %s", payment.pk, exc)
             payment.status = PaymentStatus.FAILED
@@ -121,13 +138,13 @@ class InitiatePaymentView(APIView):
             )
 
         return Response({
-            "payment_id":    payment.pk,
-            "amount":        str(payment.amount),
-            "currency":      payment.currency,
-            "payment_type":  payment.payment_type,
-            "checkout_url":  checkout_url,
-            "provider":      provider,
-            "expires_at":    payment.expires_at,
+            "payment_id":   payment.pk,
+            "amount":       str(payment.amount),
+            "currency":     payment.currency,
+            "payment_type": payment.payment_type,
+            "checkout_url": checkout_url,
+            "provider":     provider,
+            "expires_at":   payment.expires_at,
         }, status=status.HTTP_201_CREATED)
 
 
@@ -221,7 +238,7 @@ class PayMongoWebhookView(APIView):
     Receives and processes PayMongo webhook events.
     Verifies signature using PAYMONGO_WEBHOOK_SECRET from settings.
     """
-    permission_classes = [AllowAny]
+    permission_classes     = [AllowAny]
     authentication_classes = []  # No JWT — provider sends raw POST
 
     def post(self, request):
@@ -230,7 +247,7 @@ class PayMongoWebhookView(APIView):
         if secret:
             sig_header = request.headers.get("Paymongo-Signature", "")
             try:
-                parts = dict(p.split("=", 1) for p in sig_header.split(","))
+                parts     = dict(p.split("=", 1) for p in sig_header.split(","))
                 timestamp = parts.get("t", "")
                 sig       = parts.get("te", "") or parts.get("li", "")
                 payload   = f"{timestamp}.{request.body.decode()}"
@@ -289,7 +306,7 @@ class PayPalWebhookView(APIView):
     POST /api/payments/webhooks/paypal/
     Receives PayPal webhook events and processes order captures.
     """
-    permission_classes = [AllowAny]
+    permission_classes     = [AllowAny]
     authentication_classes = []
 
     def post(self, request):
@@ -302,7 +319,6 @@ class PayPalWebhookView(APIView):
             order_id = resource.get("id")
             if order_id:
                 try:
-                    # Capture the order via PayPal API
                     capture = PayPalService.capture_order(order_id)
                     if capture.get("status") == "COMPLETED":
                         payment = Payment.objects.get(checkout_session_id=order_id)
@@ -420,7 +436,6 @@ class AdminInitiateRefundView(APIView):
                 initiated_by = request.user,
             )
 
-            # Call provider API to process refund
             try:
                 if payment.provider == PaymentProvider.PAYMONGO:
                     result = PayMongoService.create_refund(payment, amount, reason)
@@ -431,16 +446,13 @@ class AdminInitiateRefundView(APIView):
                     refund.provider_refund_id = result.get("refund_id")
                     refund.status = Refund.RefundStatus.COMPLETED
                 else:
-                    # Manual — mark completed immediately
                     refund.status = Refund.RefundStatus.COMPLETED
 
                 refund.save(update_fields=["provider_refund_id", "status", "updated_at"])
 
-                # Update payment status
                 payment.status = PaymentStatus.REFUNDED
                 payment.save(update_fields=["status", "updated_at"])
 
-                # Sync booking refund status
                 booking = payment.booking
                 from bookings.models import RefundStatus as BRefundStatus
                 booking.refund_status = BRefundStatus.COMPLETED
@@ -463,7 +475,6 @@ class AdminPaymentDashboardView(APIView):
     """
     GET /api/payments/admin/dashboard/
     Aggregated revenue stats for the admin dashboard.
-    Returns: total revenue, counts by status, breakdown by method, recent payments.
     """
     permission_classes = [IsStaffOrAdmin]
 
@@ -473,23 +484,20 @@ class AdminPaymentDashboardView(APIView):
 
         qs = Payment.objects.filter(status=PaymentStatus.PAID)
 
-        # ── Totals ─────────────────────────────────────────────────────────
-        total_revenue   = qs.aggregate(total=Sum("amount"))["total"] or 0
-        total_paid      = qs.count()
-        total_refunded  = Payment.objects.filter(status=PaymentStatus.REFUNDED).aggregate(
+        total_revenue  = qs.aggregate(total=Sum("amount"))["total"] or 0
+        total_paid     = qs.count()
+        total_refunded = Payment.objects.filter(status=PaymentStatus.REFUNDED).aggregate(
             total=Sum("amount")
         )["total"] or 0
-        total_pending   = Payment.objects.filter(status=PaymentStatus.PENDING).count()
-        total_failed    = Payment.objects.filter(status=PaymentStatus.FAILED).count()
+        total_pending  = Payment.objects.filter(status=PaymentStatus.PENDING).count()
+        total_failed   = Payment.objects.filter(status=PaymentStatus.FAILED).count()
 
-        # ── By payment method ──────────────────────────────────────────────
         by_method = (
             qs.values("payment_method")
             .annotate(count=Count("id"), total=Sum("amount"))
             .order_by("-total")
         )
 
-        # ── Monthly revenue (last 12 months) ───────────────────────────────
         monthly = (
             qs.annotate(month=TruncMonth("paid_at"))
             .values("month")
@@ -497,7 +505,6 @@ class AdminPaymentDashboardView(APIView):
             .order_by("month")
         )
 
-        # ── Recent payments ────────────────────────────────────────────────
         recent = Payment.objects.select_related("booking__room").order_by("-created_at")[:10]
 
         return Response({

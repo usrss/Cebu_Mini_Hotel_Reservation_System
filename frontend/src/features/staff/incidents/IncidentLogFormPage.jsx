@@ -6,7 +6,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { incidentsApi, INCIDENT_TYPE_LABELS, SEVERITY_LABELS } from '../services/staffApi';
-// import '../Staff.css';
+import '../Staff.css';
 
 const EMPTY = {
   incident_type: 'other', severity: 'low', location: '', description: '',

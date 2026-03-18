@@ -341,3 +341,331 @@ def expire_unpaid_bookings():
         ])
 
     return len(ids)
+
+class FrontDeskVerifyPinView(APIView):
+    """
+    POST /api/bookings/admin/<pk>/verify-pin/
+
+    Step 2 of the check-in flow.
+    Validates the guest's PIN without changing booking status.
+    The frontend uses this to gate the payment/confirm step.
+
+    Body:  { "pin": "1234" }
+    Returns: { "valid": true } or 400 with error detail.
+
+    Allowed: front_desk, admin, manager (CanHandleCheckInOut)
+    """
+    permission_classes = [CanHandleCheckInOut]
+
+    def post(self, request, pk):
+        try:
+            booking = Booking.objects.get(pk=pk)
+        except Booking.DoesNotExist:
+            return Response(
+                {"error": "Booking not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Only CONFIRMED bookings can be checked in
+        if booking.status != BookingStatus.CONFIRMED:
+            return Response(
+                {"error": f"Booking cannot be checked in (status: {booking.status})."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not booking.has_credentials:
+            return Response(
+                {"error": "This booking has no valid check-in credentials."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        pin = str(request.data.get("pin", "")).strip()
+        if not pin:
+            return Response(
+                {"error": "PIN is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if booking.checkin_pin != pin:
+            return Response(
+                {"valid": False, "error": "Incorrect PIN. Please try again."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return Response({"valid": True})
+
+
+class FrontDeskCheckInView(APIView):
+    """
+    POST /api/bookings/admin/<pk>/check-in/
+
+    Step 3a — used when booking is FULLY PAID.
+    PIN must have already been verified (step 2).
+    Transitions booking: CONFIRMED → CHECKED_IN.
+    Room status automatically becomes OCCUPIED via existing signal in staff/signals.py.
+
+    Body:  { "method": "qr_scan" | "manual_entry" }
+    Returns: updated BookingDetailSerializer data.
+
+    Allowed: front_desk, admin, manager (CanHandleCheckInOut)
+    """
+    permission_classes = [CanHandleCheckInOut]
+
+    def post(self, request, pk):
+        try:
+            booking = Booking.objects.select_related("room").get(pk=pk)
+        except Booking.DoesNotExist:
+            return Response(
+                {"error": "Booking not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if booking.status != BookingStatus.CONFIRMED:
+            return Response(
+                {"error": f"Booking cannot be checked in (status: {booking.status})."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        method = request.data.get("method", "manual_entry")
+        note   = f"Checked in at front desk via {method.replace('_', ' ')}."
+
+        with transaction.atomic():
+            booking = booking.transition_to(
+                BookingStatus.CHECKED_IN,
+                changed_by=request.user,
+                note=note,
+            )
+
+        # Log to StaffActivityLog (imported here to avoid circular dependency)
+        try:
+            from staff.models import StaffActivityLog
+            profile = getattr(request.user, "staff_profile", None)
+            StaffActivityLog.objects.create(
+                staff       = profile,
+                action_type = "check_in_guest",
+                description = (
+                    f"[{method.replace('_', ' ').title()}] Guest '{booking.full_name}' "
+                    f"checked in to Room {booking.room.room_number} "
+                    f"(Booking {booking.reference_number})."
+                ),
+                booking_id  = booking.pk,
+                room_id     = booking.room_id,
+                metadata    = {"method": method},
+            )
+        except Exception:
+            pass  # Never block check-in due to logging failure
+
+        return Response(BookingDetailSerializer(booking).data)
+
+
+class FrontDeskCollectPaymentView(APIView):
+    """
+    POST /api/bookings/admin/<pk>/collect-payment/
+
+    Step 3b — used when booking has a remaining balance (deposit paid).
+    Records the remaining balance payment then transitions to CHECKED_IN.
+
+    What it does:
+      1. Calculates remaining balance = total_price - sum(paid payments)
+      2. Creates a Payment record with payment_type=balance_payment, provider=manual
+      3. Calls payment.mark_paid() which sets booking.payment_status = PAID
+      4. Transitions booking: CONFIRMED → CHECKED_IN
+
+    Body:  { "payment_method": "cash"|"gcash"|"card"|"other" }
+    Returns: updated BookingDetailSerializer data.
+
+    Allowed: front_desk, admin, manager (CanHandleCheckInOut)
+    """
+    permission_classes = [CanHandleCheckInOut]
+
+    def post(self, request, pk):
+        try:
+            booking = Booking.objects.select_related("room").get(pk=pk)
+        except Booking.DoesNotExist:
+            return Response(
+                {"error": "Booking not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if booking.status != BookingStatus.CONFIRMED:
+            return Response(
+                {"error": f"Booking cannot be checked in (status: {booking.status})."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Validate payment method
+        from payments.models import PaymentMethod as PM
+        VALID_METHODS = [PM.CASH, PM.GCASH, PM.CARD, "other"]
+        raw_method = request.data.get("payment_method", "").strip()
+        if raw_method == "other":
+            payment_method = PM.CASH   # map "other" to cash internally
+        elif raw_method in VALID_METHODS:
+            payment_method = raw_method
+        else:
+            return Response(
+                {"error": f"Invalid payment method '{raw_method}'. "
+                          f"Valid: cash, gcash, card, other."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Calculate remaining balance
+        from decimal import Decimal
+        from payments.models import Payment, PaymentStatus as PStatus, PaymentType, PaymentProvider
+        from django.db.models import Sum
+
+        paid_total = booking.payments.filter(
+            status=PStatus.PAID
+        ).aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
+
+        remaining = booking.total_price - paid_total
+
+        if remaining <= 0:
+            # Nothing to collect — just check in
+            with transaction.atomic():
+                booking = booking.transition_to(
+                    BookingStatus.CHECKED_IN,
+                    changed_by=request.user,
+                    note="Checked in at front desk. Balance already cleared.",
+                )
+            return Response(BookingDetailSerializer(booking).data)
+
+        with transaction.atomic():
+            # 1. Create Payment record for the balance
+            balance_payment = Payment.objects.create(
+                booking        = booking,
+                user           = booking.user,
+                amount         = remaining,
+                payment_type   = PaymentType.BALANCE_PAYMENT,
+                provider       = PaymentProvider.MANUAL,
+                payment_method = payment_method,
+                status         = PStatus.PENDING,
+            )
+
+            # 2. Mark paid — this sets booking.payment_status = PAID
+            balance_payment.mark_paid(
+                transaction_id=f"DESK-{booking.reference_number}-BAL",
+                payload={
+                    "collected_by":    request.user.email,
+                    "payment_method":  raw_method,
+                    "collected_at":    timezone.now().isoformat(),
+                    "notes":           "Balance collected at front desk during check-in.",
+                },
+            )
+
+            # 3. Transition booking to CHECKED_IN
+            booking.refresh_from_db()
+            booking = booking.transition_to(
+                BookingStatus.CHECKED_IN,
+                changed_by=request.user,
+                note=f"Checked in. Remaining balance of ₱{remaining} collected via {raw_method}.",
+            )
+
+        # Log to StaffActivityLog
+        try:
+            from staff.models import StaffActivityLog
+            profile = getattr(request.user, "staff_profile", None)
+            StaffActivityLog.objects.create(
+                staff       = profile,
+                action_type = "check_in_guest",
+                description = (
+                    f"Guest '{booking.full_name}' checked in to Room "
+                    f"{booking.room.room_number} (Booking {booking.reference_number}). "
+                    f"Remaining balance ₱{remaining} collected via {raw_method}."
+                ),
+                booking_id = booking.pk,
+                room_id    = booking.room_id,
+                metadata   = {
+                    "payment_method": raw_method,
+                    "amount_collected": str(remaining),
+                },
+            )
+        except Exception:
+            pass
+
+        return Response(BookingDetailSerializer(booking).data)
+
+
+class FrontDeskCheckInWithBalanceView(APIView):
+    """
+    POST /api/bookings/admin/<pk>/check-in-with-balance/
+
+    Step 3c — hotel allows check-in despite unpaid balance.
+    Does NOT collect payment. Records a partial-payment note.
+    Transitions booking: CONFIRMED → CHECKED_IN
+    Booking.payment_status stays as-is (UNPAID or PAID based on deposit).
+
+    Body:  { "method": "qr_scan" | "manual_entry" }
+    Returns: updated BookingDetailSerializer data.
+    Response also includes remaining_balance for the frontend warning.
+
+    Allowed: front_desk, admin, manager (CanHandleCheckInOut)
+    """
+    permission_classes = [CanHandleCheckInOut]
+
+    def post(self, request, pk):
+        try:
+            booking = Booking.objects.select_related("room").get(pk=pk)
+        except Booking.DoesNotExist:
+            return Response(
+                {"error": "Booking not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if booking.status != BookingStatus.CONFIRMED:
+            return Response(
+                {"error": f"Booking cannot be checked in (status: {booking.status})."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Calculate remaining for the log / response
+        from decimal import Decimal
+        from payments.models import Payment, PaymentStatus as PStatus
+        from django.db.models import Sum
+
+        paid_total = booking.payments.filter(
+            status=PStatus.PAID
+        ).aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
+
+        remaining = booking.total_price - paid_total
+        method    = request.data.get("method", "manual_entry")
+
+        with transaction.atomic():
+            booking = booking.transition_to(
+                BookingStatus.CHECKED_IN,
+                changed_by=request.user,
+                note=(
+                    f"Checked in with outstanding balance of ₱{remaining}. "
+                    f"Method: {method.replace('_', ' ')}. "
+                    f"Payment to be settled during stay or at checkout."
+                ),
+            )
+
+        # Log to StaffActivityLog
+        try:
+            from staff.models import StaffActivityLog
+            profile = getattr(request.user, "staff_profile", None)
+            StaffActivityLog.objects.create(
+                staff       = profile,
+                action_type = "check_in_guest",
+                description = (
+                    f"[{method.replace('_', ' ').title()}] Guest '{booking.full_name}' "
+                    f"checked in to Room {booking.room.room_number} "
+                    f"(Booking {booking.reference_number}) "
+                    f"with outstanding balance of ₱{remaining}."
+                ),
+                booking_id = booking.pk,
+                room_id    = booking.room_id,
+                metadata   = {
+                    "method":            method,
+                    "remaining_balance": str(remaining),
+                    "check_in_type":     "with_balance",
+                },
+            )
+        except Exception:
+            pass
+
+        data = BookingDetailSerializer(booking).data
+        data["remaining_balance"] = str(remaining)
+        return Response(data)
+
+

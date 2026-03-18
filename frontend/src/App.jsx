@@ -15,6 +15,7 @@ import HotelHomepage          from './features/home/HotelHomepage.jsx';
 import { notificationRoutes } from './features/notifications/NotificationRoutes';
 import { adminPanelRoutes }   from './components/AdminPanelRoutes';
 import { staffRoutes }        from './features/staff/StaffRoutes';   // ← new
+import StaffActivatePage from './features/adminPanel/staff/StaffActivatePage';
 import './App.css';
 
 function getHomeRoute() {
@@ -64,6 +65,9 @@ function App() {
 
         {/* ── Staff Module ─────────────────────────────────────────────── */}
         {staffRoutes}
+
+         {/* ── Staff Activation (public — no login needed) ──────────────── */}
+        <Route path="/staff/activate/:uidb64/:token" element={<StaffActivatePage />} />  {/* ← ADD THIS */}
 
         {/* ── Default & 404 ────────────────────────────────────────────── */}
         <Route path="/" element={<HotelHomepage />} />

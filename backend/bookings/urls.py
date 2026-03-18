@@ -24,4 +24,9 @@ urlpatterns = [
 
     # Phase 2: Confirm after payment (generates reference_number, QR, PIN)
     path("admin/<int:pk>/confirm/", views.BookingConfirmView.as_view(), name="admin-booking-confirm"),
+
+    path("admin/<int:pk>/verify-pin/", views.FrontDeskVerifyPinView.as_view(), name="admin-verify-pin"),
+    path("admin/<int:pk>/check-in/", views.FrontDeskCheckInView.as_view(), name="admin-check-in"),
+    path("admin/<int:pk>/collect-payment/", views.FrontDeskCollectPaymentView.as_view(), name="admin-collect-payment"),
+    path("admin/<int:pk>/check-in-with-balance/", views.FrontDeskCheckInWithBalanceView.as_view(), name="admin-check-in-with-balance"),
 ]

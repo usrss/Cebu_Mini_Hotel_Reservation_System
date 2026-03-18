@@ -1,23 +1,15 @@
 /**
  * src/features/staff/profiles/StaffFormModal.jsx
- *
- * Modal for creating a new staff account (Admin only).
- * Creates both User + StaffProfile in one POST.
  */
 
 import { useState } from 'react';
 import { staffMembersApi, ROLE_LABELS } from '../services/staffApi';
+import '../Staff.css';
 
 export default function StaffFormModal({ onClose, onSuccess }) {
   const [form, setForm] = useState({
-    email:       '',
-    password:    '',
-    first_name:  '',
-    last_name:   '',
-    role:        'receptionist',
-    employee_id: '',
-    phone:       '',
-    notes:       '',
+    email: '', password: '', first_name: '', last_name: '',
+    role: 'receptionist', employee_id: '', phone: '', notes: '',
   });
   const [busy,  setBusy]  = useState(false);
   const [error, setError] = useState(null);
@@ -25,108 +17,84 @@ export default function StaffFormModal({ onClose, onSuccess }) {
   const set = (field) => (e) => setForm({ ...form, [field]: e.target.value });
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    setBusy(true);
-    setError(null);
+    e.preventDefault(); setBusy(true); setError(null);
     try {
       await staffMembersApi.create(form);
       onSuccess();
     } catch (err) {
       const d = err.response?.data;
       if (d && typeof d === 'object') {
-        const msgs = Object.entries(d)
-          .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(' ') : v}`)
-          .join('\n');
-        setError(msgs);
+        setError(Object.entries(d).map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(' ') : v}`).join('\n'));
       } else {
         setError(err.message || 'Failed to create staff member.');
       }
-    } finally {
-      setBusy(false);
-    }
+    } finally { setBusy(false); }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-slate-100">
-          <h2 className="text-lg font-bold text-slate-800">Add New Staff Member</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-xl leading-none">×</button>
+    <div className="sf-modal-overlay">
+      <div className="sf-modal">
+        <div className="sf-modal-header">
+          <h2 className="sf-modal-title">Add New Staff Member</h2>
+          <button className="sf-modal-close" onClick={onClose}>×</button>
         </div>
 
-        <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
+        <div className="sf-modal-body">
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm whitespace-pre-line">
-              {error}
-            </div>
+            <div className="sf-notice sf-notice-error" style={{ whiteSpace: 'pre-line' }}>{error}</div>
           )}
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs text-slate-500 mb-1">First Name</label>
-              <input value={form.first_name} onChange={set('first_name')}
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300" />
+          <div className="sf-form-row">
+            <div className="sf-form-group">
+              <label className="sf-label">First Name</label>
+              <input className="sf-input" value={form.first_name} onChange={set('first_name')} />
             </div>
-            <div>
-              <label className="block text-xs text-slate-500 mb-1">Last Name</label>
-              <input value={form.last_name} onChange={set('last_name')}
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300" />
+            <div className="sf-form-group">
+              <label className="sf-label">Last Name</label>
+              <input className="sf-input" value={form.last_name} onChange={set('last_name')} />
             </div>
           </div>
 
-          <div>
-            <label className="block text-xs text-slate-500 mb-1">Email <span className="text-red-400">*</span></label>
-            <input type="email" value={form.email} onChange={set('email')} required
-              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300" />
+          <div className="sf-form-group">
+            <label className="sf-label sf-label-req">Email</label>
+            <input type="email" className="sf-input" value={form.email} onChange={set('email')} required />
           </div>
 
-          <div>
-            <label className="block text-xs text-slate-500 mb-1">Password <span className="text-red-400">*</span></label>
-            <input type="password" value={form.password} onChange={set('password')} required minLength={8}
-              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300" />
+          <div className="sf-form-group">
+            <label className="sf-label sf-label-req">Password</label>
+            <input type="password" className="sf-input" value={form.password} onChange={set('password')} required minLength={8} />
           </div>
 
-          <div>
-            <label className="block text-xs text-slate-500 mb-1">Role <span className="text-red-400">*</span></label>
-            <select value={form.role} onChange={set('role')} required
-              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300">
-              {Object.entries(ROLE_LABELS).map(([k, v]) => (
-                <option key={k} value={k}>{v}</option>
-              ))}
+          <div className="sf-form-group">
+            <label className="sf-label sf-label-req">Role</label>
+            <select className="sf-select" value={form.role} onChange={set('role')} required>
+              {Object.entries(ROLE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs text-slate-500 mb-1">Employee ID</label>
-              <input value={form.employee_id} onChange={set('employee_id')}
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300" />
+          <div className="sf-form-row">
+            <div className="sf-form-group">
+              <label className="sf-label">Employee ID</label>
+              <input className="sf-input" value={form.employee_id} onChange={set('employee_id')} />
             </div>
-            <div>
-              <label className="block text-xs text-slate-500 mb-1">Phone</label>
-              <input value={form.phone} onChange={set('phone')}
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300" />
+            <div className="sf-form-group">
+              <label className="sf-label">Phone</label>
+              <input className="sf-input" value={form.phone} onChange={set('phone')} />
             </div>
           </div>
 
-          <div>
-            <label className="block text-xs text-slate-500 mb-1">Notes</label>
-            <textarea value={form.notes} onChange={set('notes')} rows={2}
-              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300" />
+          <div className="sf-form-group">
+            <label className="sf-label">Notes</label>
+            <textarea className="sf-textarea" rows={2} value={form.notes} onChange={set('notes')} />
           </div>
+        </div>
 
-          <div className="flex gap-3 pt-1">
-            <button type="button" onClick={onClose}
-              className="flex-1 border border-slate-200 text-slate-600 py-2 rounded-lg text-sm font-medium hover:bg-slate-50">
-              Cancel
-            </button>
-            <button type="submit" disabled={busy}
-              className="flex-1 bg-slate-800 text-white py-2 rounded-lg text-sm font-medium hover:bg-slate-700 disabled:opacity-50">
-              {busy ? 'Creating…' : 'Create Staff Member'}
-            </button>
-          </div>
-        </form>
+        <div className="sf-modal-footer">
+          <button className="sf-btn" onClick={onClose}>Cancel</button>
+          <button className="sf-btn sf-btn-primary" onClick={handleSubmit} disabled={busy}>
+            {busy ? 'Creating…' : 'Create Staff Member'}
+          </button>
+        </div>
       </div>
     </div>
   );

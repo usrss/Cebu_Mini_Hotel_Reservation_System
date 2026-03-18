@@ -2,18 +2,31 @@
  * src/features/staff/hooks/useStaffRole.js
  *
  * Returns the current user's effective_role and granular permission flags.
- * Mirrors the useAdminRole.js pattern from the adminPanel feature.
+ * Mirrors the strict RBAC definitions from staff/permissions.py.
  *
- * Always reads effective_role (respects temp role overrides).
+ * Always reads effective_role — never role directly.
+ * Respects temp_role overrides automatically because the backend
+ * serializer returns effective_role in the login response.
  */
 
 import { getStoredUser } from '../../../services/api';
-import { STAFF_ROLES } from '../services/staffApi';
+
+export const STAFF_ROLES = {
+  ADMIN:        'admin',
+  MANAGER:      'manager',
+  RECEPTIONIST: 'receptionist',
+  FRONT_DESK:   'front_desk',
+  HOUSEKEEPING: 'housekeeping',
+  MAINTENANCE:  'maintenance',
+  SECURITY:     'security',
+};
 
 export function useStaffRole() {
   const user = getStoredUser();
 
-  // effective_role respects temp_role overrides — always use this, never role directly
+  // effective_role is set by the backend serializer and respects temp_role.
+  // Fallback: if staff_profile isn't present yet (pre-serializer-fix session),
+  // treat is_staff=true as admin so existing sessions aren't locked out.
   const role =
     user?.staff_profile?.effective_role ??
     (user?.is_staff ? STAFF_ROLES.ADMIN : null);
@@ -23,33 +36,48 @@ export function useStaffRole() {
   return {
     role,
 
-    // ── Staff management ──────────────────────────────────────────────────
-    canViewStaffList:   is('admin', 'manager'),
+    // ── Staff account management ──────────────────────────────────────────
+    // Admin only — Manager explicitly excluded per prompt
+    canViewStaffList:   is('admin', 'manager'),   // Manager can view, not modify
     canCreateStaff:     is('admin'),
     canEditStaff:       is('admin'),
     canDeleteStaff:     is('admin'),
     canPromoteStaff:    is('admin'),
     canDeactivateStaff: is('admin'),
+    canAssignTempRole:  is('admin'),
 
-    // ── Shifts ────────────────────────────────────────────────────────────
-    canManageShifts:    is('admin', 'manager'),
-    canViewOwnShifts:   !!role,   // all staff
+    // ── Shift management ──────────────────────────────────────────────────
+    canManageShifts:  is('admin', 'manager'),   // create/edit/delete all shifts
+    canViewOwnShifts: !!role,                   // every role — via /my-shifts/
 
-    // ── Tasks ─────────────────────────────────────────────────────────────
-    canManageCleaning:    is('admin', 'manager'),
-    canDoHousekeeping:    is('housekeeping', 'admin', 'manager'),
-    canManageMaintenance: is('admin', 'manager'),
-    canDoMaintenance:     is('maintenance', 'admin', 'manager'),
+    // ── Reservation management ────────────────────────────────────────────
+    // Receptionist: create/modify/cancel/view reservations
+    // Front Desk does NOT get this — they use check-in/out instead
+    canManageReservations: is('admin', 'manager', 'receptionist'),
 
-    // ── Incidents ─────────────────────────────────────────────────────────
-    canLogIncidents:  is('security', 'admin'),
-    canViewIncidents: is('admin', 'manager', 'security'),
+    // ── Check-in / check-out ──────────────────────────────────────────────
+    // Front Desk only (+ admin/manager)
+    // Receptionist is explicitly excluded per prompt
+    canHandleCheckInOut: is('admin', 'manager', 'front_desk'),
 
-    // ── Reports & logs ────────────────────────────────────────────────────
+    // ── Cleaning tasks ────────────────────────────────────────────────────
+    canManageCleaning:  is('admin', 'manager'),               // create + assign
+    canAccessCleaning:  is('admin', 'manager', 'housekeeping'), // view + status update
+
+    // ── Maintenance tasks ─────────────────────────────────────────────────
+    canManageMaintenance:  is('admin', 'manager'),              // create + assign
+    canAccessMaintenance:  is('admin', 'manager', 'maintenance'), // view + status update
+
+    // ── Incident logs ─────────────────────────────────────────────────────
+    canCreateIncidents: is('admin', 'security'),              // log new incidents
+    canViewIncidents:   is('admin', 'manager', 'security'),   // Manager view-only
+
+    // ── Reports & analytics ───────────────────────────────────────────────
     canViewReports:      is('admin', 'manager'),
     canViewActivityLogs: is('admin', 'manager'),
 
-    // ── Monitoring ────────────────────────────────────────────────────────
-    canViewMonitoring: is('admin', 'manager'),
+    // ── Monitoring dashboard ──────────────────────────────────────────────
+    canViewMonitoring:   is('admin', 'manager'),
+    canViewDashboard:    is('admin', 'manager'),
   };
 }

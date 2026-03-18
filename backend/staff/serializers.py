@@ -5,9 +5,12 @@ DRF serializers for all Staff Management models.
 Includes validation for role assignments, status transitions, and temp roles.
 """
 
-from django.contrib.auth import get_user_model
 from django.utils import timezone
+from django.contrib.auth import get_user_model
+from django.db import transaction
 from rest_framework import serializers
+from .emails import send_staff_activation_email
+
 
 from .models import (
     StaffProfile,
@@ -92,51 +95,100 @@ class StaffProfileDetailSerializer(StaffProfileListSerializer):
         return ShiftSerializer(shifts, many=True).data
 
 
+
+
+
+# Role choices — receptionist excluded per spec
+STAFF_ROLE_CHOICES = [
+    (StaffRole.ADMIN, "Admin (Super Admin)"),
+    (StaffRole.MANAGER, "Manager"),
+    (StaffRole.FRONT_DESK, "Front Desk"),
+    (StaffRole.HOUSEKEEPING, "Housekeeping"),
+    (StaffRole.MAINTENANCE, "Maintenance"),
+    (StaffRole.SECURITY, "Security"),
+]
+
+ROLE_DISPLAY = dict(STAFF_ROLE_CHOICES)
+
+
 class StaffCreateSerializer(serializers.Serializer):
     """
-    Admin creates a new staff account.
-    Creates both the User and StaffProfile in a single transaction.
+    Create a new staff account.
+
+    - No password field: the staff member sets their own password via activation link.
+    - Creates user with is_active=False and an unusable password.
+    - Sends activation email automatically on save.
+    - Receptionist role excluded.
     """
-    email       = serializers.EmailField()
-    password    = serializers.CharField(write_only=True, min_length=8)
-    first_name  = serializers.CharField(max_length=150, required=False, default="")
-    last_name   = serializers.CharField(max_length=150, required=False, default="")
-    role        = serializers.ChoiceField(choices=StaffRole.choices)
-    employee_id = serializers.CharField(max_length=50, required=False, allow_blank=True)
-    phone       = serializers.CharField(max_length=30, required=False, allow_blank=True)
-    notes       = serializers.CharField(required=False, allow_blank=True)
+
+    # User fields
+    email = serializers.EmailField()
+    first_name = serializers.CharField(max_length=150, required=False, allow_blank=True, default="")
+    last_name = serializers.CharField(max_length=150, required=False, allow_blank=True, default="")
+
+    # Staff profile fields
+    role = serializers.ChoiceField(choices=STAFF_ROLE_CHOICES)
+    employee_id = serializers.CharField(
+        max_length=50, required=False, allow_blank=True, default=None,
+        allow_null=True,
+    )
+    phone = serializers.CharField(max_length=30, required=False, allow_blank=True, default="")
+    notes = serializers.CharField(required=False, allow_blank=True, default="")
+
+    # ── Validation ─────────────────────────────────────────────────────────────
 
     def validate_email(self, value):
-        if User.objects.filter(email__iexact=value).exists():
+        value = value.strip().lower()
+        if User.objects.filter(email=value).exists():
             raise serializers.ValidationError("A user with this email already exists.")
-        return value.lower()
+        return value
 
+    def validate_employee_id(self, value):
+        if value and StaffProfile.objects.filter(employee_id=value).exists():
+            raise serializers.ValidationError("This employee ID is already in use.")
+        return value or None
+
+    # ── Create ─────────────────────────────────────────────────────────────────
+
+    @transaction.atomic
     def create(self, validated_data):
-        from django.db import transaction
+        email = validated_data["email"]
+        first_name = validated_data.get("first_name", "")
+        last_name = validated_data.get("last_name", "")
+        role = validated_data["role"]
+        employee_id = validated_data.get("employee_id") or None
+        phone = validated_data.get("phone", "")
+        notes = validated_data.get("notes", "")
 
-        role        = validated_data.pop("role")
-        employee_id = validated_data.pop("employee_id", "") or None
-        phone       = validated_data.pop("phone", "")
-        notes       = validated_data.pop("notes", "")
-        password    = validated_data.pop("password")
+        # 1. Create the user — inactive, no usable password
+        user = User.objects.create_user(
+            email=email,
+            password=None,  # sets an unusable password
+            first_name=first_name,
+            last_name=last_name,
+            is_staff=True,
+            is_active=False,  # ← inactive until email activation
+        )
 
-        with transaction.atomic():
-            user = User.objects.create_user(
-                email      = validated_data["email"],
-                password   = password,
-                first_name = validated_data.get("first_name", ""),
-                last_name  = validated_data.get("last_name", ""),
-                is_staff   = True,
-            )
-            profile = StaffProfile.objects.create(
-                user        = user,
-                role        = role,
-                employee_id = employee_id,
-                phone       = phone,
-                notes       = notes,
-            )
+        # 2. Create the staff profile — also inactive until activation
+        profile = StaffProfile.objects.create(
+            user=user,
+            role=role,
+            is_active=False,  # ← inactive until email activation
+            employee_id=employee_id,
+            phone=phone,
+            notes=notes,
+        )
+
+        # 3. Send activation email (non-blocking — failure is logged, not raised)
+        role_display = ROLE_DISPLAY.get(role, role)
+        send_staff_activation_email(user, role_display=role_display)
 
         return profile
+
+    # save() delegates to create() for Serializer (not ModelSerializer)
+    def save(self, **kwargs):
+        return self.create(self.validated_data)
 
 
 class StaffUpdateSerializer(serializers.ModelSerializer):

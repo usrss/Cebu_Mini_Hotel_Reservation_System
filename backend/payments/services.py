@@ -3,15 +3,6 @@ payments/services.py
 
 Provider integration layer.
 All API calls go through these service classes — views never call provider APIs directly.
-
-Setup (add to your .env):
-    PAYMONGO_SECRET_KEY=sk_test_...
-    PAYMONGO_PUBLIC_KEY=pk_test_...
-    PAYMONGO_WEBHOOK_SECRET=whsec_...
-    PAYPAL_CLIENT_ID=...
-    PAYPAL_CLIENT_SECRET=...
-    PAYPAL_MODE=sandbox   # or 'live'
-    FRONTEND_URL=http://localhost:5173
 """
 
 import base64
@@ -27,12 +18,26 @@ PAYMONGO_BASE       = "https://api.paymongo.com/v1"
 PAYPAL_SANDBOX_BASE = "https://api-m.sandbox.paypal.com"
 PAYPAL_LIVE_BASE    = "https://api-m.paypal.com"
 
-# ── PayMongo method map ────────────────────────────────────────────────────────
-# Maps our internal method keys to PayMongo payment_method_types values
+# ── All PayMongo payment methods available on the checkout page ────────────────
+# When provider=paymongo we always show ALL methods so the guest can choose.
+# PayMongo checkout page handles method selection on their end.
+PAYMONGO_ALL_METHODS = [
+    "card",       # Visa / Mastercard / JCB
+    "gcash",      # GCash e-wallet
+    "paymaya",    # Maya (PayMaya) e-wallet
+    "dob",        # Direct Online Banking (BPI, UnionBank, etc.)
+    "dob_ubp",    # UnionBank Online
+    "brankas_bdo", # BDO
+    "brankas_landbank", # Landbank
+    "brankas_metrobank", # Metrobank
+]
+
+# ── Single method map — used when a specific method is forced ──────────────────
 PAYMONGO_METHOD_MAP = {
     "card":          "card",
     "gcash":         "gcash",
-    "bank_transfer": "dob",   # Direct Online Banking
+    "bank_transfer": "dob",
+    "paymaya":       "paymaya",
 }
 
 
@@ -75,11 +80,13 @@ class PayMongoService:
         Creates a PayMongo Checkout Session and returns:
             { "checkout_url": str, "session_id": str }
 
+        Always enables ALL available payment methods so the guest can choose
+        on the PayMongo checkout page (card, GCash, Maya, online banking, etc.)
+
         PayMongo amounts are in CENTS (PHP x 100).
         Minimum amount is PHP 100.00 (10000 cents).
         """
         amount_cents = int(payment.amount * 100)
-        method_type  = PAYMONGO_METHOD_MAP.get(payment.payment_method, "card")
 
         # PayMongo minimum is PHP 100
         if amount_cents < 10000:
@@ -88,16 +95,20 @@ class PayMongoService:
                 f"PayMongo minimum is PHP 100.00 (got {amount_cents} cents)."
             )
 
+        # Always offer all payment methods — guest picks on checkout page
+        # PayMongo will only show methods available for the account's enabled list
+        payment_method_types = PAYMONGO_ALL_METHODS
+
         payload = {
             "data": {
                 "attributes": {
                     "amount":               amount_cents,
                     "currency":             "PHP",
                     "description":          (
-                        f"Booking {booking.reference_number} "
-                        f"- Room {booking.room.room_number}"
+                        f"Booking {booking.reference_number or f'#{booking.pk}'} "
+                        f"— Room {booking.room.room_number}"
                     ),
-                    "payment_method_types": [method_type],
+                    "payment_method_types": payment_method_types,
                     "success_url":          success_url,
                     "cancel_url":           cancel_url,
                     "send_email_receipt":   False,
@@ -105,23 +116,27 @@ class PayMongoService:
                     "show_line_items":      True,
                     "line_items": [
                         {
-                            "currency":  "PHP",
-                            "amount":    amount_cents,
-                            "name":      f"Room {booking.room.room_number} - {booking.room.get_room_type_display()}",
-                            "quantity":  1,
+                            "currency": "PHP",
+                            "amount":   amount_cents,
+                            "name":     (
+                                f"Room {booking.room.room_number} — "
+                                f"{booking.room.get_room_type_display()}"
+                            ),
+                            "quantity": 1,
                         }
                     ],
                     "metadata": {
                         "payment_id":        str(payment.pk),
-                        "booking_reference": booking.reference_number,
+                        "booking_reference": booking.reference_number or str(booking.pk),
+                        "booking_id":        str(booking.pk),
                     },
                 }
             }
         }
 
         logger.info(
-            "PayMongo checkout_sessions request — payment_id=%s amount_cents=%s method=%s",
-            payment.pk, amount_cents, method_type,
+            "PayMongo checkout_sessions request — payment_id=%s amount_cents=%s methods=%s",
+            payment.pk, amount_cents, payment_method_types,
         )
 
         resp = requests.post(
@@ -131,18 +146,18 @@ class PayMongoService:
             timeout=20,
         )
 
-        # Log full response on error so we can see exactly what PayMongo rejected
+        # Log full response on error
         if not resp.ok:
             logger.error(
                 "PayMongo checkout_sessions FAILED %s — response: %s",
-                resp.status_code,
-                resp.text,
+                resp.status_code, resp.text,
             )
             resp.raise_for_status()
 
         data = resp.json()["data"]
         logger.info(
-            "PayMongo checkout_sessions SUCCESS — session_id=%s", data["id"]
+            "PayMongo checkout_sessions SUCCESS — session_id=%s url=%s",
+            data["id"], data["attributes"]["checkout_url"],
         )
         return {
             "session_id":   data["id"],
@@ -228,8 +243,8 @@ class PayMongoService:
 
         attrs = resp.json()["data"]["attributes"]
         return {
-            "status": attrs.get("status"),  # 'active' or 'expired'
-            "payments": attrs.get("payments", []),  # list of payment objects
+            "status":   attrs.get("status"),    # 'active' or 'expired'
+            "payments": attrs.get("payments", []),
         }
 
 
@@ -260,8 +275,8 @@ class PayPalService:
                         "value":         str(payment.amount),
                     },
                     "description": (
-                        f"Booking {booking.reference_number} "
-                        f"- Room {booking.room.room_number}"
+                        f"Booking {booking.reference_number or f'#{booking.pk}'} "
+                        f"— Room {booking.room.room_number}"
                     ),
                     "custom_id": str(payment.pk),
                 }
@@ -290,7 +305,6 @@ class PayPalService:
 
         data = resp.json()
 
-        # Find the approval link
         checkout_url = next(
             (link["href"] for link in data.get("links", []) if link["rel"] == "approve"),
             None,

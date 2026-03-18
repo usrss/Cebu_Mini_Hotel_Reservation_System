@@ -1,63 +1,59 @@
 /**
  * src/features/staff/profiles/StaffListPage.jsx
- *
- * Lists all staff members with filtering, search, and inline actions.
- * Admin: full CRUD + deactivate/reactivate + promote
- * Manager: read-only list
  */
 
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Plus, ArrowRight } from 'lucide-react';
 import {
   staffMembersApi,
-  STAFF_ROLES,
   ROLE_LABELS,
   ONLINE_STATUS_LABELS,
 } from '../services/staffApi';
 import { useStaffRole } from '../hooks/useStaffRole';
 import StaffFormModal from './StaffFormModal';
+import '../Staff.css';
 
-const STATUS_COLORS = {
-  online:  'bg-emerald-100 text-emerald-700',
-  offline: 'bg-slate-100 text-slate-500',
-  idle:    'bg-amber-100 text-amber-700',
-};
+function roleBadgeClass(role) {
+  const map = {
+    admin:        'sf-badge-gold',
+    manager:      'sf-badge-blue',
+    receptionist: 'sf-badge-amber',
+    front_desk:   'sf-badge-amber',
+    housekeeping: 'sf-badge-green',
+    maintenance:  'sf-badge-muted',
+    security:     'sf-badge-red',
+  };
+  return map[role] || 'sf-badge-muted';
+}
 
-const ROLE_COLORS = {
-  admin:        'bg-purple-100 text-purple-700',
-  manager:      'bg-blue-100 text-blue-700',
-  receptionist: 'bg-cyan-100 text-cyan-700',
-  front_desk:   'bg-teal-100 text-teal-700',
-  housekeeping: 'bg-green-100 text-green-700',
-  maintenance:  'bg-orange-100 text-orange-700',
-  security:     'bg-red-100 text-red-700',
-};
+function statusBadgeClass(s) {
+  return s === 'online' ? 'sf-badge-green' : s === 'idle' ? 'sf-badge-amber' : 'sf-badge-muted';
+}
 
 export default function StaffListPage() {
-  const navigate  = useNavigate();
-  const perms     = useStaffRole();
+  const navigate = useNavigate();
+  const perms    = useStaffRole();
 
-  const [members,    setMembers]    = useState([]);
-  const [loading,    setLoading]    = useState(true);
-  const [error,      setError]      = useState(null);
-  const [search,     setSearch]     = useState('');
-  const [roleFilter, setRoleFilter] = useState('');
+  const [members,      setMembers]      = useState([]);
+  const [loading,      setLoading]      = useState(true);
+  const [error,        setError]        = useState(null);
+  const [search,       setSearch]       = useState('');
+  const [roleFilter,   setRoleFilter]   = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [activeFilter, setActiveFilter] = useState('');
-  const [showModal,  setShowModal]  = useState(false);
-  const [actionLoading, setActionLoading] = useState(null); // pk being acted on
+  const [showModal,    setShowModal]    = useState(false);
+  const [actionBusy,   setActionBusy]  = useState(null);
 
   const fetchMembers = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+    setLoading(true); setError(null);
     try {
       const params = {};
-      if (search)       params.search        = search;
-      if (roleFilter)   params.role          = roleFilter;
-      if (statusFilter) params.online_status = statusFilter;
-      if (activeFilter !== '') params.is_active = activeFilter;
+      if (search)              params.search        = search;
+      if (roleFilter)          params.role          = roleFilter;
+      if (statusFilter)        params.online_status = statusFilter;
+      if (activeFilter !== '') params.is_active     = activeFilter;
       const data = await staffMembersApi.list(params);
-      // Handle paginated or plain array
       setMembers(Array.isArray(data) ? data : (data.results ?? []));
     } catch (err) {
       setError(err.response?.data?.detail || err.message || 'Failed to load staff.');
@@ -70,187 +66,148 @@ export default function StaffListPage() {
 
   const handleDeactivate = async (pk, email) => {
     if (!window.confirm(`Deactivate ${email}?`)) return;
-    setActionLoading(pk);
+    setActionBusy(pk);
     try {
       await staffMembersApi.deactivate(pk, { reason: 'Deactivated via admin panel.' });
       fetchMembers();
-    } catch (err) {
-      alert(err.response?.data?.detail || err.message);
-    } finally {
-      setActionLoading(null);
-    }
+    } catch (err) { alert(err.response?.data?.detail || err.message); }
+    finally { setActionBusy(null); }
   };
 
   const handleReactivate = async (pk, email) => {
     if (!window.confirm(`Reactivate ${email}?`)) return;
-    setActionLoading(pk);
+    setActionBusy(pk);
     try {
       await staffMembersApi.reactivate(pk);
       fetchMembers();
-    } catch (err) {
-      alert(err.response?.data?.detail || err.message);
-    } finally {
-      setActionLoading(null);
-    }
+    } catch (err) { alert(err.response?.data?.detail || err.message); }
+    finally { setActionBusy(null); }
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800 tracking-tight">Staff Members</h1>
-          <p className="text-sm text-slate-500 mt-0.5">{members.length} total</p>
+    <div className="sf-page">
+      <div className="sf-inner">
+
+        <div className="sf-toprow">
+          <div className="sf-toprow-left">
+            <p className="sf-eyebrow">Hotel Administration</p>
+            <h1>Staff Members</h1>
+            <p>{members.length} total members</p>
+          </div>
+          {/* Admin only — Manager cannot create staff */}
+          {perms.canCreateStaff && (
+            <button className="sf-btn sf-btn-primary" onClick={() => setShowModal(true)}>
+              <Plus size={13} /> Add Staff Member
+            </button>
+          )}
         </div>
-        {perms.canCreateStaff && (
-          <button
-            onClick={() => setShowModal(true)}
-            className="flex items-center gap-2 bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-700 transition-colors"
-          >
-            <span className="text-lg leading-none">+</span> Add Staff
+
+        {/* Filters */}
+        <div className="sf-filter-bar">
+          <input className="sf-input" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name or email…" />
+          <select className="sf-select" value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}>
+            <option value="">All Roles</option>
+            {Object.entries(ROLE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+          </select>
+          <select className="sf-select" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+            <option value="">All Statuses</option>
+            <option value="online">Online</option>
+            <option value="idle">Idle</option>
+            <option value="offline">Offline</option>
+          </select>
+          <select className="sf-select" value={activeFilter} onChange={(e) => setActiveFilter(e.target.value)}>
+            <option value="">Active &amp; Inactive</option>
+            <option value="true">Active only</option>
+            <option value="false">Inactive only</option>
+          </select>
+          <button className="sf-filter-clear" onClick={() => { setSearch(''); setRoleFilter(''); setStatusFilter(''); setActiveFilter(''); }}>
+            Clear filters
           </button>
-        )}
-      </div>
+        </div>
 
-      {/* Filters */}
-      <div className="bg-white rounded-xl border border-slate-200 p-4 mb-4 flex flex-wrap gap-3">
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search name or email…"
-          className="flex-1 min-w-[180px] border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300"
-        />
-        <select
-          value={roleFilter}
-          onChange={(e) => setRoleFilter(e.target.value)}
-          className="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300"
-        >
-          <option value="">All Roles</option>
-          {Object.entries(ROLE_LABELS).map(([k, v]) => (
-            <option key={k} value={k}>{v}</option>
-          ))}
-        </select>
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300"
-        >
-          <option value="">All Statuses</option>
-          <option value="online">Online</option>
-          <option value="offline">Offline</option>
-          <option value="idle">Idle</option>
-        </select>
-        <select
-          value={activeFilter}
-          onChange={(e) => setActiveFilter(e.target.value)}
-          className="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300"
-        >
-          <option value="">Active &amp; Inactive</option>
-          <option value="true">Active only</option>
-          <option value="false">Inactive only</option>
-        </select>
-        <button
-          onClick={() => { setSearch(''); setRoleFilter(''); setStatusFilter(''); setActiveFilter(''); }}
-          className="text-sm text-slate-500 hover:text-slate-700 px-2"
-        >
-          Clear
-        </button>
-      </div>
-
-      {/* Table */}
-      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        {/* Table */}
         {loading ? (
-          <div className="py-20 text-center text-slate-400">Loading…</div>
+          <div className="sf-loading"><div className="sf-spinner" /><p>Loading staff…</p></div>
         ) : error ? (
-          <div className="py-20 text-center text-red-500">{error}</div>
-        ) : members.length === 0 ? (
-          <div className="py-20 text-center text-slate-400">No staff members found.</div>
+          <div className="sf-error"><p>{error}</p></div>
         ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-slate-50 border-b border-slate-200">
-                <th className="text-left px-4 py-3 font-medium text-slate-600">Name / Email</th>
-                <th className="text-left px-4 py-3 font-medium text-slate-600">Role</th>
-                <th className="text-left px-4 py-3 font-medium text-slate-600">Status</th>
-                <th className="text-left px-4 py-3 font-medium text-slate-600">Current Task</th>
-                <th className="text-left px-4 py-3 font-medium text-slate-600">Employee ID</th>
-                <th className="text-left px-4 py-3 font-medium text-slate-600">Active</th>
-                <th className="text-right px-4 py-3 font-medium text-slate-600">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {members.map((m) => (
-                <tr key={m.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-4 py-3">
-                    <div className="font-medium text-slate-800">{m.user?.full_name || '—'}</div>
-                    <div className="text-xs text-slate-400">{m.user?.email}</div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${ROLE_COLORS[m.effective_role] || 'bg-slate-100 text-slate-600'}`}>
-                      {ROLE_LABELS[m.effective_role] || m.effective_role}
-                    </span>
-                    {m.temp_role && (
-                      <div className="text-xs text-amber-600 mt-0.5">
-                        temp: {ROLE_LABELS[m.temp_role]}
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[m.online_status] || ''}`}>
-                      {ONLINE_STATUS_LABELS[m.online_status] || m.online_status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-slate-500 max-w-[160px] truncate">
-                    {m.current_task || '—'}
-                  </td>
-                  <td className="px-4 py-3 text-slate-500">{m.employee_id || '—'}</td>
-                  <td className="px-4 py-3">
-                    <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${m.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
-                      {m.is_active ? 'Active' : 'Inactive'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <button
-                        onClick={() => navigate(`/staff/members/${m.id}`)}
-                        className="text-xs text-blue-600 hover:underline"
-                      >
-                        View
-                      </button>
-                      {perms.canDeactivateStaff && (
-                        m.is_active ? (
-                          <button
-                            onClick={() => handleDeactivate(m.id, m.user?.email)}
-                            disabled={actionLoading === m.id}
-                            className="text-xs text-red-500 hover:underline disabled:opacity-50"
-                          >
-                            {actionLoading === m.id ? '…' : 'Deactivate'}
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => handleReactivate(m.id, m.user?.email)}
-                            disabled={actionLoading === m.id}
-                            className="text-xs text-green-600 hover:underline disabled:opacity-50"
-                          >
-                            {actionLoading === m.id ? '…' : 'Reactivate'}
-                          </button>
-                        )
-                      )}
-                    </div>
-                  </td>
+          <div className="sf-table-wrap">
+            <table className="sf-table">
+              <thead>
+                <tr>
+                  <th>Name / Email</th>
+                  <th>Effective Role</th>
+                  <th>Status</th>
+                  <th>Current Task</th>
+                  <th>Employee ID</th>
+                  <th>Account</th>
+                  <th>Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {members.length === 0 ? (
+                  <tr><td colSpan={7} className="sf-table-empty">No staff members found</td></tr>
+                ) : members.map((m) => (
+                  <tr key={m.id}>
+                    <td>
+                      <div className="sf-table-name">{m.user?.full_name || '—'}</div>
+                      <div className="sf-table-sub">{m.user?.email}</div>
+                    </td>
+                    <td>
+                      <span className={`sf-badge ${roleBadgeClass(m.effective_role)}`}>
+                        {ROLE_LABELS[m.effective_role] || m.effective_role}
+                      </span>
+                      {m.temp_role && (
+                        <div style={{ marginTop: 5 }}>
+                          <span className="sf-badge sf-badge-amber">temp: {ROLE_LABELS[m.temp_role]}</span>
+                        </div>
+                      )}
+                    </td>
+                    <td>
+                      <span className={`sf-badge ${statusBadgeClass(m.online_status)}`}>
+                        {ONLINE_STATUS_LABELS[m.online_status] || m.online_status}
+                      </span>
+                    </td>
+                    <td style={{ maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {m.current_task || '—'}
+                    </td>
+                    <td>{m.employee_id || '—'}</td>
+                    <td>
+                      <span className={`sf-badge ${m.is_active ? 'sf-badge-green' : 'sf-badge-red'}`}>
+                        {m.is_active ? 'Active' : 'Inactive'}
+                      </span>
+                    </td>
+                    <td>
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                        <button className="sf-btn" style={{ padding: '5px 12px', fontSize: 9 }} onClick={() => navigate(`/staff/members/${m.id}`)}>
+                          View <ArrowRight size={11} />
+                        </button>
+                        {/* Admin only — Manager sees list but cannot deactivate */}
+                        {perms.canDeactivateStaff && (
+                          m.is_active ? (
+                            <button className="sf-btn sf-btn-danger" style={{ padding: '5px 12px', fontSize: 9 }}
+                              onClick={() => handleDeactivate(m.id, m.user?.email)} disabled={actionBusy === m.id}>
+                              {actionBusy === m.id ? '…' : 'Deactivate'}
+                            </button>
+                          ) : (
+                            <button className="sf-btn sf-btn-success" style={{ padding: '5px 12px', fontSize: 9 }}
+                              onClick={() => handleReactivate(m.id, m.user?.email)} disabled={actionBusy === m.id}>
+                              {actionBusy === m.id ? '…' : 'Reactivate'}
+                            </button>
+                          )
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
-      {/* Create Staff Modal */}
       {showModal && (
-        <StaffFormModal
-          onClose={() => setShowModal(false)}
-          onSuccess={() => { setShowModal(false); fetchMembers(); }}
-        />
+        <StaffFormModal onClose={() => setShowModal(false)} onSuccess={() => { setShowModal(false); fetchMembers(); }} />
       )}
     </div>
   );

@@ -9,7 +9,22 @@ import './AuthModern.css';
 
 function getPostLoginRoute() {
   const user = getStoredUser();
-  return user?.is_staff === true ? '/admin/dashboard' : '/dashboard';  // ← fixed
+
+  // Guest users go to the guest dashboard
+  if (!user?.is_staff) return '/dashboard';
+
+  // Staff — redirect based on effective role
+  const role =
+    user?.staff_profile?.effective_role ??
+    (user?.is_staff ? 'admin' : null);
+
+  switch (role) {
+    case 'front_desk':   return '/staff/front-desk';
+    case 'housekeeping': return '/staff/cleaning';
+    case 'maintenance':  return '/staff/maintenance';
+    case 'security':     return '/staff/incidents';
+    default:             return '/admin/dashboard'; // admin, manager, receptionist
+  }
 }
 
 export default function Login() {
