@@ -1,5 +1,6 @@
 # bookings/models.py
 import random
+from decimal import Decimal
 from datetime import timedelta
 from django.db import models
 from django.conf import settings
@@ -355,3 +356,231 @@ class BookingStatusHistory(models.Model):
     def __str__(self):
         ref = self.booking.reference_number or f"(pending #{self.booking_id})"
         return f"{ref}: {self.old_status} → {self.new_status}"
+
+
+# ─── Modification Enums ───────────────────────────────────────────────────────
+# These are appended below the existing models.
+# BookingStatusHistory is already defined above so BookingModification
+# can reference it directly with no import.
+
+class ModificationType(models.TextChoices):
+    RESCHEDULE = "reschedule", "Reschedule"
+    EXTEND     = "extend",     "Extend Stay"
+
+
+class ModificationStatus(models.TextChoices):
+    PENDING          = "pending",          "Pending"
+    AWAITING_PAYMENT = "awaiting_payment", "Awaiting Payment"
+    AWAITING_REFUND  = "awaiting_refund",  "Awaiting Refund"
+    CONFIRMED        = "confirmed",        "Confirmed"
+    PAYMENT_FAILED   = "payment_failed",   "Payment Failed"
+    CANCELLED        = "cancelled",        "Cancelled"
+
+
+# ─── BookingModification ──────────────────────────────────────────────────────
+
+class BookingModification(models.Model):
+    """
+    Represents one reschedule or extend-stay request by a guest.
+
+    Lifecycle
+    ---------
+    PENDING → AWAITING_PAYMENT → CONFIRMED     (additional charge)
+    PENDING → AWAITING_REFUND  → CONFIRMED     (refund due)
+    PENDING → CONFIRMED                        (no price difference)
+    PENDING → PAYMENT_FAILED                   (charge failed)
+    PENDING → CANCELLED                        (user abandoned)
+
+    The booking's check_in / check_out / total_price are only updated
+    when status transitions to CONFIRMED.
+    """
+
+    PROCESSING_FEE_RATE = Decimal("0.035")   # 3.5 % non-refundable PayMongo fee
+
+    booking = models.ForeignKey(
+        Booking,
+        on_delete=models.CASCADE,
+        related_name="modifications",
+    )
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="booking_modifications",
+    )
+
+    modification_type = models.CharField(
+        max_length=15,
+        choices=ModificationType.choices,
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=ModificationStatus.choices,
+        default=ModificationStatus.PENDING,
+        db_index=True,
+    )
+
+    # ── Original snapshot (before modification) ───────────────────────────
+    original_check_in  = models.DateField()
+    original_check_out = models.DateField()
+    original_nights    = models.PositiveIntegerField()
+    original_total     = models.DecimalField(max_digits=10, decimal_places=2)
+
+    # ── Requested new dates ───────────────────────────────────────────────
+    new_check_in  = models.DateField()
+    new_check_out = models.DateField()
+    new_nights    = models.PositiveIntegerField()
+
+    # ── Recalculated price fields ─────────────────────────────────────────
+    new_room_price_snapshot = models.DecimalField(max_digits=10, decimal_places=2)
+    new_subtotal            = models.DecimalField(max_digits=10, decimal_places=2)
+    new_tax                 = models.DecimalField(max_digits=10, decimal_places=2)
+    new_service_fee         = models.DecimalField(max_digits=10, decimal_places=2)
+    new_total               = models.DecimalField(max_digits=10, decimal_places=2)
+
+    # ── Financial delta ───────────────────────────────────────────────────
+    # positive  → guest owes more   (additional payment)
+    # negative  → guest gets refund
+    price_difference = models.DecimalField(
+        max_digits=10, decimal_places=2, default=Decimal("0")
+    )
+
+    # For REFUND case only — deductions from raw difference
+    processing_fee_deduction = models.DecimalField(
+        max_digits=10, decimal_places=2, default=Decimal("0"),
+        help_text="Non-refundable payment processing fee deducted from refund.",
+    )
+    penalty_deduction = models.DecimalField(
+        max_digits=10, decimal_places=2, default=Decimal("0"),
+        help_text="Applicable penalty (e.g. same-day reschedule) deducted from refund.",
+    )
+    net_refund_amount = models.DecimalField(
+        max_digits=10, decimal_places=2, default=Decimal("0"),
+        help_text="Actual refund amount after all deductions.",
+    )
+
+    # ── Timestamps ────────────────────────────────────────────────────────
+    created_at   = models.DateTimeField(auto_now_add=True)
+    updated_at   = models.DateTimeField(auto_now=True)
+    confirmed_at = models.DateTimeField(null=True, blank=True)
+
+    # Optional note from staff or system
+    note = models.TextField(blank=True)
+
+    class Meta:
+        db_table = "booking_modifications"
+        ordering = ["-created_at"]
+        indexes  = [
+            models.Index(fields=["booking", "status"]),
+            models.Index(fields=["modification_type", "status"]),
+        ]
+
+    def __str__(self):
+        return (
+            f"Modification #{self.pk} [{self.modification_type}] "
+            f"Booking {self.booking_id} → {self.status}"
+        )
+
+    # ── Helpers ───────────────────────────────────────────────────────────
+
+    @property
+    def requires_additional_payment(self) -> bool:
+        return self.price_difference > Decimal("0")
+
+    @property
+    def requires_refund(self) -> bool:
+        return self.price_difference < Decimal("0")
+
+    @property
+    def no_price_change(self) -> bool:
+        return self.price_difference == Decimal("0")
+
+    def compute_penalty(self) -> Decimal:
+        """
+        Returns a penalty amount for same-day reschedules.
+        Same-day = modification is requested on the original check-in date.
+        Penalty = 10 % of original total.
+        """
+        today = timezone.now().date()
+        if today == self.original_check_in:
+            return (self.original_total * Decimal("0.10")).quantize(Decimal("0.01"))
+        return Decimal("0")
+
+    def commit_to_booking(self, changed_by=None):
+        """
+        Apply the approved modification to the parent Booking.
+        Must only be called when status == CONFIRMED.
+        Wrapped in a transaction by the caller.
+
+        BookingStatusHistory is defined above in this same file —
+        no import needed.
+        """
+        booking = self.booking
+        booking.check_in            = self.new_check_in
+        booking.check_out           = self.new_check_out
+        booking.nights              = self.new_nights
+        booking.room_price_snapshot = self.new_room_price_snapshot
+        booking.subtotal            = self.new_subtotal
+        booking.tax                 = self.new_tax
+        booking.service_fee         = self.new_service_fee
+        booking.total_price         = self.new_total
+        booking.save(update_fields=[
+            "check_in", "check_out", "nights",
+            "room_price_snapshot", "subtotal", "tax", "service_fee",
+            "total_price", "updated_at",
+        ])
+
+        self.status       = ModificationStatus.CONFIRMED
+        self.confirmed_at = timezone.now()
+        self.save(update_fields=["status", "confirmed_at", "updated_at"])
+
+        BookingStatusHistory.objects.create(
+            booking    = booking,
+            old_status = booking.status,
+            new_status = booking.status,   # booking status itself does not change
+            changed_by = changed_by,
+            note       = (
+                f"[{self.get_modification_type_display()}] "
+                f"Dates updated: {self.original_check_in} → {self.original_check_out} "
+                f"changed to {self.new_check_in} → {self.new_check_out}. "
+                f"New total: ₱{self.new_total}."
+            ),
+        )
+        return self
+
+
+# ─── ModificationPayment ──────────────────────────────────────────────────────
+
+class ModificationPayment(models.Model):
+    """
+    Links a BookingModification to the Payment record that settled it.
+    A modification may have at most one linked payment (charge or refund).
+    """
+
+    modification = models.OneToOneField(
+        BookingModification,
+        on_delete=models.CASCADE,
+        related_name="modification_payment",
+    )
+    payment = models.ForeignKey(
+        "payments.Payment",
+        on_delete=models.PROTECT,
+        related_name="modification_payments",
+        null=True,
+        blank=True,
+    )
+    refund = models.ForeignKey(
+        "payments.Refund",
+        on_delete=models.SET_NULL,
+        related_name="modification_refunds",
+        null=True,
+        blank=True,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "modification_payments"
+
+    def __str__(self):
+        return f"ModPayment — Mod #{self.modification_id}"

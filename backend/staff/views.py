@@ -2,15 +2,17 @@
 staff/views.py
 
 All Staff Management API views for the Cebu Mini Hotel System.
-Refactored to enforce strict RBAC per role definitions:
+Enforces strict RBAC per role definitions:
 
   admin        — Full access.
   manager      — Operational oversight. Cannot control staff accounts.
   receptionist — Reservation management + own shifts + own activity log.
   front_desk   — Check-in / check-out / walk-ins. Own shifts.
+                 Can report maintenance issues and incidents.
   housekeeping — Own assigned cleaning tasks + own shifts.
+                 Can report maintenance issues and incidents.
   maintenance  — Own assigned maintenance tasks + own shifts.
-  security     — Incident logs + own shifts.
+  security     — ALL incident logs (shared awareness). Can create + edit own.
 
 All permission checks use effective_role (respects temp_role overrides).
 """
@@ -35,7 +37,9 @@ from .filters import (
     StaffProfileFilter,
     CleaningTaskFilter,
     MaintenanceTaskFilter,
+    IncidentLogFilter,
     StaffActivityLogFilter,
+    MaintenanceRequestFilter,
 )
 from .models import (
     StaffProfile,
@@ -48,6 +52,7 @@ from .models import (
     MaintenanceTask,
     MaintenanceStatus,
     IncidentLog,
+    MaintenanceRequest,
 )
 from .permissions import (
     IsStaff,
@@ -63,6 +68,12 @@ from .permissions import (
     CanCreateIncidents,
     CanViewReports,
     IsAssignedStaffOrAdmin,
+    IsIncidentOwnerOrAdmin,
+    CanSubmitMaintenanceRequest,
+    CanViewMaintenanceRequests,
+    CanManageMaintenanceRequests,
+    CanReportIncident,
+    CanViewOwnIncidents,
 )
 from .serializers import (
     StaffProfileListSerializer,
@@ -80,6 +91,10 @@ from .serializers import (
     MaintenanceTaskSerializer,
     MaintenanceTaskStatusSerializer,
     IncidentLogSerializer,
+    MaintenanceRequestSerializer,
+    MaintenanceRequestCreateSerializer,
+    MaintenanceRequestReviewSerializer,
+    MaintenanceRequestConvertSerializer,
 )
 from .services import ReportService
 
@@ -114,13 +129,11 @@ def _get_profile_or_404(pk):
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # ── STAFF MEMBER MANAGEMENT
-# ── Admin only: create, delete, promote, deactivate, assign temp roles.
-# ── Manager:    read-only view of list and profiles.
 # ═══════════════════════════════════════════════════════════════════════════════
 
 class StaffListCreateView(generics.ListCreateAPIView):
     """
-    GET  /api/staff/members/  — List all staff (Admin + Manager, read-only for Manager)
+    GET  /api/staff/members/  — List all staff (Admin + Manager)
     POST /api/staff/members/  — Create a new staff account (Admin only)
     """
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -131,8 +144,8 @@ class StaffListCreateView(generics.ListCreateAPIView):
 
     def get_permissions(self):
         if self.request.method == "POST":
-            return [IsAdminStaff()]       # Admin only — Manager cannot create staff
-        return [IsAdminOrManager()]       # Admin + Manager can view list
+            return [IsAdminStaff()]
+        return [IsAdminOrManager()]
 
     def get_queryset(self):
         return StaffProfile.objects.select_related("user").all()
@@ -158,11 +171,7 @@ class StaffListCreateView(generics.ListCreateAPIView):
 
 
 class StaffDetailView(APIView):
-    """
-    GET    /api/staff/members/<pk>/  — Full profile (Admin + Manager)
-    PATCH  /api/staff/members/<pk>/  — Update basic fields (Admin only)
-    DELETE /api/staff/members/<pk>/  — Hard-delete account (Admin only)
-    """
+    """GET / PATCH / DELETE /api/staff/members/<pk>/"""
 
     def get_permissions(self):
         if self.request.method in ("PATCH", "DELETE"):
@@ -182,8 +191,7 @@ class StaffDetailView(APIView):
         serializer = StaffUpdateSerializer(profile, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
-        _log_action(request, "update_staff",
-                    f"Updated profile for {profile.user.email}",
+        _log_action(request, "update_staff", f"Updated profile for {profile.user.email}",
                     target_user_id=profile.user_id)
         return Response(StaffProfileDetailSerializer(profile).data)
 
@@ -195,17 +203,13 @@ class StaffDetailView(APIView):
             return Response({"error": "You cannot delete your own account."},
                             status=status.HTTP_400_BAD_REQUEST)
         email = profile.user.email
-        profile.user.delete()   # CASCADE deletes the StaffProfile
+        profile.user.delete()
         _log_action(request, "delete_staff", f"Deleted staff account: {email}")
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class StaffRoleChangeView(APIView):
-    """
-    POST /api/staff/members/<pk>/promote/
-    Admin only. Cannot change own role.
-    Manager cannot promote or demote anyone.
-    """
+    """POST /api/staff/members/<pk>/promote/"""
     permission_classes = [IsAdminStaff]
 
     def post(self, request, pk):
@@ -215,12 +219,10 @@ class StaffRoleChangeView(APIView):
         if profile.user == request.user:
             return Response({"error": "You cannot change your own role."},
                             status=status.HTTP_400_BAD_REQUEST)
-
-        old_role = profile.role
+        old_role   = profile.role
         serializer = StaffRoleChangeSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
         serializer.save(profile)
-
         _log_action(
             request, "role_change",
             f"Changed role for {profile.user.email}: {old_role} → {profile.role}",
@@ -232,11 +234,7 @@ class StaffRoleChangeView(APIView):
 
 
 class StaffTempRoleView(APIView):
-    """
-    POST   /api/staff/members/<pk>/temp-role/  — Assign temporary role override.
-    DELETE /api/staff/members/<pk>/temp-role/  — Remove temp role.
-    Admin only. Manager cannot assign temp roles.
-    """
+    """POST/DELETE /api/staff/members/<pk>/temp-role/"""
     permission_classes = [IsAdminStaff]
 
     def post(self, request, pk):
@@ -261,17 +259,13 @@ class StaffTempRoleView(APIView):
         profile.temp_role            = None
         profile.temp_role_expires_at = None
         profile.save(update_fields=["temp_role", "temp_role_expires_at", "updated_at"])
-        _log_action(request, "remove_temp_role",
-                    f"Removed temp role from {profile.user.email}",
+        _log_action(request, "remove_temp_role", f"Removed temp role from {profile.user.email}",
                     target_user_id=profile.user_id)
         return Response(StaffProfileDetailSerializer(profile).data)
 
 
 class StaffDeactivateView(APIView):
-    """
-    POST /api/staff/members/<pk>/deactivate/
-    Admin only. Manager cannot deactivate staff.
-    """
+    """POST /api/staff/members/<pk>/deactivate/"""
     permission_classes = [IsAdminStaff]
 
     def post(self, request, pk):
@@ -297,10 +291,7 @@ class StaffDeactivateView(APIView):
 
 
 class StaffReactivateView(APIView):
-    """
-    POST /api/staff/members/<pk>/reactivate/
-    Admin only. Manager cannot reactivate staff.
-    """
+    """POST /api/staff/members/<pk>/reactivate/"""
     permission_classes = [IsAdminStaff]
 
     def post(self, request, pk):
@@ -330,8 +321,19 @@ class StaffReactivateView(APIView):
 class StaffMonitoringView(generics.ListAPIView):
     """
     GET /api/staff/monitoring/
-    Real-time staff overview. Admin + Manager only.
+
+    Presence sweep runs on every request:
+      - Clears expired temp roles
+      - Auto-marks offline any staff whose last_seen_at is older than
+        PRESENCE_STALE_SECONDS (180 s = 3 minutes).
+        This is the server-side complement to the frontend heartbeat.
+        If the browser fails to send a clean offline beacon, the server
+        catches it here on the next monitoring poll (every 15 s from admin UI).
     """
+    # Staff member is considered stale / offline if no heartbeat for this long.
+    # Must be > frontend HEARTBEAT_MS (90 s) + some buffer.
+    PRESENCE_STALE_SECONDS = 180  # 3 minutes
+
     serializer_class   = StaffProfileListSerializer
     permission_classes = [IsAdminOrManager]
     filter_backends    = [DjangoFilterBackend, filters.SearchFilter]
@@ -342,18 +344,38 @@ class StaffMonitoringView(generics.ListAPIView):
         return StaffProfile.objects.select_related("user").filter(is_active=True)
 
     def list(self, request, *args, **kwargs):
+        from datetime import timedelta
         profiles = list(self.filter_queryset(self.get_queryset()))
+        now      = timezone.now()
+        stale_cutoff = now - timedelta(seconds=self.PRESENCE_STALE_SECONDS)
 
-        # Clear expired temp roles in bulk
-        now = timezone.now()
-        to_clear = [
-            p for p in profiles
-            if p.temp_role and p.temp_role_expires_at and now >= p.temp_role_expires_at
-        ]
-        for p in to_clear:
-            p.temp_role            = None
-            p.temp_role_expires_at = None
-            p.save(update_fields=["temp_role", "temp_role_expires_at", "updated_at"])
+        stale_pks = []
+        for p in profiles:
+            # ── Clear expired temp roles ──────────────────────────────────
+            if p.temp_role and p.temp_role_expires_at and now >= p.temp_role_expires_at:
+                p.temp_role            = None
+                p.temp_role_expires_at = None
+                p.save(update_fields=["temp_role", "temp_role_expires_at", "updated_at"])
+
+            # ── Stale presence sweep ──────────────────────────────────────
+            # Mark offline if:
+            #   - currently online or idle (not already offline)
+            #   - last_seen_at is older than the stale cutoff
+            #     OR last_seen_at is null (never sent a heartbeat)
+            if p.online_status != StaffOnlineStatus.OFFLINE:
+                is_stale = (
+                    p.last_seen_at is None
+                    or p.last_seen_at < stale_cutoff
+                )
+                if is_stale:
+                    p.online_status = StaffOnlineStatus.OFFLINE
+                    stale_pks.append(p.pk)
+
+        # Bulk update stale profiles in one query
+        if stale_pks:
+            StaffProfile.objects.filter(pk__in=stale_pks).update(
+                online_status=StaffOnlineStatus.OFFLINE
+            )
 
         by_role = {}
         for role_key, role_label in StaffRole.choices:
@@ -369,14 +391,19 @@ class StaffMonitoringView(generics.ListAPIView):
             "total_active": len(profiles),
             "total_online": sum(1 for p in profiles if p.online_status == StaffOnlineStatus.ONLINE),
             "by_role":      by_role,
+            "swept_offline": len(stale_pks),   # useful for debugging
+            "generated_at":  now,
         })
 
 
 class StaffPresenceUpdateView(APIView):
     """
     POST /api/staff/presence/
-    Self-service heartbeat. Any active staff member can update their own status.
-    Body: { "status": "online|idle|offline", "current_task": "..." }
+
+    Called by usePresenceHeartbeat.js every 90 seconds from every layout.
+    Body: { status: "online" | "idle" | "offline", current_task?: string }
+
+    Always updates last_seen_at so the monitoring sweep can detect stale sessions.
     """
     permission_classes = [IsStaff]
 
@@ -384,19 +411,15 @@ class StaffPresenceUpdateView(APIView):
         profile = getattr(request.user, "staff_profile", None)
         if not profile:
             return Response({"error": "No staff profile found."}, status=status.HTTP_400_BAD_REQUEST)
-
         new_status   = request.data.get("status", "online")
         current_task = request.data.get("current_task", profile.current_task)
-
         if new_status not in StaffOnlineStatus.values:
             return Response({"error": f"Invalid status '{new_status}'."},
                             status=status.HTTP_400_BAD_REQUEST)
-
         profile.online_status = new_status
         profile.last_seen_at  = timezone.now()
         profile.current_task  = current_task
         profile.save(update_fields=["online_status", "last_seen_at", "current_task", "updated_at"])
-
         return Response({
             "status":       profile.online_status,
             "current_task": profile.current_task,
@@ -406,33 +429,24 @@ class StaffPresenceUpdateView(APIView):
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # ── SHIFTS
-# ── Admin + Manager: create, edit, delete, view all.
-# ── All staff:       view own shifts only (/staff/my-shifts/).
 # ═══════════════════════════════════════════════════════════════════════════════
 
 class ShiftListCreateView(generics.ListCreateAPIView):
-    """
-    GET  /api/staff/shifts/  — List all shifts (Admin + Manager)
-    POST /api/staff/shifts/  — Schedule a shift (Admin + Manager)
-    """
+    """GET/POST /api/staff/shifts/"""
     permission_classes = [IsAdminOrManager]
     filter_backends    = [DjangoFilterBackend, filters.OrderingFilter]
     ordering_fields    = ["start_time", "end_time", "status"]
     ordering           = ["-start_time"]
 
     def get_serializer_class(self):
-        if self.request.method == "POST":
-            return ShiftCreateSerializer
-        return ShiftSerializer
+        return ShiftCreateSerializer if self.request.method == "POST" else ShiftSerializer
 
     def get_queryset(self):
         qs = Shift.objects.select_related("staff__user")
-        staff_id = self.request.query_params.get("staff_id")
-        if staff_id:
-            qs = qs.filter(staff_id=staff_id)
-        shift_status = self.request.query_params.get("status")
-        if shift_status:
-            qs = qs.filter(status=shift_status)
+        if sid := self.request.query_params.get("staff_id"):
+            qs = qs.filter(staff_id=sid)
+        if s := self.request.query_params.get("status"):
+            qs = qs.filter(status=s)
         return qs
 
     def perform_create(self, serializer):
@@ -442,21 +456,14 @@ class ShiftListCreateView(generics.ListCreateAPIView):
 
 
 class ShiftDetailView(generics.RetrieveUpdateDestroyAPIView):
-    """
-    GET / PATCH / DELETE /api/staff/shifts/<pk>/
-    Admin + Manager only.
-    """
+    """GET/PATCH/DELETE /api/staff/shifts/<pk>/"""
     permission_classes = [IsAdminOrManager]
     serializer_class   = ShiftSerializer
     queryset           = Shift.objects.select_related("staff__user")
 
 
 class MyShiftView(generics.ListAPIView):
-    """
-    GET /api/staff/my-shifts/
-    Any active staff member views their own assigned shifts.
-    Receptionists, Front Desk, Housekeeping, Maintenance, Security all use this.
-    """
+    """GET /api/staff/my-shifts/"""
     serializer_class   = ShiftSerializer
     permission_classes = [IsStaff]
 
@@ -464,20 +471,16 @@ class MyShiftView(generics.ListAPIView):
         profile = getattr(self.request.user, "staff_profile", None)
         if not profile:
             return Shift.objects.none()
-        return Shift.objects.select_related("staff__user").filter(staff=profile).order_by("-start_time")
+        return Shift.objects.select_related("staff__user").filter(
+            staff=profile).order_by("-start_time")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # ── ACTIVITY LOGS
-# ── Admin + Manager: full audit trail.
-# ── All staff:       own activity log only.
 # ═══════════════════════════════════════════════════════════════════════════════
 
 class StaffActivityLogListView(generics.ListAPIView):
-    """
-    GET /api/staff/activity-logs/
-    Full audit trail. Admin + Manager only.
-    """
+    """GET /api/staff/activity-logs/"""
     serializer_class   = StaffActivityLogSerializer
     permission_classes = [IsAdminOrManager]
     filter_backends    = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -491,11 +494,7 @@ class StaffActivityLogListView(generics.ListAPIView):
 
 
 class MyActivityLogView(generics.ListAPIView):
-    """
-    GET /api/staff/activity-logs/me/
-    Any staff member views their own activity log.
-    Available to all roles including receptionist, security, etc.
-    """
+    """GET /api/staff/activity-logs/me/"""
     serializer_class   = StaffActivityLogSerializer
     permission_classes = [IsStaff]
 
@@ -508,16 +507,10 @@ class MyActivityLogView(generics.ListAPIView):
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # ── CLEANING TASKS
-# ── Admin + Manager:  create, assign, view all, update any.
-# ── Housekeeping:     view own assigned tasks only, update status on own tasks.
-# ── All other roles:  no access.
 # ═══════════════════════════════════════════════════════════════════════════════
 
 class CleaningTaskListCreateView(generics.ListCreateAPIView):
-    """
-    GET  /api/staff/cleaning/  — Admin/Manager: all tasks. Housekeeping: own tasks.
-    POST /api/staff/cleaning/  — Admin/Manager only. Housekeeping cannot create tasks.
-    """
+    """GET/POST /api/staff/cleaning/"""
     serializer_class = CleaningTaskSerializer
     filter_backends  = [DjangoFilterBackend, filters.OrderingFilter]
     filterset_class  = CleaningTaskFilter
@@ -526,45 +519,39 @@ class CleaningTaskListCreateView(generics.ListCreateAPIView):
 
     def get_permissions(self):
         if self.request.method == "POST":
-            return [CanManageHousekeeping()]      # Admin + Manager only
-        return [CanAccessCleaningTasks()]         # Admin + Manager + Housekeeping
+            return [CanManageHousekeeping()]
+        return [CanAccessCleaningTasks()]
 
     def get_queryset(self):
-        qs = CleaningTask.objects.select_related("room", "assigned_to__user")
+        qs      = CleaningTask.objects.select_related("room", "assigned_to__user")
         profile = getattr(self.request.user, "staff_profile", None)
-        # Housekeeping staff see only their own assigned tasks
         if profile and profile.effective_role == StaffRole.HOUSEKEEPING:
             return qs.filter(assigned_to=profile)
-        # Admin and Manager see all tasks
         return qs
 
     def perform_create(self, serializer):
         task = serializer.save(created_by=self.request.user)
-        _log_action(
-            self.request, "create_cleaning_task",
-            f"Created cleaning task for Room {task.room.room_number}",
-            room_id=task.room_id,
-        )
+        _log_action(self.request, "create_cleaning_task",
+                    f"Created cleaning task for Room {task.room.room_number}",
+                    room_id=task.room_id)
+        if task.assigned_to:
+            try:
+                from notifications.service import NotificationService
+                NotificationService.notify_cleaning_assigned(
+                    task=task, assigned_by=self.request.user)
+            except Exception as exc:
+                logger.warning("notify_cleaning_assigned failed: %s", exc)
 
 
 class CleaningTaskDetailView(generics.RetrieveUpdateAPIView):
-    """
-    GET   /api/staff/cleaning/<pk>/  — Admin/Manager/Housekeeping (own task).
-    PATCH /api/staff/cleaning/<pk>/  — Admin/Manager only (field updates).
-                                       Housekeeping uses /status/ endpoint instead.
-    """
+    """GET/PATCH /api/staff/cleaning/<pk>/"""
     serializer_class   = CleaningTaskSerializer
     permission_classes = [CanAccessCleaningTasks, IsAssignedStaffOrAdmin]
     queryset           = CleaningTask.objects.select_related("room", "assigned_to__user")
 
 
 class CleaningTaskStatusView(APIView):
-    """
-    PATCH /api/staff/cleaning/<pk>/status/
-    Status transition with validation.
-    Housekeeping: own tasks only (dirty→cleaning→clean or cleaning→dirty).
-    Admin/Manager: any task.
-    """
+    """PATCH /api/staff/cleaning/<pk>/status/"""
     permission_classes = [CanAccessCleaningTasks]
 
     def patch(self, request, pk):
@@ -574,40 +561,76 @@ class CleaningTaskStatusView(APIView):
             return Response({"error": "Cleaning task not found."}, status=status.HTTP_404_NOT_FOUND)
 
         profile = getattr(request.user, "staff_profile", None)
-        # Housekeeping can only update tasks assigned to them
         if profile and profile.effective_role == StaffRole.HOUSEKEEPING:
             if task.assigned_to != profile:
-                return Response(
-                    {"error": "You can only update tasks assigned to you."},
-                    status=status.HTTP_403_FORBIDDEN,
-                )
+                return Response({"error": "You can only update tasks assigned to you."},
+                                status=status.HTTP_403_FORBIDDEN)
 
-        serializer = CleaningTaskStatusSerializer(
-            data=request.data, context={"task": task}
-        )
+        serializer = CleaningTaskStatusSerializer(data=request.data, context={"task": task})
         serializer.is_valid(raise_exception=True)
         task = serializer.save(task, actor=request.user)
+        _log_action(request, "update_cleaning_status",
+                    f"Cleaning task {pk} → {task.status} (Room {task.room.room_number})",
+                    room_id=task.room_id)
+        return Response(CleaningTaskSerializer(task).data)
 
-        _log_action(
-            request, "update_cleaning_status",
-            f"Cleaning task {pk} → {task.status} (Room {task.room.room_number})",
-            room_id=task.room_id,
-        )
+
+class CleaningTaskAssignView(APIView):
+    """PATCH /api/staff/cleaning/<pk>/assign/"""
+    permission_classes = [CanManageHousekeeping]
+
+    def patch(self, request, pk):
+        try:
+            task = CleaningTask.objects.select_related("room", "assigned_to__user").get(pk=pk)
+        except CleaningTask.DoesNotExist:
+            return Response({"error": "Cleaning task not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        assigned_to_pk = request.data.get("assigned_to")
+
+        if assigned_to_pk is None:
+            old          = task.assigned_to
+            task.assigned_to = None
+            task.save(update_fields=["assigned_to", "updated_at"])
+            _log_action(request, "unassign_cleaning_task",
+                        f"Unassigned cleaning task {pk} (Room {task.room.room_number})"
+                        + (f" from {old}" if old else ""), room_id=task.room_id)
+            return Response(CleaningTaskSerializer(task).data)
+
+        try:
+            new_assignee = StaffProfile.objects.select_related("user").get(
+                pk=assigned_to_pk, is_active=True)
+        except StaffProfile.DoesNotExist:
+            return Response({"error": "Staff profile not found or inactive."},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        if new_assignee.effective_role != StaffRole.HOUSEKEEPING:
+            return Response({"error": "Only Housekeeping staff can be assigned cleaning tasks."},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        old              = task.assigned_to
+        task.assigned_to = new_assignee
+        task.save(update_fields=["assigned_to", "updated_at"])
+        _log_action(request, "assign_cleaning_task",
+                    f"Assigned cleaning task {pk} (Room {task.room.room_number}) "
+                    f"to {new_assignee.user.email}"
+                    + (f" (was {old.user.email})" if old else ""), room_id=task.room_id)
+
+        if old != new_assignee:
+            try:
+                from notifications.service import NotificationService
+                NotificationService.notify_cleaning_assigned(task=task, assigned_by=request.user)
+            except Exception as exc:
+                logger.warning("notify_cleaning_assigned failed: %s", exc)
+
         return Response(CleaningTaskSerializer(task).data)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # ── MAINTENANCE TASKS
-# ── Admin + Manager:  create, assign, view all, update any.
-# ── Maintenance:      view own assigned tasks only, update status on own tasks.
-# ── All other roles:  no access.
 # ═══════════════════════════════════════════════════════════════════════════════
 
 class MaintenanceTaskListCreateView(generics.ListCreateAPIView):
-    """
-    GET  /api/staff/maintenance/  — Admin/Manager: all. Maintenance: own only.
-    POST /api/staff/maintenance/  — Admin/Manager only.
-    """
+    """GET/POST /api/staff/maintenance/"""
     serializer_class = MaintenanceTaskSerializer
     filter_backends  = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class  = MaintenanceTaskFilter
@@ -617,42 +640,32 @@ class MaintenanceTaskListCreateView(generics.ListCreateAPIView):
 
     def get_permissions(self):
         if self.request.method == "POST":
-            return [CanManageMaintenance()]           # Admin + Manager only
-        return [CanAccessMaintenanceTasks()]          # Admin + Manager + Maintenance
+            return [CanManageMaintenance()]
+        return [CanAccessMaintenanceTasks()]
 
     def get_queryset(self):
-        qs = MaintenanceTask.objects.select_related("room", "assigned_to__user")
+        qs      = MaintenanceTask.objects.select_related("room", "assigned_to__user")
         profile = getattr(self.request.user, "staff_profile", None)
-        # Maintenance staff see only their own assigned tasks
         if profile and profile.effective_role == StaffRole.MAINTENANCE:
             return qs.filter(assigned_to=profile)
         return qs
 
     def perform_create(self, serializer):
         task = serializer.save(created_by=self.request.user)
-        _log_action(
-            self.request, "create_maintenance_task",
-            f"Created maintenance task '{task.title}' for Room {task.room.room_number}",
-            room_id=task.room_id,
-        )
+        _log_action(self.request, "create_maintenance_task",
+                    f"Created maintenance task '{task.title}' for Room {task.room.room_number}",
+                    room_id=task.room_id)
 
 
 class MaintenanceTaskDetailView(generics.RetrieveUpdateAPIView):
-    """
-    GET   /api/staff/maintenance/<pk>/  — Admin/Manager/Maintenance (own task).
-    PATCH /api/staff/maintenance/<pk>/  — Admin/Manager only.
-    """
+    """GET/PATCH /api/staff/maintenance/<pk>/"""
     serializer_class   = MaintenanceTaskSerializer
     permission_classes = [CanAccessMaintenanceTasks, IsAssignedStaffOrAdmin]
     queryset           = MaintenanceTask.objects.select_related("room", "assigned_to__user")
 
 
 class MaintenanceTaskStatusView(APIView):
-    """
-    PATCH /api/staff/maintenance/<pk>/status/
-    Maintenance: own tasks only (pending→in_progress→completed or cancelled).
-    Admin/Manager: any task.
-    """
+    """PATCH /api/staff/maintenance/<pk>/status/"""
     permission_classes = [CanAccessMaintenanceTasks]
 
     def patch(self, request, pk):
@@ -662,95 +675,167 @@ class MaintenanceTaskStatusView(APIView):
             return Response({"error": "Maintenance task not found."}, status=status.HTTP_404_NOT_FOUND)
 
         profile = getattr(request.user, "staff_profile", None)
-        # Maintenance staff can only update tasks assigned to them
         if profile and profile.effective_role == StaffRole.MAINTENANCE:
             if task.assigned_to != profile:
-                return Response(
-                    {"error": "You can only update tasks assigned to you."},
-                    status=status.HTTP_403_FORBIDDEN,
-                )
+                return Response({"error": "You can only update tasks assigned to you."},
+                                status=status.HTTP_403_FORBIDDEN)
 
-        serializer = MaintenanceTaskStatusSerializer(
-            data=request.data, context={"task": task}
-        )
+        serializer = MaintenanceTaskStatusSerializer(data=request.data, context={"task": task})
         serializer.is_valid(raise_exception=True)
         task = serializer.save(task, actor=request.user)
+        _log_action(request, "update_maintenance_status",
+                    f"Maintenance task {pk} '{task.title}' → {task.status}",
+                    room_id=task.room_id)
+        return Response(MaintenanceTaskSerializer(task).data)
 
-        _log_action(
-            request, "update_maintenance_status",
-            f"Maintenance task {pk} '{task.title}' → {task.status}",
-            room_id=task.room_id,
-        )
+
+class MaintenanceTaskNotesView(APIView):
+    """
+    PATCH /api/staff/maintenance/<pk>/notes/
+
+    Allows maintenance staff to append progress notes to a task
+    without changing its status. Admin/Manager can also use this.
+    Body: { "staff_notes": "text" }
+    """
+    permission_classes = [CanAccessMaintenanceTasks]
+
+    def patch(self, request, pk):
+        try:
+            task = MaintenanceTask.objects.select_related("assigned_to").get(pk=pk)
+        except MaintenanceTask.DoesNotExist:
+            return Response({"error": "Maintenance task not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        profile = getattr(request.user, "staff_profile", None)
+        if profile and profile.effective_role == StaffRole.MAINTENANCE:
+            if task.assigned_to != profile:
+                return Response({"error": "You can only add notes to tasks assigned to you."},
+                                status=status.HTTP_403_FORBIDDEN)
+
+        notes_text = request.data.get("staff_notes", "").strip()
+        if not notes_text:
+            return Response({"error": "staff_notes is required."},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        now        = timezone.now().strftime("%Y-%m-%d %H:%M")
+        actor_name = request.user.get_full_name() or request.user.email
+        entry      = f"[{now}] {actor_name}: {notes_text}"
+        current    = task.staff_notes or ""
+        task.staff_notes = f"{current}\n{entry}".strip()
+        task.save(update_fields=["staff_notes", "updated_at"])
+
+        _log_action(request, "add_maintenance_notes",
+                    f"Added notes to maintenance task {pk} '{task.title}'",
+                    room_id=task.room_id)
         return Response(MaintenanceTaskSerializer(task).data)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # ── INCIDENT LOGS
-# ── Admin:    full access (view + create + edit).
-# ── Manager:  view and monitor only (cannot create).
-# ── Security: create + view + edit/resolve their own logs.
-# ── All other roles: no access.
+# ── Admin/Manager:   view all, edit all.
+# ── Security:        view ALL, create, edit own only.
+# ── Front Desk / HK: create, view own only, read-only after submission.
 # ═══════════════════════════════════════════════════════════════════════════════
 
 class IncidentLogListCreateView(generics.ListCreateAPIView):
     """
-    GET  /api/staff/incidents/  — Admin, Manager, Security.
-    POST /api/staff/incidents/  — Admin and Security only. Manager cannot create.
+    GET  /api/staff/incidents/
+      Admin/Manager/Security: ALL incidents.
+      Front Desk/Housekeeping: ONLY incidents they logged.
+
+    POST /api/staff/incidents/
+      Admin, Security, Front Desk, Housekeeping.
+      Manager: view-only (cannot create).
     """
     serializer_class = IncidentLogSerializer
-    filter_backends  = [DjangoFilterBackend, filters.OrderingFilter]
-    ordering_fields  = ["created_at", "severity", "incident_type"]
+    filter_backends  = [DjangoFilterBackend, filters.OrderingFilter, filters.SearchFilter]
+    filterset_class  = IncidentLogFilter
+    search_fields    = ["title", "description", "location"]
+    ordering_fields  = ["created_at", "severity", "incident_type", "status"]
     ordering         = ["-created_at"]
 
     def get_permissions(self):
         if self.request.method == "POST":
-            return [CanCreateIncidents()]      # Admin + Security only
-        return [CanAccessIncidents()]          # Admin + Manager + Security
+            return [CanReportIncident()]
+        return [CanViewOwnIncidents()]
 
     def get_queryset(self):
-        return IncidentLog.objects.select_related("logged_by__user")
+        qs      = IncidentLog.objects.select_related("logged_by__user")
+        profile = getattr(self.request.user, "staff_profile", None)
+        role    = profile.effective_role if profile else None
+        if role in (StaffRole.FRONT_DESK, StaffRole.HOUSEKEEPING):
+            return qs.filter(logged_by=profile)
+        return qs
 
     def perform_create(self, serializer):
-        profile = getattr(self.request.user, "staff_profile", None)
+        profile  = getattr(self.request.user, "staff_profile", None)
         incident = serializer.save(logged_by=profile)
-        _log_action(
-            self.request, "log_incident",
-            f"Logged incident: {incident.get_incident_type_display()} at {incident.location}",
-        )
+        _log_action(self.request, "log_incident",
+                    f"Logged incident: {incident.get_incident_type_display()} "
+                    f"at {incident.location or 'unspecified location'}")
+        try:
+            from notifications.service import NotificationService
+            NotificationService.notify_incident_reported(incident=incident)
+        except Exception as exc:
+            logger.warning("notify_incident_reported failed: %s", exc)
 
 
 class IncidentLogDetailView(generics.RetrieveUpdateAPIView):
     """
-    GET   /api/staff/incidents/<pk>/          — Admin, Manager, Security.
-    PATCH /api/staff/incidents/<pk>/          — Admin + Security only.
-                                                Manager cannot edit incidents.
+    GET   /api/staff/incidents/<pk>/  — all roles with access (scoped).
+    PATCH /api/staff/incidents/<pk>/  — Admin: any. Security: own. FD/HK: blocked.
     """
     serializer_class = IncidentLogSerializer
-    queryset         = IncidentLog.objects.select_related("logged_by__user")
+
+    def get_queryset(self):
+        qs      = IncidentLog.objects.select_related("logged_by__user")
+        profile = getattr(self.request.user, "staff_profile", None)
+        role    = profile.effective_role if profile else None
+        if role in (StaffRole.FRONT_DESK, StaffRole.HOUSEKEEPING):
+            return qs.filter(logged_by=profile)
+        return qs
 
     def get_permissions(self):
         if self.request.method in ("PATCH", "PUT"):
-            return [CanCreateIncidents()]      # Admin + Security can edit
-        return [CanAccessIncidents()]          # Admin + Manager + Security can view
+            return [CanCreateIncidents(), IsIncidentOwnerOrAdmin()]
+        return [CanViewOwnIncidents()]
+
+    def update(self, request, *args, **kwargs):
+        profile = getattr(request.user, "staff_profile", None)
+        role    = profile.effective_role if profile else None
+        if role in (StaffRole.FRONT_DESK, StaffRole.HOUSEKEEPING):
+            return Response(
+                {"error": "Front Desk and Housekeeping staff cannot edit incident reports "
+                           "after submission. Contact Admin or Security."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        return super().update(request, *args, **kwargs)
 
     def perform_update(self, serializer):
         incident = serializer.save()
-        # Auto-set resolved_at when marking resolved
         if incident.resolved and not incident.resolved_at:
             incident.resolved_at = timezone.now()
-            incident.save(update_fields=["resolved_at"])
+            incident.save(update_fields=["resolved_at", "updated_at"])
+        try:
+            from notifications.service import NotificationService
+            if incident.status == IncidentLog.IncidentStatus.RESOLVED:
+                NotificationService.notify_incident_resolved(incident=incident)
+            else:
+                NotificationService.notify_incident_updated(incident=incident)
+        except Exception as exc:
+            logger.warning("notify_incident_updated/resolved failed: %s", exc)
+        _log_action(
+            self.request, "update_incident",
+            f"Updated incident {incident.pk}: "
+            f"{incident.title or incident.get_incident_type_display()} → {incident.status}",
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # ── DASHBOARD OVERVIEW
-# ── Admin + Manager only.
 # ═══════════════════════════════════════════════════════════════════════════════
 
 class AdminDashboardView(APIView):
-    """
-    GET /api/staff/dashboard/
-    Real-time hotel operational overview. Admin + Manager only.
-    """
+    """GET /api/staff/dashboard/"""
     permission_classes = [IsAdminOrManager]
 
     def get(self, request):
@@ -783,6 +868,9 @@ class AdminDashboardView(APIView):
             "maintenance_in_progress": MaintenanceTask.objects.filter(status=MaintenanceStatus.IN_PROGRESS).count(),
         }
 
+        pending_requests = MaintenanceRequest.objects.filter(
+            status=MaintenanceRequest.RequestStatus.PENDING).count()
+
         staff_summary = {
             "total":   StaffProfile.objects.filter(is_active=True).count(),
             "online":  StaffProfile.objects.filter(is_active=True, online_status=StaffOnlineStatus.ONLINE).count(),
@@ -795,35 +883,27 @@ class AdminDashboardView(APIView):
             .aggregate(total=Sum("total_price"))["total"] or 0
         )
 
-        recent_logs    = StaffActivityLog.objects.select_related("staff__user").all()[:15]
+        recent_logs     = StaffActivityLog.objects.select_related("staff__user").all()[:15]
         recent_activity = StaffActivityLogSerializer(recent_logs, many=True).data
 
         return Response({
-            "rooms":           room_summary,
-            "bookings":        booking_summary,
-            "tasks":           task_summary,
-            "staff":           staff_summary,
-            "revenue_today":   float(revenue_today),
-            "recent_activity": recent_activity,
-            "generated_at":    now,
+            "rooms":                    room_summary,
+            "bookings":                 booking_summary,
+            "tasks":                    task_summary,
+            "pending_maintenance_requests": pending_requests,
+            "staff":                    staff_summary,
+            "revenue_today":            float(revenue_today),
+            "recent_activity":          recent_activity,
+            "generated_at":             now,
         })
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # ── REPORTS & ANALYTICS
-# ── Admin + Manager only.
 # ═══════════════════════════════════════════════════════════════════════════════
 
 class ReportView(APIView):
-    """
-    GET /api/staff/reports/
-    ?type=bookings|revenue|occupancy|guests|staff
-    &period=daily|weekly|monthly|yearly
-    &start_date=YYYY-MM-DD&end_date=YYYY-MM-DD
-    &export=csv|json
-
-    Admin + Manager only. All other roles return 403.
-    """
+    """GET /api/staff/reports/"""
     permission_classes = [CanViewReports]
 
     def get(self, request):
@@ -869,7 +949,6 @@ class ReportView(APIView):
 
 
 def _export_csv(data: dict, filename: str) -> HttpResponse:
-    """Convert a report dict to a CSV download response."""
     response = HttpResponse(content_type="text/csv")
     response["Content-Disposition"] = f'attachment; filename="{filename}"'
     rows = data.get("rows", [])
@@ -879,3 +958,202 @@ def _export_csv(data: dict, filename: str) -> HttpResponse:
     writer.writeheader()
     writer.writerows(rows)
     return response
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ── MAINTENANCE REQUESTS  (reporting layer — FD + HK → Admin/Manager)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class MaintenanceRequestListCreateView(generics.ListCreateAPIView):
+    """
+    GET  /api/staff/maintenance-requests/
+      Admin/Manager: ALL requests.
+      Front Desk/Housekeeping: ONLY their own.
+
+    POST /api/staff/maintenance-requests/
+      Front Desk, Housekeeping, Admin, Manager.
+      Maintenance and Security: no access.
+    """
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_class = MaintenanceRequestFilter
+    search_fields   = ["title", "description"]
+    ordering_fields = ["created_at", "status"]
+    ordering        = ["-created_at"]
+
+    def get_permissions(self):
+        if self.request.method == "POST":
+            return [CanSubmitMaintenanceRequest()]
+        return [CanViewMaintenanceRequests()]
+
+    def get_serializer_class(self):
+        if self.request.method == "POST":
+            return MaintenanceRequestCreateSerializer
+        return MaintenanceRequestSerializer
+
+    def get_queryset(self):
+        qs      = MaintenanceRequest.objects.select_related("reported_by", "room", "converted_task")
+        profile = getattr(self.request.user, "staff_profile", None)
+        role    = profile.effective_role if profile else None
+        if role in (StaffRole.FRONT_DESK, StaffRole.HOUSEKEEPING):
+            return qs.filter(reported_by=self.request.user)
+        return qs
+
+    def perform_create(self, serializer):
+        req = serializer.save(
+            reported_by=self.request.user,
+            status=MaintenanceRequest.RequestStatus.PENDING,
+        )
+        _log_action(self.request, "submit_maintenance_request",
+                    f"Submitted maintenance request: '{req.title}'",
+                    room_id=req.room_id)
+        try:
+            from notifications.service import NotificationService
+            NotificationService.notify_maintenance_request_created(request_obj=req)
+        except Exception as exc:
+            logger.warning("notify_maintenance_request_created failed: %s", exc)
+
+
+class MaintenanceRequestDetailView(generics.RetrieveAPIView):
+    """GET /api/staff/maintenance-requests/<pk>/"""
+    serializer_class   = MaintenanceRequestSerializer
+    permission_classes = [CanViewMaintenanceRequests]
+
+    def get_queryset(self):
+        qs      = MaintenanceRequest.objects.select_related("reported_by", "room", "converted_task")
+        profile = getattr(self.request.user, "staff_profile", None)
+        role    = profile.effective_role if profile else None
+        if role in (StaffRole.FRONT_DESK, StaffRole.HOUSEKEEPING):
+            return qs.filter(reported_by=self.request.user)
+        return qs
+
+
+class MaintenanceRequestReviewView(APIView):
+    """PATCH /api/staff/maintenance-requests/<pk>/review/ — Admin/Manager only."""
+    permission_classes = [CanManageMaintenanceRequests]
+
+    def patch(self, request, pk):
+        try:
+            req = MaintenanceRequest.objects.get(pk=pk)
+        except MaintenanceRequest.DoesNotExist:
+            return Response({"error": "Request not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if req.status == MaintenanceRequest.RequestStatus.CONVERTED_TO_TASK:
+            return Response({"error": "This request has already been converted to a task."},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        serializer = MaintenanceRequestReviewSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        req = serializer.save(req)
+        _log_action(request, "review_maintenance_request",
+                    f"Reviewed maintenance request '{req.title}' (pk={pk})",
+                    room_id=req.room_id)
+        return Response(MaintenanceRequestSerializer(req).data)
+
+
+class MaintenanceRequestConvertView(APIView):
+    """POST /api/staff/maintenance-requests/<pk>/convert/ — Admin/Manager only."""
+    permission_classes = [CanManageMaintenanceRequests]
+
+    def post(self, request, pk):
+        try:
+            req = MaintenanceRequest.objects.select_related("room").get(pk=pk)
+        except MaintenanceRequest.DoesNotExist:
+            return Response({"error": "Request not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if not req.is_convertible:
+            return Response({"error": "This request has already been converted to a task."},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        data = {
+            "title":       request.data.get("title",       req.title),
+            "description": request.data.get("description", req.description),
+            "priority":    request.data.get("priority",    2),
+            "deadline":    request.data.get("deadline"),
+            "assigned_to": request.data.get("assigned_to"),
+        }
+        serializer = MaintenanceRequestConvertSerializer(data=data)
+        serializer.is_valid(raise_exception=True)
+        task = serializer.save(request_obj=req, created_by=request.user)
+
+        _log_action(request, "convert_maintenance_request",
+                    f"Converted request '{req.title}' (pk={pk}) into task '{task.title}'",
+                    room_id=task.room_id)
+
+        if task.assigned_to:
+            try:
+                from notifications.service import NotificationService
+                NotificationService.notify_maintenance_assigned(
+                    task=task, assigned_by=request.user)
+            except Exception as exc:
+                logger.warning("notify_maintenance_assigned failed: %s", exc)
+
+        return Response(MaintenanceTaskSerializer(task).data, status=status.HTTP_201_CREATED)
+
+
+class IncidentEscalateView(APIView):
+    """
+    POST /api/staff/incidents/<pk>/escalate/
+
+    Cross-module escalation: create a linked MaintenanceTask from an incident.
+    Allowed: Admin + Security (own incidents only).
+    Body: { title, description, room?, priority?, deadline?, assigned_to? }
+    Returns the created MaintenanceTask.
+    """
+    permission_classes = [CanCreateIncidents]
+
+    def post(self, request, pk):
+        try:
+            incident = IncidentLog.objects.get(pk=pk)
+        except IncidentLog.DoesNotExist:
+            return Response({"error": "Incident not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        # Security staff can only escalate their own incidents
+        profile = getattr(request.user, "staff_profile", None)
+        if profile and profile.effective_role == StaffRole.SECURITY:
+            if incident.logged_by != profile:
+                return Response(
+                    {"error": "You can only escalate incidents that you created."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
+        data     = request.data
+        room_obj = None
+        if data.get("room"):
+            try:
+                room_obj = Room.objects.get(pk=data["room"])
+            except Room.DoesNotExist:
+                pass
+
+        assigned_to = None
+        if data.get("assigned_to"):
+            try:
+                assigned_profile = StaffProfile.objects.get(
+                    pk=data["assigned_to"], is_active=True)
+                if assigned_profile.effective_role == StaffRole.MAINTENANCE:
+                    assigned_to = assigned_profile
+            except StaffProfile.DoesNotExist:
+                pass
+
+        task = MaintenanceTask.objects.create(
+            title       = data.get("title", f"Escalated: {incident.title or incident.get_incident_type_display()}"),
+            description = data.get("description", incident.description),
+            room        = room_obj,
+            priority    = data.get("priority", 2),
+            deadline    = data.get("deadline"),
+            assigned_to = assigned_to,
+            created_by  = request.user,
+            reported_by = request.user,
+        )
+
+        _log_action(request, "escalate_incident",
+                    f"Escalated incident {pk} to maintenance task '{task.title}'")
+
+        if task.assigned_to:
+            try:
+                from notifications.service import NotificationService
+                NotificationService.notify_maintenance_assigned(
+                    task=task, assigned_by=request.user)
+            except Exception as exc:
+                logger.warning("notify_maintenance_assigned failed: %s", exc)
+
+        return Response(MaintenanceTaskSerializer(task).data, status=status.HTTP_201_CREATED)

@@ -1,4 +1,3 @@
-
 # rooms/models.py
 from django.db import models
 from django.conf import settings
@@ -147,9 +146,9 @@ class Room(models.Model):
             models.Index(fields=["room_type", "status"]),
             models.Index(fields=["price_per_night"]),
             models.Index(fields=["capacity"]),
-            models.Index(fields=["is_featured"]),  # NEW
-            models.Index(fields=["view_type"]),  # NEW
-            models.Index(fields=["-discount_percentage"]),  # NEW for filtering discounted rooms
+            models.Index(fields=["is_featured"]),
+            models.Index(fields=["view_type"]),
+            models.Index(fields=["-discount_percentage"]),
         ]
 
     def __str__(self):
@@ -158,19 +157,63 @@ class Room(models.Model):
     def is_available_for_dates(self, check_in, check_out):
         """
         Check if this room is free for a given date range.
-        Prevents double-booking by checking against confirmed bookings.
-        Used by both online and offline booking flows.
+
+        Availability is determined by TWO checks — never by room status alone:
+
+        1. Booking overlap — no active booking (PENDING_PAYMENT / CONFIRMED /
+           CHECKED_IN) overlaps the requested dates.
+
+        2. Cleaning schedule overlap — no active cleaning task whose window
+           (cleaning_started_at → cleaning_end_at) overlaps the requested
+           check-in datetime.
+
+        A room in CLEANING status is still bookable for future dates as long
+        as its cleaning window ends before the requested check-in time.
+
+        MAINTENANCE is the only status that blocks ALL bookings regardless
+        of dates — a room under maintenance is not available to guests.
         """
+        from django.utils import timezone
+        from bookings.models import Booking, BookingStatus
 
+        # MAINTENANCE blocks everything — room is physically unavailable
+        if self.status == RoomStatus.MAINTENANCE:
+            return False
 
-        overlapping = Booking.objects.filter(
+        # Check 1: booking overlap
+        booking_conflict = Booking.objects.filter(
             room=self,
-            status__in=[BookingStatus.CONFIRMED, BookingStatus.PENDING],
+            status__in=[
+                BookingStatus.PENDING_PAYMENT,
+                BookingStatus.CONFIRMED,
+                BookingStatus.CHECKED_IN,
+            ],
             check_in__lt=check_out,
             check_out__gt=check_in,
         ).exists()
 
-        return not overlapping and self.status == RoomStatus.AVAILABLE
+        if booking_conflict:
+            return False
+
+        # Check 2: cleaning schedule overlap
+        # Convert check_in date to datetime at midnight for comparison
+        from datetime import datetime, time as dt_time
+        import pytz
+        from django.conf import settings as django_settings
+
+        tz = timezone.get_current_timezone()
+        check_in_dt = datetime.combine(check_in, dt_time.min).replace(tzinfo=tz)
+
+        cleaning_conflict = self.cleaning_tasks.filter(
+            status__in=["dirty", "cleaning"],  # active cleaning tasks
+            cleaning_end_at__isnull=False,  # has a defined end window
+            cleaning_end_at__gt=check_in_dt,  # window extends into check-in time
+        ).exists()
+
+        if cleaning_conflict:
+            return False
+
+        return True
 
     @property
     def average_rating(self):
@@ -219,36 +262,20 @@ class Room(models.Model):
         '''
         Get the effective price for a specific date.
         Checks seasonal pricing rules with priority.
-
-        Logic:
-        1. Find all active seasonal prices covering this date
-        2. Sort by priority (highest first)
-        3. If weekend, prefer weekend-specific rules
-        4. Return highest priority match
-        5. Fallback to base price (or discounted price if applicable)
         '''
-        from datetime import datetime
-
-        # Check if date is weekend (Friday=4, Saturday=5)
         is_weekend = date.weekday() in [4, 5]
 
-        # Get all active seasonal prices covering this date
         applicable_prices = self.seasonal_prices.filter(
             is_active=True,
             start_date__lte=date,
             end_date__gte=date
         ).order_by('-priority', '-id')
 
-        # Try to find best match
         for price_rule in applicable_prices:
-            # If it's weekend-only rule, only apply on weekends
             if price_rule.is_weekend_only and not is_weekend:
                 continue
-            # If it's not weekend-only, apply anytime
-            # If it IS weekend and rule is weekend-only, apply
             return price_rule.price_per_night
 
-        # No seasonal price found, return discounted price or base price
         return self.discounted_price
 
     def calculate_total_price(self, check_in, check_out):
@@ -271,14 +298,12 @@ class Room(models.Model):
         '''Model validation.'''
         super().clean()
 
-        # Validate capacity logic
         if hasattr(self, 'max_adults') and hasattr(self, 'max_children'):
             if self.max_adults + self.max_children > self.capacity:
                 raise ValidationError(
                     f"Total capacity (adults + children) cannot exceed room capacity of {self.capacity}."
                 )
 
-        # Validate discount
         if hasattr(self, 'discount_percentage'):
             if self.discount_percentage < 0 or self.discount_percentage > 100:
                 raise ValidationError("Discount percentage must be between 0 and 100.")
@@ -337,7 +362,6 @@ class RoomImage(models.Model):
         return f"Image for {self.room} ({'Primary' if self.is_primary else 'Secondary'})"
 
     def save(self, *args, **kwargs):
-        # Ensure only one primary image per room
         if self.is_primary:
             RoomImage.objects.filter(room=self.room, is_primary=True).exclude(pk=self.pk).update(is_primary=False)
         super().save(*args, **kwargs)
@@ -398,10 +422,6 @@ class RoomTemporaryLock(models.Model):
         return not self.released and self.expires_at > timezone.now()
 
 
-# ============================================================================
-# ADD THIS TO THE END OF YOUR backend/rooms/models.py FILE
-# ============================================================================
-
 class RoomReview(models.Model):
     """
     Guest reviews and ratings for rooms.
@@ -424,19 +444,15 @@ class RoomReview(models.Model):
         related_name="room_reviews"
     )
 
-    # Rating (required)
     rating = models.PositiveIntegerField(
         validators=[MinValueValidator(1), MaxValueValidator(5)],
         help_text="Star rating from 1 to 5"
     )
-
-    # Written review (optional)
     review_text = models.TextField(
         blank=True,
         help_text="Optional written review"
     )
 
-    # Metadata
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     is_verified = models.BooleanField(
@@ -455,7 +471,6 @@ class RoomReview(models.Model):
             models.Index(fields=["room", "-created_at"]),
             models.Index(fields=["rating"]),
         ]
-        # Ensure one review per booking
         constraints = [
             models.UniqueConstraint(
                 fields=['booking'],
@@ -468,38 +483,29 @@ class RoomReview(models.Model):
 
     @property
     def guest_name(self):
-        """Return guest's display name."""
         if self.guest.first_name:
             return f"{self.guest.first_name} {self.guest.last_name[0]}." if self.guest.last_name else self.guest.first_name
         return self.guest.email.split('@')[0]
 
     @property
     def star_display(self):
-        """Return star rating as string (e.g., '★★★★☆')."""
         filled = "★" * self.rating
         empty = "☆" * (5 - self.rating)
         return filled + empty
 
     @property
     def helpful_count(self):
-        """Count of thumbs up votes."""
         return self.helpfulness_votes.filter(is_helpful=True).count()
 
     @property
     def not_helpful_count(self):
-        """Count of thumbs down votes."""
         return self.helpfulness_votes.filter(is_helpful=False).count()
 
     @property
     def total_votes(self):
-        """Total number of votes (helpful + not helpful)."""
         return self.helpfulness_votes.count()
 
     def get_user_vote(self, user):
-        """
-        Check if user has voted on this review.
-        Returns: True (thumbs up), False (thumbs down), or None (no vote)
-        """
         try:
             vote = self.helpfulness_votes.get(user=user)
             return vote.is_helpful
@@ -536,15 +542,6 @@ class ReviewHelpfulness(models.Model):
         vote_type = "👍" if self.is_helpful else "👎"
         return f"{vote_type} by {self.user.email} on review #{self.review.id}"
 
-
-# ============================================================================
-# ADD THESE NEW MODELS TO THE END OF YOUR backend/rooms/models.py FILE
-# AFTER ReviewHelpfulness MODEL
-# ============================================================================
-
-# ============================================================================
-# 1️⃣ ROOM INCLUSIONS SYSTEM
-# ============================================================================
 
 class Inclusion(models.Model):
     """
@@ -605,13 +602,6 @@ class RoomInclusion(models.Model):
         return f"{self.room} — {self.inclusion}"
 
 
-
-
-
-# ============================================================================
-# 5️⃣ SEASONAL PRICING SYSTEM
-# ============================================================================
-
 class SeasonalPrice(models.Model):
     """
     Dynamic pricing for rooms based on date ranges.
@@ -665,13 +655,11 @@ class SeasonalPrice(models.Model):
         return f"{self.room} - {self.name} ({self.start_date} to {self.end_date})"
 
     def clean(self):
-        """Validate date ranges."""
         from django.core.exceptions import ValidationError
 
         if self.end_date < self.start_date:
             raise ValidationError("End date must be on or after start date.")
 
-        # Check for overlapping same-priority active rules
         if self.is_active:
             overlapping = SeasonalPrice.objects.filter(
                 room=self.room,
@@ -689,4 +677,3 @@ class SeasonalPrice(models.Model):
     def save(self, *args, **kwargs):
         self.clean()
         super().save(*args, **kwargs)
-

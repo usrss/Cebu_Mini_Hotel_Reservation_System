@@ -9,19 +9,20 @@ import {
   ChevronLeft,
   ChevronRight,
   CheckCircle2,
-  RotateCw, // NEW: for 360° button
+  RotateCw,
 } from 'lucide-react';
 import { useRoomDetail } from '../hooks/useRooms';
 import BookingForm from '../bookings/BookingForm';
 import RoomReviews from './RoomReviews';
 import './RoomDetailPage.css';
 
-// NEW: Lazy load 360 viewer - only loads when button is clicked
 const Room360Viewer = lazy(() => import('./Room360Viewer'));
 
 const STATUS_CONFIG = {
   available:   { label: 'Available',         className: 'status-available' },
+  cleaning:    { label: 'Cleaning',           className: 'status-cleaning' },
   maintenance: { label: 'Under Maintenance', className: 'status-maintenance' },
+  reserved:    { label: 'Reserved',          className: 'status-reserved' },
   disabled:    { label: 'Not Available',     className: 'status-disabled' },
 };
 
@@ -30,7 +31,7 @@ export default function RoomDetailPage() {
   const [searchParams]   = useSearchParams();
   const { room, loading, error } = useRoomDetail(id);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
-  const [show360Viewer, setShow360Viewer] = useState(false); // NEW: 360 viewer state
+  const [show360Viewer, setShow360Viewer] = useState(false);
 
   if (loading) return <LoadingSkeleton />;
 
@@ -52,9 +53,13 @@ export default function RoomDetailPage() {
     );
   }
 
-  const images      = room.images || [];
+  const images       = room.images || [];
   const statusConfig = STATUS_CONFIG[room.status] || STATUS_CONFIG.disabled;
-  const isAvailable  = room.status === 'available';
+
+  // A room in CLEANING status can still be booked for future dates.
+  // The booking form is shown and the server validates date availability.
+  // MAINTENANCE is the only status that completely blocks bookings.
+  const isAvailable = room.status === 'available' || room.status === 'cleaning';
 
   // Group amenities by category
   const amenitiesByCategory = (room.amenities || []).reduce((acc, amenity) => {
@@ -70,7 +75,6 @@ export default function RoomDetailPage() {
   const nextImage = () =>
     setActiveImageIndex((prev) => (prev === images.length - 1 ? 0 : prev + 1));
 
-  // Pre-fill dates from room list if user came from availability search
   const prefillCheckIn  = searchParams.get('check_in')  || '';
   const prefillCheckOut = searchParams.get('check_out') || '';
 
@@ -136,7 +140,7 @@ export default function RoomDetailPage() {
               )}
             </div>
 
-            {/* NEW: 360° Virtual Tour Button */}
+            {/* 360° Virtual Tour Button */}
             {room.panorama_image_url && (
               <button
                 onClick={() => setShow360Viewer(true)}
@@ -199,6 +203,7 @@ export default function RoomDetailPage() {
                 </div>
               </div>
             )}
+
             {/* Ratings & Reviews */}
             <div className="amenities-card">
               <h2 className="amenities-title">Ratings &amp; Reviews</h2>
@@ -210,6 +215,7 @@ export default function RoomDetailPage() {
               />
             </div>
           </div>
+
           <div className="room-detail-sidebar">
             <div className="sidebar-card">
               <h3 className="sidebar-title">Room Information</h3>
@@ -228,10 +234,22 @@ export default function RoomDetailPage() {
                 <div className="sidebar-price-amount">₱{room.price_per_night}</div>
               </div>
 
-              {/* Booking Form — only when room is available */}
+              {/* Booking Form — shown for available and cleaning rooms.
+                  Cleaning rooms can be booked for future dates — the server
+                  validates that the booking start date is after cleaning_end_at.
+                  Only MAINTENANCE completely blocks the booking form. */}
               {isAvailable ? (
                 <div className="sidebar-booking-form">
                   <div className="sidebar-divider" />
+                  {room.status === 'cleaning' && (
+                    <div className="cleaning-notice">
+                      <span>🧹</span>
+                      <p>
+                        This room is currently being cleaned and will be ready
+                        soon. You can still book it for future dates.
+                      </p>
+                    </div>
+                  )}
                   <BookingForm
                     room={room}
                     prefillCheckIn={prefillCheckIn}
@@ -248,7 +266,7 @@ export default function RoomDetailPage() {
         </div>
       </div>
 
-      {/* NEW: 360° Viewer Modal - Lazy Loaded */}
+      {/* 360° Viewer Modal - Lazy Loaded */}
       {show360Viewer && room.panorama_image_url && (
         <Suspense fallback={null}>
           <Room360Viewer

@@ -12,6 +12,7 @@ Models:
   - CleaningTask        : Housekeeping task assigned to a room.
   - MaintenanceTask     : Maintenance/repair task assigned to a room.
   - IncidentLog         : Security incident record (optional Security role).
+  - MaintenanceRequest  : Reporting layer for FD/HK to submit maintenance issues.
 """
 
 from django.db import models
@@ -161,7 +162,7 @@ class StaffProfile(models.Model):
             and self.temp_role_expires_at
             and timezone.now() >= self.temp_role_expires_at
         ):
-            self.temp_role          = None
+            self.temp_role            = None
             self.temp_role_expires_at = None
             self.save(update_fields=["temp_role", "temp_role_expires_at", "updated_at"])
 
@@ -190,7 +191,7 @@ class StaffSession(models.Model):
     Drives the online/offline/idle presence logic.
     """
 
-    staff      = models.ForeignKey(
+    staff       = models.ForeignKey(
         StaffProfile,
         on_delete=models.CASCADE,
         related_name="sessions",
@@ -215,7 +216,6 @@ class StaffSession(models.Model):
         self.logged_out_at = timezone.now()
         self.is_active     = False
         self.save(update_fields=["logged_out_at", "is_active"])
-        # Update presence on the profile
         if not self.staff.sessions.filter(is_active=True).exists():
             self.staff.mark_offline()
 
@@ -278,11 +278,6 @@ class StaffActivityLog(models.Model):
     """
     Immutable audit trail. One row per significant staff action.
     Never updated — only appended.
-
-    action_type examples:
-      login, logout, check_in_guest, check_out_guest, create_booking,
-      cancel_booking, assign_task, complete_task, update_room_status,
-      promote_staff, deactivate_staff, generate_report, …
     """
 
     staff       = models.ForeignKey(
@@ -295,17 +290,15 @@ class StaffActivityLog(models.Model):
     description = models.TextField()
     ip_address  = models.GenericIPAddressField(null=True, blank=True)
 
-    # Optional FK references — any may be null
-    booking_id  = models.IntegerField(null=True, blank=True, db_index=True)
-    room_id     = models.IntegerField(null=True, blank=True, db_index=True)
+    booking_id     = models.IntegerField(null=True, blank=True, db_index=True)
+    room_id        = models.IntegerField(null=True, blank=True, db_index=True)
     target_user_id = models.IntegerField(
         null=True, blank=True,
         help_text="If the action involves another user (e.g. promoting staff).",
     )
 
-    # Snapshot of extra data at time of action (JSON-compatible dict)
-    metadata    = models.JSONField(default=dict, blank=True)
-    created_at  = models.DateTimeField(auto_now_add=True, db_index=True)
+    metadata   = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
     class Meta:
         db_table = "staff_activity_logs"
@@ -326,7 +319,6 @@ class CleaningTask(models.Model):
     """
     Housekeeping task for a specific room.
     Status flow: dirty → cleaning → clean
-    Automatically created when a booking is checked out (via signal).
     """
 
     room = models.ForeignKey(
@@ -351,13 +343,13 @@ class CleaningTask(models.Model):
         help_text="The checkout booking that triggered this task.",
     )
 
-    status       = models.CharField(
+    status = models.CharField(
         max_length=15,
         choices=CleaningStatus.choices,
         default=CleaningStatus.DIRTY,
         db_index=True,
     )
-    priority     = models.PositiveSmallIntegerField(
+    priority = models.PositiveSmallIntegerField(
         default=2,
         help_text="1=High, 2=Normal, 3=Low",
     )
@@ -365,14 +357,26 @@ class CleaningTask(models.Model):
     scheduled_at = models.DateTimeField(null=True, blank=True)
     started_at   = models.DateTimeField(null=True, blank=True)
     completed_at = models.DateTimeField(null=True, blank=True)
-    created_by   = models.ForeignKey(
+
+    cleaning_started_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Set automatically when room enters CLEANING status on checkout.",
+    )
+    cleaning_end_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Set automatically to cleaning_started_at + 2 hours.",
+    )
+
+    created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         null=True,
         on_delete=models.SET_NULL,
         related_name="created_cleaning_tasks",
     )
-    created_at   = models.DateTimeField(auto_now_add=True)
-    updated_at   = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = "cleaning_tasks"
@@ -380,12 +384,23 @@ class CleaningTask(models.Model):
         indexes  = [
             models.Index(fields=["status"]),
             models.Index(fields=["room", "status"]),
+            models.Index(fields=["cleaning_end_at"]),
         ]
 
     def __str__(self):
         return f"CleaningTask Room {self.room_id} [{self.get_status_display()}]"
 
-    # ── Status transitions ────────────────────────────────────────────────────
+    @property
+    def is_overdue(self) -> bool:
+        if self.status == CleaningStatus.CLEAN:
+            return False
+        if not self.cleaning_end_at:
+            return False
+        return timezone.now() > self.cleaning_end_at
+
+    @property
+    def cleaning_window_end(self):
+        return self.cleaning_end_at
 
     ALLOWED_TRANSITIONS = {
         CleaningStatus.DIRTY:    [CleaningStatus.CLEANING],
@@ -403,21 +418,21 @@ class CleaningTask(models.Model):
             )
         now = timezone.now()
         self.status = new_status
+
         if new_status == CleaningStatus.CLEANING:
             self.started_at = now
         elif new_status == CleaningStatus.CLEAN:
             self.completed_at = now
+
         self.save(update_fields=["status", "started_at", "completed_at", "updated_at"])
 
-        # Update the room status accordingly.
-        # RoomStatus has: AVAILABLE, OCCUPIED, MAINTENANCE, RESERVED — no CLEANING value.
-        # We use RESERVED to signal the room is out-of-service while being cleaned,
-        # and restore it to AVAILABLE once the task is marked Clean/Ready.
         from rooms.models import Room, RoomStatus
         if new_status == CleaningStatus.CLEANING:
-            Room.objects.filter(pk=self.room_id).update(status=RoomStatus.RESERVED)
+            Room.objects.filter(pk=self.room_id).update(status=RoomStatus.CLEANING)
         elif new_status == CleaningStatus.CLEAN:
             Room.objects.filter(pk=self.room_id).update(status=RoomStatus.AVAILABLE)
+        elif new_status == CleaningStatus.DIRTY:
+            Room.objects.filter(pk=self.room_id).update(status=RoomStatus.CLEANING)
 
         return self
 
@@ -428,11 +443,14 @@ class MaintenanceTask(models.Model):
     """
     Maintenance / repair task assigned to a room.
     Status flow: pending → in_progress → completed
+
+    Priority uses MEDIUM (not NORMAL) to align with the
+    MaintenanceRequestConvertSerializer and the frontend priority labels.
     """
 
     class Priority(models.IntegerChoices):
         HIGH   = 1, "High"
-        NORMAL = 2, "Normal"
+        MEDIUM = 2, "Medium"   # NOTE: was NORMAL — renamed for consistency
         LOW    = 3, "Low"
 
     room = models.ForeignKey(
@@ -457,6 +475,16 @@ class MaintenanceTask(models.Model):
         help_text="Booking linked to this request (if guest-reported).",
     )
 
+    # Who originally reported this issue (set on creation via request or convert)
+    reported_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="reported_maintenance_tasks",
+        help_text="Staff member who originally reported/created this task.",
+    )
+
     title       = models.CharField(max_length=200)
     description = models.TextField()
     status      = models.CharField(
@@ -465,26 +493,33 @@ class MaintenanceTask(models.Model):
         default=MaintenanceStatus.PENDING,
         db_index=True,
     )
-    priority    = models.IntegerField(
+    priority = models.IntegerField(
         choices=Priority.choices,
-        default=Priority.NORMAL,
+        default=Priority.MEDIUM,
         db_index=True,
     )
 
-    # Completion
+    # Optional deadline for overdue detection
+    deadline = models.DateTimeField(
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="Expected completion deadline. Used for overdue alerts.",
+    )
+
     completion_notes = models.TextField(blank=True)
+    staff_notes = models.TextField(blank=True, help_text="Progress notes added by maintenance staff.")
     started_at       = models.DateTimeField(null=True, blank=True)
     completed_at     = models.DateTimeField(null=True, blank=True)
 
-    # Audit
-    created_by  = models.ForeignKey(
+    created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         null=True,
         on_delete=models.SET_NULL,
         related_name="created_maintenance_tasks",
     )
-    created_at  = models.DateTimeField(auto_now_add=True)
-    updated_at  = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = "maintenance_tasks"
@@ -492,12 +527,20 @@ class MaintenanceTask(models.Model):
         indexes  = [
             models.Index(fields=["status"]),
             models.Index(fields=["room", "status"]),
+            models.Index(fields=["deadline"]),
         ]
 
     def __str__(self):
         return f"MaintenanceTask '{self.title}' — Room {self.room_id} [{self.get_status_display()}]"
 
-    # ── Status transitions ────────────────────────────────────────────────────
+    @property
+    def is_overdue(self) -> bool:
+        """True if deadline has passed and task is not yet completed/cancelled."""
+        if self.status in (MaintenanceStatus.COMPLETED, MaintenanceStatus.CANCELLED):
+            return False
+        if not self.deadline:
+            return False
+        return timezone.now() > self.deadline
 
     ALLOWED_TRANSITIONS = {
         MaintenanceStatus.PENDING:     [MaintenanceStatus.IN_PROGRESS, MaintenanceStatus.CANCELLED],
@@ -518,13 +561,11 @@ class MaintenanceTask(models.Model):
         self.status = new_status
         if new_status == MaintenanceStatus.IN_PROGRESS:
             self.started_at = now
-            # Put room into maintenance status
             from rooms.models import Room, RoomStatus
             Room.objects.filter(pk=self.room_id).update(status=RoomStatus.MAINTENANCE)
         elif new_status == MaintenanceStatus.COMPLETED:
             self.completed_at     = now
             self.completion_notes = completion_notes or self.completion_notes
-            # Maintenance is done — restore room to Available
             from rooms.models import Room, RoomStatus
             Room.objects.filter(pk=self.room_id).update(status=RoomStatus.AVAILABLE)
         self.save(update_fields=[
@@ -537,59 +578,192 @@ class MaintenanceTask(models.Model):
 
 class IncidentLog(models.Model):
     """
-    Security incident record — logged by Security staff.
-    Optional module per the spec.
+    Security incident record.
+    Can now be created by Security, Front Desk, and Housekeeping.
+
+    Changes from original:
+      - title field added
+      - severity now includes CRITICAL
+      - status workflow added (reported → under_investigation → resolved)
+      - resolved boolean kept for backward compatibility
     """
 
     class IncidentType(models.TextChoices):
-        LOST_ITEM    = "lost_item",    "Lost Item"
-        DISTURBANCE  = "disturbance",  "Disturbance"
-        TRESPASSING  = "trespassing",  "Trespassing"
-        MEDICAL      = "medical",      "Medical Emergency"
-        THEFT        = "theft",        "Theft"
-        OTHER        = "other",        "Other"
+        LOST_ITEM   = "lost_item",   "Lost Item"
+        DISTURBANCE = "disturbance", "Disturbance"
+        TRESPASSING = "trespassing", "Trespassing"
+        MEDICAL     = "medical",     "Medical Emergency"
+        THEFT       = "theft",       "Theft"
+        OTHER       = "other",       "Other"
 
     class Severity(models.TextChoices):
-        LOW    = "low",    "Low"
-        MEDIUM = "medium", "Medium"
-        HIGH   = "high",   "High"
+        LOW      = "low",      "Low"
+        MEDIUM   = "medium",   "Medium"
+        HIGH     = "high",     "High"
+        CRITICAL = "critical", "Critical"
 
-    logged_by    = models.ForeignKey(
+    class IncidentStatus(models.TextChoices):
+        REPORTED            = "reported",            "Reported"
+        UNDER_INVESTIGATION = "under_investigation", "Under Investigation"
+        RESOLVED            = "resolved",            "Resolved"
+
+    logged_by = models.ForeignKey(
         StaffProfile,
         on_delete=models.SET_NULL,
         null=True,
         related_name="incident_logs",
     )
+
+    # Short descriptive title (new)
+    title = models.CharField(
+        max_length=200,
+        blank=True,
+        help_text="Short descriptive title, e.g. 'Broken door lock Room 205'.",
+    )
+
     incident_type = models.CharField(
         max_length=20,
         choices=IncidentType.choices,
         default=IncidentType.OTHER,
         db_index=True,
     )
-    severity     = models.CharField(
+    severity = models.CharField(
         max_length=10,
         choices=Severity.choices,
         default=Severity.LOW,
     )
-    location     = models.CharField(
+
+    # Workflow status replacing the boolean resolved field
+    status = models.CharField(
+        max_length=25,
+        choices=IncidentStatus.choices,
+        default=IncidentStatus.REPORTED,
+        db_index=True,
+    )
+
+    location = models.CharField(
         max_length=200,
         blank=True,
         help_text="e.g. 'Room 205', 'Lobby', 'Parking'",
     )
-    description  = models.TextField()
+    description     = models.TextField()
     involved_guests = models.TextField(
         blank=True,
         help_text="Names / booking references of involved guests.",
     )
-    resolved     = models.BooleanField(default=False)
-    resolved_at  = models.DateTimeField(null=True, blank=True)
+
+    # Legacy boolean — kept for backward compatibility.
+    # Automatically synced with status in the serializer and view.
+    resolved         = models.BooleanField(default=False)
+    resolved_at      = models.DateTimeField(null=True, blank=True)
     resolution_notes = models.TextField(blank=True)
-    created_at   = models.DateTimeField(auto_now_add=True, db_index=True)
-    updated_at   = models.DateTimeField(auto_now=True)
+
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = "incident_logs"
         ordering = ["-created_at"]
+        indexes  = [
+            models.Index(fields=["status"]),
+            models.Index(fields=["severity"]),
+        ]
 
     def __str__(self):
-        return f"Incident [{self.get_incident_type_display()}] — {self.created_at:%Y-%m-%d %H:%M}"
+        return (
+            f"Incident [{self.get_incident_type_display()}] "
+            f"— {self.title or self.description[:40]} "
+            f"({self.created_at:%Y-%m-%d %H:%M})"
+        )
+
+    def resolve(self, notes: str = ""):
+        """Convenience method to mark incident resolved."""
+        self.status           = self.IncidentStatus.RESOLVED
+        self.resolved         = True
+        self.resolved_at      = timezone.now()
+        self.resolution_notes = notes or self.resolution_notes
+        self.save(update_fields=[
+            "status", "resolved", "resolved_at", "resolution_notes", "updated_at"
+        ])
+
+
+# ─── MaintenanceRequest ───────────────────────────────────────────────────────
+
+class MaintenanceRequest(models.Model):
+    """
+    Staging layer for maintenance issues reported by Front Desk or Housekeeping.
+
+    Flow:
+      1. Front Desk / Housekeeping submits a request  → status = pending
+      2. Admin / Manager reviews                       → status = reviewed
+      3. Admin / Manager converts to MaintenanceTask   → status = converted_to_task
+
+    Rules:
+      - Maintenance staff NEVER see this model — they only see MaintenanceTask.
+      - Only Admin/Manager can change status or convert to task.
+      - reported_by is set automatically from request.user on creation.
+      - converted_task FK is set when status → converted_to_task.
+    """
+
+    class RequestStatus(models.TextChoices):
+        PENDING           = "pending",           "Pending"
+        REVIEWED          = "reviewed",          "Reviewed"
+        CONVERTED_TO_TASK = "converted_to_task", "Converted to Task"
+
+    reported_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="maintenance_requests",
+        help_text="Front Desk or Housekeeping staff who submitted this request.",
+    )
+    room = models.ForeignKey(
+        "rooms.Room",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="maintenance_requests",
+        help_text="Room this issue was observed in (optional).",
+    )
+
+    title       = models.CharField(max_length=200)
+    description = models.TextField()
+
+    status = models.CharField(
+        max_length=20,
+        choices=RequestStatus.choices,
+        default=RequestStatus.PENDING,
+        db_index=True,
+    )
+
+    converted_task = models.OneToOneField(
+        "MaintenanceTask",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="source_request",
+        help_text="The MaintenanceTask created from this request (if converted).",
+    )
+    review_notes = models.TextField(
+        blank=True,
+        help_text="Notes added by Admin/Manager during review.",
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "maintenance_requests"
+        ordering = ["-created_at"]
+        indexes  = [
+            models.Index(fields=["status"]),
+            models.Index(fields=["reported_by", "created_at"]),
+        ]
+
+    def __str__(self):
+        return f"MaintenanceRequest '{self.title}' [{self.get_status_display()}]"
+
+    @property
+    def is_convertible(self) -> bool:
+        """True when the request can still be converted to a task."""
+        return self.status != self.RequestStatus.CONVERTED_TO_TASK

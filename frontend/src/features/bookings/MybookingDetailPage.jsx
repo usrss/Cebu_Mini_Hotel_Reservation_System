@@ -3,6 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Calendar, Users, Hash, Key, Clock,
   CreditCard, AlertCircle, CheckCircle2, XCircle, ChevronDown, ChevronUp, Tag,
+  RefreshCw, PlusCircle,
 } from 'lucide-react';
 import { useBookingDetail, useCancelBooking } from '../hooks/useBookings';
 import './MyBookingDetailPage.css';
@@ -63,6 +64,11 @@ export default function MyBookingDetailPage() {
   const amountDue        = Number(booking.amount_due   || 0);
   const depositPaid      = booking.payment_type_used === 'deposit' && amountPaid > 0;
   const balancePending   = isConfirmed && depositPaid && amountDue > 0;
+
+  // Modification eligibility
+  const today         = new Date().toISOString().split('T')[0];
+  const canReschedule = isConfirmed && !booking.is_expired && today < booking.check_in;
+  const canExtend     = (isConfirmed || booking.status === 'checked_in') && today < booking.check_out;
 
   const handleCancel = async () => {
     const updated = await cancelBooking(id, cancelReason);
@@ -317,6 +323,28 @@ export default function MyBookingDetailPage() {
               >
                 <CreditCard size={16} />
                 Pay Remaining Balance (₱{formatPrice(amountDue)})
+              </Link>
+            )}
+
+            {/* Reschedule Booking */}
+            {canReschedule && (
+              <Link
+                to={`/bookings/my/${booking.id}/reschedule`}
+                className="btn btn-secondary btn-full"
+              >
+                <RefreshCw size={16} />
+                Reschedule Booking
+              </Link>
+            )}
+
+            {/* Extend Stay */}
+            {canExtend && (
+              <Link
+                to={`/bookings/my/${booking.id}/extend`}
+                className="btn btn-secondary btn-full"
+              >
+                <PlusCircle size={16} />
+                Extend Stay
               </Link>
             )}
 

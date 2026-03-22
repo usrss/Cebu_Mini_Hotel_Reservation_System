@@ -26,6 +26,7 @@ async function fetchVerify(paymentId) {
 export default function PaymentSuccessPage() {
   const [searchParams] = useSearchParams();
   const paymentId      = searchParams.get('payment_id');
+  const modId          = searchParams.get('mod_id');   // present when payment is for a modification
 
   const [payment,  setPayment]  = useState(null);
   const [status,   setStatus]   = useState('loading'); // loading | pending | paid | failed | error
@@ -138,7 +139,9 @@ export default function PaymentSuccessPage() {
           </div>
           <h2 className="success-title">Payment Successful!</h2>
           <p className="success-subtitle">
-            Your booking is confirmed. Check your email for details.
+            {modId
+              ? 'Your booking has been updated successfully.'
+              : 'Your booking is confirmed. Check your email for details.'}
           </p>
 
           <div className="success-details">
@@ -161,9 +164,17 @@ export default function PaymentSuccessPage() {
           )}
 
           <div className="success-actions">
-            <Link to={`/bookings/confirmation/${payment.booking}`} className="btn btn-primary">
-              <CheckCircle2 size={16} /> View Booking Confirmation
-            </Link>
+            {modId ? (
+              // Modification payment → go back to booking detail
+              <Link to={`/bookings/my/${payment.booking}`} className="btn btn-primary">
+                <CheckCircle2 size={16} /> View Updated Booking
+              </Link>
+            ) : (
+              // Normal booking → go to confirmation page
+              <Link to={`/bookings/confirmation/${payment.booking}`} className="btn btn-primary">
+                <CheckCircle2 size={16} /> View Booking Confirmation
+              </Link>
+            )}
             <Link to="/bookings/my" className="btn btn-outline">
               My Bookings
             </Link>

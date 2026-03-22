@@ -2,6 +2,9 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 from .models import Booking, BookingStatus
 
+import logging
+logger = logging.getLogger(__name__)
+
 
 @receiver(post_save, sender=Booking)
 def release_room_lock_on_confirm_or_cancel(sender, instance, created, **kwargs):
@@ -20,7 +23,7 @@ def release_room_lock_on_confirm_or_cancel(sender, instance, created, **kwargs):
 
     if instance.status in release_statuses:
         try:
-            from rooms.models import RoomTemporaryLock # noqa
+            from rooms.models import RoomTemporaryLock
             RoomTemporaryLock.objects.filter(
                 room=instance.room,
                 check_in=instance.check_in,
@@ -32,29 +35,57 @@ def release_room_lock_on_confirm_or_cancel(sender, instance, created, **kwargs):
 
 
 @receiver(post_save, sender=Booking)
-def send_booking_confirmation_notification(sender, instance, created, **kwargs):
+def send_booking_notification_on_status_change(sender, instance, created, **kwargs):
     """
-    Fires a confirmation notification (email/SMS) when a booking transitions
-    to CONFIRMED. At this point reference_number, checkin_pin, and QR data
-    are all guaranteed to be present on the instance.
+    Fires role-based in-app notifications on every relevant booking status change.
 
-    Wire up your email/SMS service here (e.g. Celery task, SendGrid, Twilio).
+    Created  → notify Front Desk + Manager (new pending booking)
+    CONFIRMED → notify Guest + Front Desk + Manager
+    CANCELLED → notify Guest + Front Desk + Manager
+    CHECKED_IN  → notify Manager
+    CHECKED_OUT → notify Housekeeping (high priority) + Front Desk + Manager
     """
-    if created:
+    try:
+        from notifications.service import NotificationService
+        from bookings.models import Booking as B
+        # Re-fetch with room relation to avoid AttributeError on room_number
+        booking = B.objects.select_related("room").get(pk=instance.pk)
+    except Exception as exc:
+        logger.warning("Could not fetch booking for notification: %s", exc)
         return
 
+    # ── New booking created (PENDING_PAYMENT) ─────────────────────────────
+    if created:
+        try:
+            NotificationService.notify_booking_created(booking)
+        except Exception as exc:
+            logger.warning("notify_booking_created failed for booking %s: %s", instance.pk, exc)
+        return  # nothing else to check on creation
+
+    # ── Booking confirmed (payment received) ──────────────────────────────
     if instance.status == BookingStatus.CONFIRMED and instance.has_credentials:
         try:
-            # Example: send_confirmation_email.delay(instance.pk)
-            # Replace with your actual notification dispatch below.
-            import logging
-            logging.getLogger(__name__).info(
-                "Booking %s confirmed — notification dispatch triggered for %s.",
-                instance.reference_number, instance.email,
-            )
+            NotificationService.notify_booking_confirmed(booking)
         except Exception as exc:
-            import logging
-            logging.getLogger(__name__).warning(
-                "Failed to dispatch confirmation notification for booking %s: %s",
-                instance.reference_number, exc,
-            )
+            logger.warning("notify_booking_confirmed failed for booking %s: %s", instance.pk, exc)
+
+    # ── Booking cancelled ─────────────────────────────────────────────────
+    if instance.status == BookingStatus.CANCELLED:
+        try:
+            NotificationService.notify_booking_cancelled(booking)
+        except Exception as exc:
+            logger.warning("notify_booking_cancelled failed for booking %s: %s", instance.pk, exc)
+
+    # ── Guest checked in ──────────────────────────────────────────────────
+    if instance.status == BookingStatus.CHECKED_IN:
+        try:
+            NotificationService.notify_guest_checked_in(booking)
+        except Exception as exc:
+            logger.warning("notify_guest_checked_in failed for booking %s: %s", instance.pk, exc)
+
+    # ── Guest checked out → trigger housekeeping ──────────────────────────
+    if instance.status == BookingStatus.CHECKED_OUT:
+        try:
+            NotificationService.notify_guest_checked_out(booking)
+        except Exception as exc:
+            logger.warning("notify_guest_checked_out failed for booking %s: %s", instance.pk, exc)

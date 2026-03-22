@@ -3,25 +3,21 @@
  *
  * Front Desk creates a walk-in booking and collects payment.
  *
+ * Availability flow:
+ *   1. Staff selects check-in + check-out dates
+ *   2. System calls POST /rooms/availability/ with the date range
+ *   3. Only available rooms are shown in the room selector
+ *   4. Changing dates clears the selected room and re-fetches availability
+ *   5. Before confirming the booking, availability is re-validated on the backend
+ *
  * Payment flow by method:
  *   Cash / GCash / Card / Bank Transfer
  *     → provider=manual → POST /payments/admin/<pk>/confirm/ → CONFIRMED immediately
- *
- *   PayMongo
- *     → provider=paymongo → returns checkout_url → show link to guest
- *
- *   PayPal
- *     → provider=paypal  → returns checkout_url → show link to guest
- *
- * Email validation: any email allowed — walk-ins don't need an existing account.
- *
- * Steps:
- *   1 — Guest info + room + dates (POST /bookings/)
- *   2 — Select payment type + method (POST /payments/initiate/)
- *   3 — Success: show credentials OR show checkout link
+ *   PayMongo / PayPal
+ *     → provider=paymongo|paypal → returns checkout_url → show link to guest
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   frontDeskRoomsApi,
@@ -39,27 +35,23 @@ import '../Staff.css';
 const STEP = { FORM: 'form', PAYMENT: 'payment', SUCCESS: 'success' };
 
 const PAYMENT_TYPES = [
-  { value: 'full_payment', label: 'Full Payment',   desc: '100% of total' },
-  { value: 'deposit',      label: 'Deposit (30%)',  desc: '30% now, rest at check-in' },
+  { value: 'full_payment', label: 'Full Payment',  desc: '100% of total' },
+  { value: 'deposit',      label: 'Deposit (30%)', desc: '30% now, rest at check-in' },
 ];
 
-// Methods that are confirmed immediately at the desk (manual provider)
 const MANUAL_METHODS = ['cash', 'gcash', 'card', 'bank_transfer'];
 
 const PAYMENT_METHODS = [
-  // Immediate (manual)
-  { value: 'cash',           label: 'Cash',           icon: '💵', provider: 'manual',   group: 'immediate' },
-  { value: 'gcash',          label: 'GCash',          icon: '📱', provider: 'manual',   group: 'immediate' },
-  { value: 'card',           label: 'Card',           icon: '💳', provider: 'manual',   group: 'immediate' },
-  { value: 'bank_transfer',  label: 'Bank Transfer',  icon: '🏦', provider: 'manual',   group: 'immediate' },
-  // Online (returns checkout link)
-  { value: 'paymongo',       label: 'PayMongo',       icon: '🔗', provider: 'paymongo', group: 'online'    },
-  { value: 'paypal',         label: 'PayPal',         icon: '🅿',  provider: 'paypal',  group: 'online'    },
+  { value: 'cash',          label: 'Cash',          icon: '💵', provider: 'manual',   group: 'immediate' },
+  { value: 'gcash',         label: 'GCash',         icon: '📱', provider: 'manual',   group: 'immediate' },
+  { value: 'card',          label: 'Card',          icon: '💳', provider: 'manual',   group: 'immediate' },
+  { value: 'bank_transfer', label: 'Bank Transfer', icon: '🏦', provider: 'manual',   group: 'immediate' },
+  { value: 'paymongo',      label: 'PayMongo',      icon: '🔗', provider: 'paymongo', group: 'online'    },
+  { value: 'paypal',        label: 'PayPal',        icon: '🅿',  provider: 'paypal',  group: 'online'    },
 ];
 
-// For online methods, payment_method field the backend expects
 const ONLINE_METHOD_MAP = {
-  paymongo: 'card',   // PayMongo checkout supports card/gcash — use 'card' as default
+  paymongo: 'card',
   paypal:   'paypal',
 };
 
@@ -80,6 +72,13 @@ function nightsBetween(checkIn, checkOut) {
   return Math.max(0, Math.round((new Date(checkOut) - new Date(checkIn)) / 86400000));
 }
 
+function datesAreValid(checkIn, checkOut, today) {
+  if (!checkIn || !checkOut) return false;
+  if (checkIn < today) return false;
+  if (checkOut <= checkIn) return false;
+  return true;
+}
+
 // ── Component ──────────────────────────────────────────────────────────────────
 
 export default function WalkInBookingPage() {
@@ -87,11 +86,20 @@ export default function WalkInBookingPage() {
   const today    = todayISO();
   const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
 
-  const [step,    setStep]    = useState(STEP.FORM);
-  const [rooms,   setRooms]   = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [step, setStep] = useState(STEP.FORM);
 
-  // Step 1 — form
+  // ── Availability state ─────────────────────────────────────────────────────
+  // availableRooms: rooms returned by the backend for the selected date range.
+  // availLoading:   true while the availability request is in flight.
+  // availError:     string if the request failed or dates are invalid.
+  // availFetched:   true once at least one successful fetch has completed —
+  //                 used to distinguish "not yet checked" from "no results".
+  const [availableRooms, setAvailableRooms] = useState([]);
+  const [availLoading,   setAvailLoading]   = useState(false);
+  const [availError,     setAvailError]     = useState(null);
+  const [availFetched,   setAvailFetched]   = useState(false);
+
+  // Step 1 — form fields
   const [form, setForm] = useState({
     full_name: '', email: '', phone: '',
     room_id: '', check_in: today, check_out: tomorrow, guests_count: 1,
@@ -103,26 +111,77 @@ export default function WalkInBookingPage() {
   const [booking, setBooking] = useState(null);
 
   // Step 2 — payment
-  const [paymentType,   setPaymentType]   = useState('full_payment');
-  const [selectedMethod, setSelectedMethod] = useState(null); // full PAYMENT_METHODS entry
-  const [payBusy,       setPayBusy]       = useState(false);
-  const [payError,      setPayError]      = useState(null);
+  const [paymentType,    setPaymentType]    = useState('full_payment');
+  const [selectedMethod, setSelectedMethod] = useState(null);
+  const [payBusy,        setPayBusy]        = useState(false);
+  const [payError,       setPayError]       = useState(null);
 
   // Step 3 — result
-  const [confirmed,       setConfirmed]       = useState(null);   // booking after confirm
-  const [checkoutUrl,     setCheckoutUrl]     = useState(null);   // for online payments
-  const [checkInBusy,     setCheckInBusy]     = useState(false);
-  const [checkedIn,       setCheckedIn]       = useState(false);
+  const [confirmed,   setConfirmed]   = useState(null);
+  const [checkoutUrl, setCheckoutUrl] = useState(null);
+  const [checkInBusy, setCheckInBusy] = useState(false);
+  const [checkedIn,   setCheckedIn]   = useState(false);
 
-  // Load available rooms on mount
+  // ── Fetch available rooms whenever dates change ────────────────────────────
+  const fetchAvailability = useCallback(async (checkIn, checkOut) => {
+    // Guard: both dates must be present and logically valid
+    if (!datesAreValid(checkIn, checkOut, today)) {
+      setAvailableRooms([]);
+      setAvailFetched(false);
+      setAvailError(null);
+      return;
+    }
+
+    setAvailLoading(true);
+    setAvailError(null);
+    setAvailFetched(false);
+
+    try {
+      const rooms = await frontDeskRoomsApi.available(checkIn, checkOut);
+      setAvailableRooms(rooms);
+      setAvailFetched(true);
+    } catch (err) {
+      const msg =
+        err.response?.data?.detail ||
+        err.response?.data?.error  ||
+        'Failed to check availability. Please try again.';
+      setAvailError(msg);
+      setAvailableRooms([]);
+    } finally {
+      setAvailLoading(false);
+    }
+  }, [today]);
+
+  // Run on initial mount with default dates
   useEffect(() => {
-    frontDeskRoomsApi.list({ status: 'available' })
-      .then((d) => setRooms(Array.isArray(d) ? d : (d.results ?? [])))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
+    fetchAvailability(form.check_in, form.check_out);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const selectedRoom = rooms.find((r) => String(r.id) === String(form.room_id));
+  // ── Field change handler ───────────────────────────────────────────────────
+  const setField = (field) => (e) => {
+    const value = e.target.value;
+
+    setForm((f) => {
+      const next = { ...f, [field]: value };
+
+      // When either date changes:
+      //  1. Clear the selected room — it may no longer be available
+      //  2. Re-fetch availability for the new date range
+      if (field === 'check_in' || field === 'check_out') {
+        next.room_id = '';
+        const newCheckIn  = field === 'check_in'  ? value : f.check_in;
+        const newCheckOut = field === 'check_out' ? value : f.check_out;
+        // Schedule fetch after state update
+        setTimeout(() => fetchAvailability(newCheckIn, newCheckOut), 0);
+      }
+
+      return next;
+    });
+
+    setFormErrors((fe) => ({ ...fe, [field]: null }));
+  };
+
+  const selectedRoom = availableRooms.find((r) => String(r.id) === String(form.room_id));
   const nights       = nightsBetween(form.check_in, form.check_out);
   const prices       = selectedRoom
     ? calcPrices(selectedRoom.discounted_price || selectedRoom.price_per_night, nights)
@@ -131,25 +190,42 @@ export default function WalkInBookingPage() {
     ? parseFloat((paymentType === 'deposit' ? prices.deposit : prices.total).toFixed(2))
     : 0;
 
-  const setField = (field) => (e) => {
-    setForm((f) => ({ ...f, [field]: e.target.value }));
-    setFormErrors((fe) => ({ ...fe, [field]: null }));
-  };
-
   // ── Step 1: Create booking ─────────────────────────────────────────────────
   async function handleCreateBooking(e) {
     e.preventDefault();
+
     const errors = {};
-    if (!form.full_name.trim()) errors.full_name    = 'Required';
-    if (!form.email.trim())     errors.email        = 'Required';
-    if (!form.phone.trim())     errors.phone        = 'Required';
-    if (!form.room_id)          errors.room_id      = 'Select a room';
-    if (!form.check_in)         errors.check_in     = 'Required';
-    if (!form.check_out)        errors.check_out    = 'Required';
-    if (nights <= 0)            errors.check_out    = 'Check-out must be after check-in';
+    if (!form.full_name.trim()) errors.full_name = 'Required';
+    if (!form.email.trim())     errors.email     = 'Required';
+    if (!form.phone.trim())     errors.phone     = 'Required';
+    if (!form.room_id)          errors.room_id   = 'Select a room';
+    if (!form.check_in)         errors.check_in  = 'Required';
+    if (!form.check_out)        errors.check_out = 'Required';
+    if (nights <= 0)            errors.check_out = 'Check-out must be after check-in';
     if (Object.keys(errors).length) { setFormErrors(errors); return; }
 
+    // ── Backend re-validation before creating the booking ──────────────────
+    // Re-check availability so we never create a booking on a room that was
+    // taken between when staff loaded the form and when they hit "Continue".
     setFormBusy(true);
+    try {
+      const freshRooms = await frontDeskRoomsApi.available(form.check_in, form.check_out);
+      const stillAvailable = freshRooms.some((r) => String(r.id) === String(form.room_id));
+
+      if (!stillAvailable) {
+        // Update the room list so the UI reflects current state
+        setAvailableRooms(freshRooms);
+        setForm((f) => ({ ...f, room_id: '' }));
+        setFormErrors({ room_id: 'This room was just booked. Please select another.' });
+        setFormBusy(false);
+        return;
+      }
+    } catch {
+      // If availability re-check fails, let the backend booking call handle it
+      // — don't block the staff from proceeding on a network hiccup.
+    }
+
+    // ── Create the booking ─────────────────────────────────────────────────
     try {
       const created = await frontDeskBookingsApi.createWalkIn({
         room_id:      parseInt(form.room_id),
@@ -185,14 +261,11 @@ export default function WalkInBookingPage() {
 
     const isManual = selectedMethod.group === 'immediate';
     const provider = selectedMethod.provider;
-
-    // payment_method field — for online providers use their mapped value
     const paymentMethod = isManual
-      ? selectedMethod.value           // cash | gcash | card | bank_transfer
-      : ONLINE_METHOD_MAP[provider];   // card (paymongo) | paypal
+      ? selectedMethod.value
+      : ONLINE_METHOD_MAP[provider];
 
     try {
-      // 1. Initiate payment
       const payment = await frontDeskPaymentsApi.initiate({
         booking_id:     booking.id,
         payment_type:   paymentType,
@@ -202,27 +275,22 @@ export default function WalkInBookingPage() {
       });
 
       if (isManual) {
-        // 2a. Manual — confirm immediately at desk
         const paymentId = payment.payment_id ?? payment.id;
         await frontDeskPaymentsApi.confirmManual(
           paymentId,
           `Walk-in payment at front desk via ${selectedMethod.label}.`,
         );
-        // 3. Fetch confirmed booking (now has reference_number + checkin_pin)
         const updated = await frontDeskBookingsApi.detail(booking.id);
         setConfirmed(updated);
         setCheckoutUrl(null);
       } else {
-        // 2b. Online — return checkout URL for guest to complete payment
         setCheckoutUrl(payment.checkout_url);
-        // Booking is still PENDING_PAYMENT — will be confirmed by webhook
         const updated = await frontDeskBookingsApi.detail(booking.id);
         setConfirmed(updated);
       }
 
       setStep(STEP.SUCCESS);
     } catch (err) {
-      // Show all field errors from the backend
       const d = err.response?.data;
       if (d && typeof d === 'object') {
         const msgs = Object.entries(d)
@@ -231,9 +299,9 @@ export default function WalkInBookingPage() {
         setPayError(msgs);
       } else {
         setPayError(
-          err.response?.data?.error ||
+          err.response?.data?.error  ||
           err.response?.data?.detail ||
-          err.message ||
+          err.message                ||
           'Payment failed. Please try again.'
         );
       }
@@ -262,7 +330,83 @@ export default function WalkInBookingPage() {
     setCheckoutUrl(null); setCheckedIn(false);
     setPayError(null); setFormErrors({});
     setSelectedMethod(null); setPaymentType('full_payment');
-    setForm({ full_name: '', email: '', phone: '', room_id: '', check_in: today, check_out: tomorrow, guests_count: 1 });
+    setAvailableRooms([]); setAvailFetched(false); setAvailError(null);
+    const newForm = {
+      full_name: '', email: '', phone: '',
+      room_id: '', check_in: today, check_out: tomorrow, guests_count: 1,
+    };
+    setForm(newForm);
+    // Fetch availability for the reset dates
+    fetchAvailability(today, tomorrow);
+  }
+
+  // ── Room selector content ──────────────────────────────────────────────────
+  // Separated out to keep the JSX readable.
+  function renderRoomSelector() {
+    // Dates not yet valid — prompt staff to fill them in first
+    if (!datesAreValid(form.check_in, form.check_out, today)) {
+      return (
+        <div className="fd-notice fd-notice-amber">
+          <span className="fd-notice-icon">📅</span>
+          <span>Select valid check-in and check-out dates to see available rooms.</span>
+        </div>
+      );
+    }
+
+    // Loading
+    if (availLoading) {
+      return (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--white-dim)', fontSize: 13 }}>
+          <span className="fd-spinner-sm" />
+          Checking availability…
+        </div>
+      );
+    }
+
+    // Availability fetch failed
+    if (availError) {
+      return (
+        <div className="fd-notice fd-notice-error">
+          <span className="fd-notice-icon">✕</span>
+          <span>{availError}</span>
+        </div>
+      );
+    }
+
+    // Fetch completed but no rooms available
+    if (availFetched && availableRooms.length === 0) {
+      return (
+        <div className="fd-notice fd-notice-amber">
+          <span className="fd-notice-icon">⚠</span>
+          <span>No rooms available for the selected dates. Try a different date range.</span>
+        </div>
+      );
+    }
+
+    // Rooms available — show selector
+    if (availFetched && availableRooms.length > 0) {
+      return (
+        <select
+          className={`fd-select-lg${formErrors.room_id ? ' error' : ''}`}
+          value={form.room_id}
+          onChange={setField('room_id')}
+        >
+          <option value="">Select available room…</option>
+          {availableRooms.map((r) => (
+            <option key={r.id} value={r.id}>
+              Room {r.room_number} — {ROOM_TYPE_LABELS[r.room_type] || r.room_type} · {r.bed_type} bed · {r.capacity} guests · {formatPHP(r.discounted_price || r.price_per_night)}/night
+            </option>
+          ))}
+        </select>
+      );
+    }
+
+    // Default: not yet fetched (e.g. initial render before first fetch resolves)
+    return (
+      <div style={{ color: 'var(--white-dim)', fontSize: 13 }}>
+        Select dates above to see available rooms.
+      </div>
+    );
   }
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -299,82 +443,95 @@ export default function WalkInBookingPage() {
               <div className="fd-form-grid">
                 <div className="fd-form-group">
                   <label className="fd-label fd-label-req">Full Name</label>
-                  <input className={`fd-input-lg${formErrors.full_name ? ' error' : ''}`}
+                  <input
+                    className={`fd-input-lg${formErrors.full_name ? ' error' : ''}`}
                     value={form.full_name} onChange={setField('full_name')}
-                    placeholder="Juan dela Cruz" autoFocus />
+                    placeholder="Juan dela Cruz" autoFocus
+                  />
                   {formErrors.full_name && <p style={{ color: 'var(--red)', fontSize: 11, marginTop: 4 }}>{formErrors.full_name}</p>}
                 </div>
                 <div className="fd-form-group">
                   <label className="fd-label fd-label-req">Email Address</label>
-                  <input type="email" className={`fd-input-lg${formErrors.email ? ' error' : ''}`}
+                  <input
+                    type="email"
+                    className={`fd-input-lg${formErrors.email ? ' error' : ''}`}
                     value={form.email} onChange={setField('email')}
-                    placeholder="juan@example.com" />
+                    placeholder="juan@example.com"
+                  />
                   {formErrors.email && <p style={{ color: 'var(--red)', fontSize: 11, marginTop: 4 }}>{formErrors.email}</p>}
                 </div>
                 <div className="fd-form-group">
                   <label className="fd-label fd-label-req">Phone Number</label>
-                  <input className={`fd-input-lg${formErrors.phone ? ' error' : ''}`}
+                  <input
+                    className={`fd-input-lg${formErrors.phone ? ' error' : ''}`}
                     value={form.phone} onChange={setField('phone')}
-                    placeholder="09XX-XXX-XXXX" />
+                    placeholder="09XX-XXX-XXXX"
+                  />
                   {formErrors.phone && <p style={{ color: 'var(--red)', fontSize: 11, marginTop: 4 }}>{formErrors.phone}</p>}
                 </div>
                 <div className="fd-form-group">
                   <label className="fd-label">Number of Guests</label>
-                  <input type="number" min={1} max={selectedRoom?.capacity || 10}
+                  <input
+                    type="number" min={1} max={selectedRoom?.capacity || 10}
                     className="fd-input-lg" value={form.guests_count}
-                    onChange={setField('guests_count')} />
+                    onChange={setField('guests_count')}
+                  />
                 </div>
               </div>
             </div>
 
-            {/* Room + dates */}
+            {/* Dates first, then room — availability depends on dates */}
             <div className="fd-card">
-              <div className="fd-card-label">Room &amp; Stay Dates</div>
+              <div className="fd-card-label">Stay Dates</div>
               <div className="fd-form-grid">
-                <div className="fd-form-group" style={{ gridColumn: '1 / -1' }}>
-                  <label className="fd-label fd-label-req">Room</label>
-                  {loading ? (
-                    <p style={{ color: 'var(--white-dim)', fontSize: 13 }}>Loading available rooms…</p>
-                  ) : rooms.length === 0 ? (
-                    <div className="fd-notice fd-notice-amber">
-                      <span className="fd-notice-icon">⚠</span>
-                      <span>No available rooms at the moment.</span>
-                    </div>
-                  ) : (
-                    <select className={`fd-select-lg${formErrors.room_id ? ' error' : ''}`}
-                      value={form.room_id} onChange={setField('room_id')}>
-                      <option value="">Select available room…</option>
-                      {rooms.map((r) => (
-                        <option key={r.id} value={r.id}>
-                          Room {r.room_number} — {ROOM_TYPE_LABELS[r.room_type] || r.room_type} · {r.bed_type} bed · {r.capacity} guests · {formatPHP(r.discounted_price || r.price_per_night)}/night
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                  {formErrors.room_id && <p style={{ color: 'var(--red)', fontSize: 11, marginTop: 4 }}>{formErrors.room_id}</p>}
-                </div>
                 <div className="fd-form-group">
                   <label className="fd-label fd-label-req">Check-In Date</label>
-                  <input type="date" className={`fd-input-lg${formErrors.check_in ? ' error' : ''}`}
-                    value={form.check_in} min={today} onChange={setField('check_in')} />
+                  <input
+                    type="date"
+                    className={`fd-input-lg${formErrors.check_in ? ' error' : ''}`}
+                    value={form.check_in} min={today}
+                    onChange={setField('check_in')}
+                  />
                   {formErrors.check_in && <p style={{ color: 'var(--red)', fontSize: 11, marginTop: 4 }}>{formErrors.check_in}</p>}
                 </div>
                 <div className="fd-form-group">
                   <label className="fd-label fd-label-req">Check-Out Date</label>
-                  <input type="date" className={`fd-input-lg${formErrors.check_out ? ' error' : ''}`}
-                    value={form.check_out} min={form.check_in || today} onChange={setField('check_out')} />
+                  <input
+                    type="date"
+                    className={`fd-input-lg${formErrors.check_out ? ' error' : ''}`}
+                    value={form.check_out} min={form.check_in || today}
+                    onChange={setField('check_out')}
+                  />
                   {formErrors.check_out && <p style={{ color: 'var(--red)', fontSize: 11, marginTop: 4 }}>{formErrors.check_out}</p>}
                 </div>
               </div>
+            </div>
 
-              {/* Price preview */}
+            {/* Room selector — shown after dates, always reflects current availability */}
+            <div className="fd-card">
+              <div className="fd-card-label">Available Room</div>
+
+              {/* Availability count badge */}
+              {availFetched && !availLoading && (
+                <p style={{ fontSize: 12, color: 'var(--white-dim)', marginBottom: 12, marginTop: -6 }}>
+                  {availableRooms.length} room{availableRooms.length !== 1 ? 's' : ''} available
+                  {' '}for {form.check_in} → {form.check_out}
+                </p>
+              )}
+
+              <div className="fd-form-group" style={{ marginBottom: 0 }}>
+                {renderRoomSelector()}
+                {formErrors.room_id && <p style={{ color: 'var(--red)', fontSize: 11, marginTop: 4 }}>{formErrors.room_id}</p>}
+              </div>
+
+              {/* Price preview — only shown when a room is selected */}
               {prices && (
-                <div className="fd-price-box">
+                <div className="fd-price-box" style={{ marginTop: 16 }}>
                   {[
                     ['Room rate / night', formatPHP(selectedRoom?.discounted_price || selectedRoom?.price_per_night)],
                     [`Subtotal (${nights} night${nights !== 1 ? 's' : ''})`, formatPHP(prices.subtotal)],
-                    ['Tax (12%)',         formatPHP(prices.tax)],
-                    ['Service Fee (5%)',  formatPHP(prices.serviceFee)],
+                    ['Tax (12%)',        formatPHP(prices.tax)],
+                    ['Service Fee (5%)', formatPHP(prices.serviceFee)],
                   ].map(([label, val]) => (
                     <div className="fd-price-row" key={label}>
                       <span className="fd-price-label">{label}</span>
@@ -393,8 +550,15 @@ export default function WalkInBookingPage() {
               )}
             </div>
 
-            <button type="submit" className="fd-btn fd-btn-primary fd-btn-full" disabled={formBusy || !form.room_id}>
-              {formBusy ? <><span className="fd-spinner-sm" /> Creating Booking…</> : 'Continue to Payment →'}
+            <button
+              type="submit"
+              className="fd-btn fd-btn-primary fd-btn-full"
+              disabled={formBusy || availLoading || !form.room_id}
+            >
+              {formBusy
+                ? <><span className="fd-spinner-sm" /> Creating Booking…</>
+                : 'Continue to Payment →'
+              }
             </button>
           </form>
         )}
@@ -402,7 +566,6 @@ export default function WalkInBookingPage() {
         {/* ════ STEP 2: PAYMENT ════ */}
         {step === STEP.PAYMENT && booking && prices && (
           <div>
-            {/* Booking summary */}
             <div className="fd-card">
               <div className="fd-card-label">Booking Created</div>
               <div className="fd-notice fd-notice-blue" style={{ marginBottom: 0 }}>
@@ -443,11 +606,10 @@ export default function WalkInBookingPage() {
                 </div>
               </div>
 
-              {/* Payment method — grouped */}
+              {/* Payment method */}
               <div className="fd-form-group">
                 <label className="fd-label">Payment Method</label>
 
-                {/* Immediate methods */}
                 <p style={{ fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--white-dim)', margin: '0 0 8px' }}>
                   Collect at Desk — Confirmed Immediately
                 </p>
@@ -471,7 +633,6 @@ export default function WalkInBookingPage() {
                   ))}
                 </div>
 
-                {/* Online methods */}
                 <p style={{ fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--white-dim)', margin: '0 0 8px' }}>
                   Online — Guest Pays via Checkout Link
                 </p>
@@ -515,7 +676,6 @@ export default function WalkInBookingPage() {
                 </div>
               </div>
 
-              {/* Online payment notice */}
               {selectedMethod?.group === 'online' && (
                 <div className="fd-notice fd-notice-blue" style={{ marginBottom: 14 }}>
                   <span className="fd-notice-icon">ℹ</span>
@@ -551,8 +711,6 @@ export default function WalkInBookingPage() {
         {/* ════ STEP 3: SUCCESS ════ */}
         {step === STEP.SUCCESS && confirmed && (
           <div className="fd-card">
-
-            {/* Online payment — show checkout link */}
             {checkoutUrl ? (
               <div className="fd-success">
                 <div className="fd-success-icon" style={{ background: 'var(--blue-bg)', borderColor: 'var(--blue-border)', color: 'var(--blue)' }}>
@@ -564,7 +722,6 @@ export default function WalkInBookingPage() {
                   {selectedMethod?.label} payment of {formatPHP(amountToPay)}.
                 </p>
 
-                {/* Checkout link box */}
                 <div style={{
                   background: 'var(--navy-mid)', border: '1px solid var(--blue-border)',
                   padding: '14px 16px', maxWidth: 500, margin: '0 auto 20px',
@@ -588,7 +745,6 @@ export default function WalkInBookingPage() {
                   </span>
                 </div>
 
-                {/* Booking details */}
                 <dl className="fd-success-creds">
                   {[
                     ['Guest',     confirmed.full_name],
@@ -604,21 +760,17 @@ export default function WalkInBookingPage() {
                 </dl>
 
                 <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
-                  <button className="fd-btn"
-                    onClick={() => { navigator.clipboard.writeText(checkoutUrl); }}>
-                    📋 Copy Link
+                  <button className="fd-btn" onClick={() => { navigator.clipboard.writeText(checkoutUrl); }}>
+                    Copy Link
                   </button>
                   <a href={checkoutUrl} target="_blank" rel="noopener noreferrer"
                     className="fd-btn fd-btn-primary" style={{ textDecoration: 'none' }}>
                     Open Link →
                   </a>
-                  <button className="fd-btn fd-btn-primary" onClick={reset}>
-                    + New Walk-In
-                  </button>
+                  <button className="fd-btn fd-btn-primary" onClick={reset}>+ New Walk-In</button>
                 </div>
               </div>
             ) : (
-              /* Manual payment — confirmed immediately */
               <div className="fd-success">
                 <div className="fd-success-icon">✓</div>
                 <h2 className="fd-success-title">Booking Confirmed</h2>
@@ -647,7 +799,6 @@ export default function WalkInBookingPage() {
                   ))}
                 </dl>
 
-                {/* Check in now */}
                 {!checkedIn && confirmed.status === 'confirmed' && (
                   <div className="fd-notice fd-notice-blue" style={{ maxWidth: 420, margin: '0 auto 20px', textAlign: 'left' }}>
                     <span className="fd-notice-icon">ℹ</span>

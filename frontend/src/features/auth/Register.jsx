@@ -46,64 +46,53 @@ export default function Register() {
     }
   }, [formData.password, formData.confirmPassword]);
 
-  const googleLogin = useGoogleLogin({
-    flow: 'auth-code',
-    onSuccess: async (codeResponse) => {
-      setLoading(true);
-      setError('');
-      try {
-        const tokenResponse = await axios.post(
-          'https://oauth2.googleapis.com/token',
-          {
-            code: codeResponse.code,
-            client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID,
-            redirect_uri: window.location.origin,
-            grant_type: 'authorization_code'
-          }
-        );
-        const userInfoResponse = await axios.get(
-          'https://www.googleapis.com/oauth2/v3/userinfo',
-          { headers: { Authorization: `Bearer ${tokenResponse.data.access_token}` } }
-        );
-        const { email, given_name, family_name, sub } = userInfoResponse.data;
-        setFormData(prev => ({
-          ...prev,
-          email,
-          first_name: given_name || '',
-          last_name: family_name || '',
-          auth_provider: 'google'
-        }));
-        await registerUser({
-          email,
-          first_name: given_name || '',
-          last_name: family_name || '',
-          auth_provider: 'google',
-          access_token: tokenResponse.data.access_token,
-          social_id: sub
-        });
-        setShowVerify(true);
-      } catch (err) {
-        console.error('Google sign-in error:', err);
-        if (err.response?.data) {
-          const errorData = err.response.data;
-          setError(
-            errorData.email
-              ? (Array.isArray(errorData.email) ? errorData.email[0] : errorData.email)
-              : errorData.detail || 'Google sign-in failed. Please try email registration.'
-          );
-        } else {
-          setError('Failed to connect with Google. Please try again.');
-        }
-      } finally {
-        setLoading(false);
-      }
-    },
-    onError: (error) => {
-      console.error('Google OAuth Error:', error);
-      setError('Google sign-in was cancelled or failed. Please try again.');
+const googleLogin = useGoogleLogin({
+  // ✅ implicit flow — returns access_token directly, no client_secret needed
+  onSuccess: async (tokenResponse) => {
+    setLoading(true);
+    setError('');
+    try {
+      // Get user info from Google
+      const userInfoResponse = await axios.get(
+        'https://www.googleapis.com/oauth2/v3/userinfo',
+        { headers: { Authorization: `Bearer ${tokenResponse.access_token}` } }
+      );
+      const { email, given_name, family_name, sub } = userInfoResponse.data;
+
+      // Send to YOUR backend — it re-verifies the token server-side
+      await registerUser({
+        email,
+        first_name: given_name || '',
+        last_name: family_name || '',
+        auth_provider: 'google',
+        access_token: tokenResponse.access_token,  // backend calls _verify_google_token()
+        social_id: sub,
+      });
+
+      setFormData(prev => ({
+        ...prev,
+        email,
+        first_name: given_name || '',
+        last_name: family_name || '',
+        auth_provider: 'google',
+      }));
+      setShowVerify(true);
+    } catch (err) {
+      const errorData = err.response?.data;
+      setError(
+        errorData?.email?.[0] || errorData?.email ||
+        errorData?.detail || 'Google sign-in failed. Please try email registration.'
+      );
+    } finally {
       setLoading(false);
     }
-  });
+  },
+  onError: () => {
+    setError('Google sign-in was cancelled or failed. Please try again.');
+    setLoading(false);
+  },
+  // No flow: 'auth-code' here — defaults to implicit/token flow
+});
 
   const handleGoogleSignIn = () => {
     setError('');

@@ -31,6 +31,7 @@ urlpatterns = [
     path('api/notifications/', include('notifications.urls', namespace='notifications')),
     path("api/staff/", include("staff.urls", namespace="staff")),
     path("api/admin/", include("admin_panel.urls", namespace="admin_panel")),
+    path("api/chat/", include("chatbot.urls", namespace="chatbot")),
 
 
 

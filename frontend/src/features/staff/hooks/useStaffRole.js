@@ -61,16 +61,33 @@ export function useStaffRole() {
     canHandleCheckInOut: is('admin', 'manager', 'front_desk'),
 
     // ── Cleaning tasks ────────────────────────────────────────────────────
-    canManageCleaning:  is('admin', 'manager'),               // create + assign
+    canManageCleaning:  is('admin', 'manager'),                // create + assign
     canAccessCleaning:  is('admin', 'manager', 'housekeeping'), // view + status update
 
-    // ── Maintenance tasks ─────────────────────────────────────────────────
-    canManageMaintenance:  is('admin', 'manager'),              // create + assign
+    // ── Maintenance tasks (execution layer) ───────────────────────────────
+    canManageMaintenance:  is('admin', 'manager'),               // create + assign
     canAccessMaintenance:  is('admin', 'manager', 'maintenance'), // view + status update
 
+    // ── Maintenance Requests (reporting layer) ────────────────────────────
+    // Submit a new maintenance request (FD + HK + Admin + Manager)
+    canSubmitMaintenanceRequest: is('admin', 'manager', 'front_desk', 'housekeeping'),
+
+    // View requests: FD/HK see own; Admin/Manager see all (scoped server-side)
+    canViewMaintenanceRequests: is('admin', 'manager', 'front_desk', 'housekeeping'),
+
+    // Review + convert requests (Admin/Manager only)
+    canManageMaintenanceRequests: is('admin', 'manager'),
+
     // ── Incident logs ─────────────────────────────────────────────────────
-    canCreateIncidents: is('admin', 'security'),              // log new incidents
-    canViewIncidents:   is('admin', 'manager', 'security'),   // Manager view-only
+    // Create/report an incident — expanded to FD + HK
+    canReportIncident:  is('admin', 'security', 'front_desk', 'housekeeping'),
+
+    // View incidents: FD/HK see own; Admin/Manager/Security see all (scoped server-side)
+    canViewOwnIncidents: is('admin', 'manager', 'security', 'front_desk', 'housekeeping'),
+
+    // Legacy flags — kept for backward compatibility with existing pages
+    canCreateIncidents: is('admin', 'security'),             // log new incidents
+    canViewIncidents:   is('admin', 'manager', 'security'),  // Manager view-only
 
     // ── Reports & analytics ───────────────────────────────────────────────
     canViewReports:      is('admin', 'manager'),

@@ -1,5 +1,15 @@
 from django.urls import path
 from . import views
+from .modification_views import (
+    RescheduleRequestView,
+    ExtendStayRequestView,
+    MyModificationListView,
+    MyModificationDetailView,
+    ModificationConfirmView,
+    ModificationCancelView,
+    ModificationPaymentInitiateView,
+    ModificationRefundConfirmView,
+)
 
 app_name = "bookings"
 
@@ -29,4 +39,14 @@ urlpatterns = [
     path("admin/<int:pk>/check-in/", views.FrontDeskCheckInView.as_view(), name="admin-check-in"),
     path("admin/<int:pk>/collect-payment/", views.FrontDeskCollectPaymentView.as_view(), name="admin-collect-payment"),
     path("admin/<int:pk>/check-in-with-balance/", views.FrontDeskCheckInWithBalanceView.as_view(), name="admin-check-in-with-balance"),
+
+    # ── Booking modification (reschedule + extend) ──────────────────────────
+    path("my/<int:pk>/reschedule/", RescheduleRequestView.as_view(), name="my-booking-reschedule"),
+    path("my/<int:pk>/extend/", ExtendStayRequestView.as_view(), name="my-booking-extend"),
+    path("my/<int:pk>/modifications/", MyModificationListView.as_view(), name="my-modification-list"),
+    path("my/modification/<int:mod_id>/", MyModificationDetailView.as_view(), name="my-modification-detail"),
+    path("my/modification/<int:mod_id>/confirm/", ModificationConfirmView.as_view(), name="my-modification-confirm"),
+    path("my/modification/<int:mod_id>/cancel/", ModificationCancelView.as_view(), name="my-modification-cancel"),
+    path("my/modification/<int:mod_id>/pay/", ModificationPaymentInitiateView.as_view(), name="my-modification-pay"),
+    path("my/modification/<int:mod_id>/confirm-refund/", ModificationRefundConfirmView.as_view(), name="my-modification-confirm-refund"),
 ]

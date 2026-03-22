@@ -1,6 +1,7 @@
 from django.apps import AppConfig
 
 
+
 class BookingsConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
     name               = "bookings"
@@ -8,3 +9,4 @@ class BookingsConfig(AppConfig):
 
     def ready(self):
         import bookings.signals  # noqa: F401 — connect signal handlers
+        import bookings.modification_signals  # noqa

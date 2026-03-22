@@ -5,7 +5,10 @@ django-filter FilterSet classes for Staff Management endpoints.
 """
 
 import django_filters
-from .models import StaffProfile, StaffRole, StaffOnlineStatus, StaffActivityLog, CleaningTask, CleaningStatus, MaintenanceTask, MaintenanceStatus
+from .models import StaffProfile, StaffRole, StaffOnlineStatus, StaffActivityLog, CleaningTask, CleaningStatus, \
+    MaintenanceTask, MaintenanceStatus, IncidentLog
+from .models import MaintenanceRequest
+
 
 
 class StaffProfileFilter(django_filters.FilterSet):
@@ -47,3 +50,41 @@ class StaffActivityLogFilter(django_filters.FilterSet):
     class Meta:
         model  = StaffActivityLog
         fields = ["staff", "action_type", "date_from", "date_to"]
+
+
+
+
+
+class MaintenanceRequestFilter(django_filters.FilterSet):
+    status = django_filters.ChoiceFilter(choices=MaintenanceRequest.RequestStatus.choices)
+    reported_by = django_filters.NumberFilter(field_name="reported_by__id")
+    room = django_filters.NumberFilter(field_name="room__id")
+    date_from = django_filters.DateFilter(field_name="created_at__date", lookup_expr="gte")
+    date_to = django_filters.DateFilter(field_name="created_at__date", lookup_expr="lte")
+
+    class Meta:
+        model = MaintenanceRequest
+        fields = ["status", "reported_by", "room", "date_from", "date_to"]
+
+
+# ── Update existing IncidentLogFilter to add logged_by filter ─────────────────
+# Replace the existing IncidentLogFilter with this version:
+
+class IncidentLogFilter(django_filters.FilterSet):
+    incident_type = django_filters.ChoiceFilter(choices=IncidentLog.IncidentType.choices)
+    severity = django_filters.ChoiceFilter(choices=IncidentLog.Severity.choices)
+    status = django_filters.ChoiceFilter(choices=IncidentLog.IncidentStatus.choices)
+    resolved = django_filters.BooleanFilter()
+
+    # NEW: filter by who logged the incident (used by FD/HK "my incidents" view)
+    logged_by = django_filters.NumberFilter(field_name="logged_by__id")
+
+    date_from = django_filters.DateFilter(field_name="created_at__date", lookup_expr="gte")
+    date_to = django_filters.DateFilter(field_name="created_at__date", lookup_expr="lte")
+
+    class Meta:
+        model = IncidentLog
+        fields = ["incident_type", "severity", "status", "resolved",
+                  "logged_by", "date_from", "date_to"]
+
+

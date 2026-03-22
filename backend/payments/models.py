@@ -1,5 +1,6 @@
 # payments/models.py
 
+import logging
 import random
 import string
 from decimal import Decimal
@@ -7,6 +8,8 @@ from django.db import models
 from django.conf import settings
 from django.utils import timezone
 from django.core.validators import MinValueValidator
+
+logger = logging.getLogger(__name__)
 
 
 class PaymentProvider(models.TextChoices):
@@ -37,6 +40,7 @@ class PaymentType(models.TextChoices):
     FULL_PAYMENT    = "full_payment",    "Full Payment"
     DEPOSIT         = "deposit",         "Deposit (30%)"
     BALANCE_PAYMENT = "balance_payment", "Balance Payment"
+    MODIFICATION    = "modification",    "Booking Modification"
 
 
 DEPOSIT_PERCENTAGE = Decimal("0.30")
@@ -67,16 +71,18 @@ class Payment(models.Model):
         on_delete=models.SET_NULL,
         related_name="payments",
     )
-    amount   = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(0)])
-    currency = models.CharField(max_length=3, default="PHP")
+    amount         = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(0)])
+    currency       = models.CharField(max_length=3, default="PHP")
     payment_type   = models.CharField(max_length=20, choices=PaymentType.choices, default=PaymentType.FULL_PAYMENT)
     provider       = models.CharField(max_length=20, choices=PaymentProvider.choices)
     payment_method = models.CharField(max_length=20, choices=PaymentMethod.choices)
     status         = models.CharField(max_length=20, choices=PaymentStatus.choices, default=PaymentStatus.PENDING)
+
     transaction_id      = models.CharField(max_length=255, blank=True, null=True, unique=True)
     checkout_url        = models.URLField(max_length=1024, blank=True, null=True)
     checkout_session_id = models.CharField(max_length=255, blank=True, null=True)
     provider_payload    = models.JSONField(blank=True, null=True)
+
     paid_at    = models.DateTimeField(null=True, blank=True)
     expires_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -93,7 +99,10 @@ class Payment(models.Model):
         ]
 
     def __str__(self):
-        return f"Payment {self.receipt_number or self.pk} — {self.get_status_display()} ({self.amount} {self.currency})"
+        return (
+            f"Payment {self.receipt_number or self.pk} — "
+            f"{self.get_status_display()} ({self.amount} {self.currency})"
+        )
 
     @property
     def is_expired(self):
@@ -106,12 +115,9 @@ class Payment(models.Model):
         return self.status == PaymentStatus.PAID
 
     def mark_paid(self, transaction_id=None, payload=None):
-        import logging
-        logger = logging.getLogger(__name__)
-
         from bookings.models import BookingStatus, PaymentStatus as BPaymentStatus
 
-        # Step 1: Mark payment PAID and generate receipt
+        # ── Step 1: Mark payment PAID and generate receipt ────────────────────
         self.status         = PaymentStatus.PAID
         self.paid_at        = timezone.now()
         self.receipt_number = generate_receipt_number()
@@ -124,9 +130,7 @@ class Payment(models.Model):
             "transaction_id", "provider_payload", "updated_at",
         ])
 
-        # Step 2: Confirm booking — generates reference_number, checkin_pin,
-        # transitions to CONFIRMED, and fires the post_save signal that
-        # sends the confirmation email with QR code and PIN.
+        # ── Step 2: Confirm booking ───────────────────────────────────────────
         booking = self.booking
         if booking.status == BookingStatus.PENDING_PAYMENT:
             try:
@@ -157,11 +161,39 @@ class Payment(models.Model):
                 booking.pk, booking.status,
             )
 
+        # ── Step 3: Role-based payment notifications ──────────────────────────
+        # Notifies Front Desk + Manager based on payment type.
+        # Each call is guarded so a notification failure never breaks the payment.
+        try:
+            from notifications.service import NotificationService
+            if self.payment_type == PaymentType.DEPOSIT:
+                NotificationService.notify_deposit_received(booking, self.amount)
+            elif self.payment_type == PaymentType.FULL_PAYMENT:
+                NotificationService.notify_full_payment_received(booking, self.amount)
+            elif self.payment_type == PaymentType.BALANCE_PAYMENT:
+                NotificationService.notify_balance_collected(booking, self.amount)
+            # MODIFICATION payments do not trigger a booking notification
+        except Exception as exc:
+            logger.warning(
+                "Payment notification failed for payment pk=%s: %s",
+                self.pk, exc,
+            )
+
     def mark_failed(self, payload=None):
         self.status = PaymentStatus.FAILED
         if payload:
             self.provider_payload = payload
         self.save(update_fields=["status", "provider_payload", "updated_at"])
+
+        # Notify Admin + Front Desk of payment failure
+        try:
+            from notifications.service import NotificationService
+            NotificationService.notify_payment_failed(self.booking)
+        except Exception as exc:
+            logger.warning(
+                "notify_payment_failed failed for payment pk=%s: %s",
+                self.pk, exc,
+            )
 
     def mark_expired(self):
         self.status = PaymentStatus.EXPIRED
@@ -174,10 +206,14 @@ class Refund(models.Model):
         COMPLETED = "completed", "Completed"
         FAILED    = "failed",    "Failed"
 
-    payment            = models.ForeignKey(Payment, on_delete=models.CASCADE, related_name="refunds")
+    payment = models.ForeignKey(
+        Payment, on_delete=models.CASCADE, related_name="refunds"
+    )
     amount             = models.DecimalField(max_digits=10, decimal_places=2)
     reason             = models.TextField(blank=True)
-    status             = models.CharField(max_length=20, choices=RefundStatus.choices, default=RefundStatus.PENDING)
+    status             = models.CharField(
+        max_length=20, choices=RefundStatus.choices, default=RefundStatus.PENDING
+    )
     provider_refund_id = models.CharField(max_length=255, blank=True, null=True)
     initiated_by       = models.ForeignKey(
         settings.AUTH_USER_MODEL,

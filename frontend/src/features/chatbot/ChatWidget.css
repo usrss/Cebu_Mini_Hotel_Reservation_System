@@ -1,0 +1,687 @@
+/* ============================================================
+   ChatWidget.css — Cebu Mini Hotel · Luxury Dark Theme
+   Matches the gold/navy palette from Dashboard.css
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Raleway:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap');
+
+:root {
+  --cmh-navy:        #0A0E1A;
+  --cmh-navy-mid:    #0F1729;
+  --cmh-navy-card:   #111827;
+  --cmh-navy-light:  #162040;
+  --cmh-gold:        #C9A84C;
+  --cmh-gold-l:      #E2C97E;
+  --cmh-gold-dim:    rgba(201,168,76,0.10);
+  --cmh-gold-border: rgba(201,168,76,0.22);
+  --cmh-white:       #F8F6F0;
+  --cmh-white-dim:   rgba(248,246,240,0.55);
+  --cmh-white-faint: rgba(248,246,240,0.06);
+  --cmh-success:     #6EE7B7;
+  --cmh-warn:        #FCD34D;
+  --cmh-support:     #818CF8;
+
+  --cmh-widget-width:  380px;
+  --cmh-widget-height: 560px;
+  --cmh-z:            9999;
+}
+
+/* ── Floating toggle button ──────────────────────────────────── */
+.cmh-toggle-btn {
+  position: fixed;
+  bottom: 28px;
+  right: 28px;
+  z-index: var(--cmh-z);
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--cmh-gold) 0%, var(--cmh-gold-l) 100%);
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 6px 28px rgba(201,168,76,0.35), 0 2px 8px rgba(0,0,0,0.4);
+  transition: transform 0.25s cubic-bezier(0.34,1.56,0.64,1),
+              box-shadow 0.2s;
+  color: var(--cmh-navy);
+}
+
+.cmh-toggle-btn svg {
+  width: 24px;
+  height: 24px;
+}
+
+.cmh-toggle-btn:hover {
+  transform: scale(1.08);
+  box-shadow: 0 10px 36px rgba(201,168,76,0.45), 0 4px 12px rgba(0,0,0,0.5);
+}
+
+.cmh-toggle-btn--open {
+  background: var(--cmh-navy-card);
+  border: 1px solid var(--cmh-gold-border);
+  color: var(--cmh-gold);
+  box-shadow: 0 6px 28px rgba(0,0,0,0.5);
+}
+
+/* Unread indicator dot */
+.cmh-unread-dot {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #C0392B;
+  border: 2px solid var(--cmh-navy);
+  animation: cmh-pulse 2s infinite;
+}
+
+@keyframes cmh-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(192,57,43,0.5); }
+  50%       { box-shadow: 0 0 0 6px rgba(192,57,43,0); }
+}
+
+/* ── Chat widget window ───────────────────────────────────────── */
+.cmh-widget {
+  position: fixed;
+  bottom: 100px;
+  right: 28px;
+  z-index: var(--cmh-z);
+  width: var(--cmh-widget-width);
+  height: var(--cmh-widget-height);
+  background: var(--cmh-navy-card);
+  border: 1px solid var(--cmh-gold-border);
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow:
+    0 0 0 1px rgba(201,168,76,0.08),
+    0 32px 80px rgba(0,0,0,0.7),
+    0 8px 24px rgba(0,0,0,0.5);
+  font-family: 'Raleway', sans-serif;
+  animation: cmh-slide-in 0.3s cubic-bezier(0.16,1,0.3,1);
+}
+
+/* Gold top-line accent */
+.cmh-widget::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--cmh-gold), var(--cmh-gold-l), var(--cmh-gold));
+  z-index: 1;
+}
+
+@keyframes cmh-slide-in {
+  from { opacity: 0; transform: translateY(20px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0)    scale(1); }
+}
+
+/* ── Header ───────────────────────────────────────────────────── */
+.cmh-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  background: linear-gradient(135deg, var(--cmh-navy) 0%, var(--cmh-navy-mid) 100%);
+  border-bottom: 1px solid var(--cmh-gold-border);
+  flex-shrink: 0;
+}
+
+.cmh-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cmh-header-avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: var(--cmh-gold-dim);
+  border: 1px solid var(--cmh-gold-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+}
+
+.cmh-header-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cmh-header-name {
+  font-family: 'Playfair Display', serif;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--cmh-gold-l);
+  letter-spacing: 0.3px;
+}
+
+.cmh-header-status {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--cmh-white-dim);
+}
+
+.cmh-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.cmh-status-dot--online  { background: var(--cmh-success); }
+.cmh-status-dot--support { background: var(--cmh-support); }
+
+.cmh-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cmh-header-btn {
+  background: none;
+  border: 1px solid var(--cmh-gold-border);
+  color: var(--cmh-white-dim);
+  font-family: 'Raleway', sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: all 0.18s;
+  border-radius: 4px;
+}
+
+.cmh-header-btn:hover {
+  background: var(--cmh-gold-dim);
+  border-color: var(--cmh-gold);
+  color: var(--cmh-gold);
+}
+
+.cmh-header-btn--close {
+  padding: 4px 8px;
+  font-size: 13px;
+}
+
+/* ── Support banner ───────────────────────────────────────────── */
+.cmh-support-banner {
+  padding: 8px 14px;
+  background: rgba(129,140,248,0.08);
+  border-bottom: 1px solid rgba(129,140,248,0.2);
+  font-size: 11.5px;
+  color: var(--cmh-support);
+  text-align: center;
+  flex-shrink: 0;
+}
+
+/* ── Messages area ────────────────────────────────────────────── */
+.cmh-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  scroll-behavior: smooth;
+  scrollbar-width: thin;
+  scrollbar-color: var(--cmh-gold-border) transparent;
+}
+
+.cmh-messages::-webkit-scrollbar       { width: 4px; }
+.cmh-messages::-webkit-scrollbar-track { background: transparent; }
+.cmh-messages::-webkit-scrollbar-thumb { background: var(--cmh-gold-border); border-radius: 2px; }
+
+/* ── Empty state ──────────────────────────────────────────────── */
+.cmh-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--cmh-white-dim);
+}
+
+.cmh-empty-icon { font-size: 40px; margin-bottom: 6px; }
+
+.cmh-empty-state p {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--cmh-white);
+}
+
+.cmh-empty-sub {
+  font-size: 12px !important;
+  font-weight: 400 !important;
+  color: var(--cmh-white-dim) !important;
+}
+
+/* ── Message row ──────────────────────────────────────────────── */
+.cmh-message-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.cmh-message-row--user {
+  flex-direction: row-reverse;
+}
+
+.cmh-message-row--support {
+  flex-direction: row;
+}
+
+/* ── Avatar ───────────────────────────────────────────────────── */
+.cmh-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  flex-shrink: 0;
+  border: 1px solid var(--cmh-gold-border);
+}
+
+.cmh-avatar--bot     { background: var(--cmh-gold-dim); }
+.cmh-avatar--user    { background: rgba(110,231,183,0.1); border-color: rgba(110,231,183,0.2); }
+.cmh-avatar--support { background: rgba(129,140,248,0.1); border-color: rgba(129,140,248,0.2); }
+
+/* ── Bubble group ─────────────────────────────────────────────── */
+.cmh-bubble-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 75%;
+}
+
+.cmh-support-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--cmh-support);
+  padding-left: 2px;
+}
+
+/* ── Bubbles ──────────────────────────────────────────────────── */
+.cmh-bubble {
+  padding: 10px 13px;
+  border-radius: 12px;
+  line-height: 1.55;
+}
+
+.cmh-bubble--bot,
+.cmh-bubble--support {
+  background: var(--cmh-navy-light);
+  border: 1px solid var(--cmh-gold-border);
+  border-bottom-left-radius: 4px;
+}
+
+.cmh-bubble--support {
+  border-color: rgba(129,140,248,0.25);
+  background: rgba(129,140,248,0.06);
+}
+
+.cmh-bubble--user {
+  background: linear-gradient(135deg, var(--cmh-gold) 0%, var(--cmh-gold-l) 100%);
+  color: var(--cmh-navy);
+  border-bottom-right-radius: 4px;
+  align-self: flex-end;
+}
+
+.cmh-bubble-text {
+  margin: 0;
+  font-size: 13px;
+  color: inherit;
+  word-break: break-word;
+}
+
+.cmh-bubble--bot .cmh-bubble-text,
+.cmh-bubble--support .cmh-bubble-text {
+  color: var(--cmh-white);
+}
+
+.cmh-bubble--user .cmh-bubble-text {
+  color: var(--cmh-navy);
+  font-weight: 500;
+}
+
+.cmh-timestamp {
+  font-size: 10px;
+  color: var(--cmh-white-dim);
+  padding: 0 2px;
+}
+
+/* ── Typing indicator ─────────────────────────────────────────── */
+.cmh-typing {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 16px;
+  background: var(--cmh-navy-light);
+  border: 1px solid var(--cmh-gold-border);
+  border-radius: 12px;
+  border-bottom-left-radius: 4px;
+  width: fit-content;
+}
+
+.cmh-typing span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--cmh-gold);
+  animation: cmh-bounce 1.2s infinite;
+}
+
+.cmh-typing span:nth-child(2) { animation-delay: 0.2s; }
+.cmh-typing span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes cmh-bounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.6; }
+  30%            { transform: translateY(-5px); opacity: 1; }
+}
+
+/* ── Error message ────────────────────────────────────────────── */
+.cmh-error-msg {
+  font-size: 12px;
+  color: var(--cmh-warn);
+  background: rgba(252,211,77,0.05);
+  border: 1px solid rgba(252,211,77,0.2);
+  padding: 8px 12px;
+  border-radius: 8px;
+  text-align: center;
+}
+
+/* ── Room cards ───────────────────────────────────────────────── */
+.cmh-cards-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.cmh-room-card {
+  display: flex;
+  gap: 10px;
+  background: var(--cmh-navy);
+  border: 1px solid var(--cmh-gold-border);
+  border-radius: 10px;
+  overflow: hidden;
+  text-decoration: none;
+  transition: border-color 0.2s, transform 0.2s;
+}
+
+.cmh-room-card:hover {
+  border-color: var(--cmh-gold);
+  transform: translateY(-1px);
+}
+
+.cmh-room-card-img {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.cmh-room-card-body {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  padding: 8px 10px 8px 0;
+}
+
+.cmh-room-card-type {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--cmh-gold);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.cmh-room-card-room {
+  font-size: 11px;
+  color: var(--cmh-white-dim);
+}
+
+.cmh-room-card-price {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.cmh-price-original {
+  font-size: 11px;
+  color: var(--cmh-white-dim);
+  text-decoration: line-through;
+}
+
+.cmh-price-current {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--cmh-gold-l);
+  font-family: 'Playfair Display', serif;
+}
+
+.cmh-price-night {
+  font-size: 10px;
+  color: var(--cmh-white-dim);
+}
+
+.cmh-discount-badge {
+  font-size: 9px;
+  font-weight: 700;
+  background: var(--cmh-gold);
+  color: var(--cmh-navy);
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+.cmh-room-card-cap {
+  font-size: 10px;
+  color: var(--cmh-white-dim);
+}
+
+/* ── Booking cards ────────────────────────────────────────────── */
+.cmh-cards-col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.cmh-booking-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--cmh-navy);
+  border: 1px solid var(--cmh-gold-border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  text-decoration: none;
+  transition: border-color 0.2s;
+}
+
+.cmh-booking-card:hover { border-color: var(--cmh-gold); }
+
+.cmh-booking-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.cmh-booking-ref {
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--cmh-gold);
+}
+
+.cmh-booking-status {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  border: 1px solid;
+  text-transform: capitalize;
+}
+
+.cmh-booking-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 11.5px;
+  color: var(--cmh-white-dim);
+}
+
+/* ── Quick replies ────────────────────────────────────────────── */
+.cmh-quick-replies {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 14px;
+  border-top: 1px solid var(--cmh-gold-border);
+  background: var(--cmh-navy-mid);
+  flex-shrink: 0;
+}
+
+.cmh-quick-reply-btn {
+  background: none;
+  border: 1px solid var(--cmh-gold-border);
+  color: var(--cmh-gold);
+  font-family: 'Raleway', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  padding: 5px 11px;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.18s;
+  white-space: nowrap;
+}
+
+.cmh-quick-reply-btn:hover:not(:disabled) {
+  background: var(--cmh-gold-dim);
+  border-color: var(--cmh-gold);
+}
+
+.cmh-quick-reply-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ── Input area ───────────────────────────────────────────────── */
+.cmh-input-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--cmh-gold-border);
+  background: var(--cmh-navy);
+  flex-shrink: 0;
+}
+
+.cmh-input {
+  flex: 1;
+  background: var(--cmh-navy-light);
+  border: 1px solid var(--cmh-gold-border);
+  border-radius: 8px;
+  padding: 9px 12px;
+  color: var(--cmh-white);
+  font-family: 'Raleway', sans-serif;
+  font-size: 13px;
+  resize: none;
+  outline: none;
+  line-height: 1.4;
+  max-height: 100px;
+  overflow-y: auto;
+  transition: border-color 0.18s;
+  scrollbar-width: none;
+}
+
+.cmh-input::-webkit-scrollbar { display: none; }
+.cmh-input::placeholder        { color: rgba(248,246,240,0.2); }
+.cmh-input:focus               { border-color: var(--cmh-gold); }
+.cmh-input:disabled            { opacity: 0.5; }
+
+.cmh-send-btn {
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--cmh-gold) 0%, var(--cmh-gold-l) 100%);
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--cmh-navy);
+  flex-shrink: 0;
+  transition: opacity 0.18s, transform 0.18s;
+}
+
+.cmh-send-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.cmh-send-btn:hover:not(:disabled) {
+  opacity: 0.9;
+  transform: scale(1.05);
+}
+
+.cmh-send-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.cmh-send-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--cmh-navy);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: cmh-spin 0.7s linear infinite;
+}
+
+@keyframes cmh-spin { to { transform: rotate(360deg); } }
+
+/* ── Footer ───────────────────────────────────────────────────── */
+.cmh-footer {
+  padding: 6px 14px;
+  font-size: 10px;
+  color: rgba(248,246,240,0.2);
+  text-align: center;
+  border-top: 1px solid var(--cmh-gold-border);
+  background: var(--cmh-navy);
+  flex-shrink: 0;
+  letter-spacing: 0.3px;
+}
+
+/* ── Responsive ───────────────────────────────────────────────── */
+@media (max-width: 480px) {
+  .cmh-widget {
+    width: calc(100vw - 24px);
+    height: calc(100dvh - 120px);
+    right: 12px;
+    bottom: 90px;
+    border-radius: 12px;
+  }
+
+  .cmh-toggle-btn {
+    right: 16px;
+    bottom: 20px;
+  }
+}

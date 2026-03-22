@@ -162,6 +162,7 @@
   overflow: hidden;
 }
 
+/* ── Flat nav item (shared by links + group headers) ─────── */
 .al-nav-item {
   position: relative;
   display: flex;
@@ -176,6 +177,7 @@
   transition: all 0.15s;
   white-space: nowrap;
   border-left: 2px solid transparent;
+  width: 100%;
 }
 .al-nav-item:hover {
   color: var(--gold-l);
@@ -183,16 +185,102 @@
   border-left-color: var(--gold-border);
 }
 .al-nav-active {
-  color: var(--gold);
+  color: var(--gold) !important;
   background: var(--gold-dim);
   border-left-color: var(--gold) !important;
 }
-.al-nav-active .al-nav-icon { color: var(--gold); }
-.al-nav-icon { flex-shrink: 0; color: var(--white-dim); transition: color 0.15s; }
+.al-nav-active .al-nav-icon { color: var(--gold) !important; }
+.al-nav-icon {
+  flex-shrink: 0;
+  color: var(--white-dim);
+  transition: color 0.15s;
+}
+.al-nav-icon--active { color: var(--gold) !important; }
 .al-nav-item:hover .al-nav-icon { color: var(--gold-l); }
 .al-nav-label-text { flex: 1; }
 
-/* Tooltip for collapsed state */
+/* ── Group button (resets button default styles) ─────────── */
+.al-nav-group-btn {
+  background: none;
+  border: none;
+  border-left: 2px solid transparent;
+  cursor: pointer;
+  font-family: 'Raleway', sans-serif;
+  text-align: left;
+  box-sizing: border-box;
+}
+
+/* Chevron arrow */
+.al-nav-chevron {
+  margin-left: auto;
+  color: var(--white-dim);
+  transition: transform 0.22s ease;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+.al-nav-chevron--open {
+  transform: rotate(180deg);
+  color: var(--gold);
+}
+
+/* ── Dropdown children ───────────────────────────────────── */
+.al-nav-children {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.25s ease;
+}
+.al-nav-children--open {
+  max-height: 200px; /* enough for any group */
+}
+
+.al-nav-child {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 18px 8px 42px; /* indent under parent icon */
+  color: var(--white-dim);
+  text-decoration: none;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  border-left: 2px solid transparent;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.al-nav-child:hover {
+  color: var(--gold-l);
+  background: var(--gold-dim);
+  border-left-color: var(--gold-border);
+}
+.al-nav-child--active {
+  color: var(--gold);
+  background: rgba(201,168,76,0.06);
+  border-left-color: var(--gold);
+}
+
+/* Small dot before child label */
+.al-nav-child-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+  opacity: 0.5;
+}
+.al-nav-child--active .al-nav-child-dot {
+  opacity: 1;
+  background: var(--gold);
+}
+
+/* ── Collapsed group (icon only with rich tooltip) ───────── */
+.al-nav-group-collapsed {
+  cursor: default;
+  justify-content: center;
+  padding: 11px 0;
+}
+
+/* ── Tooltips ────────────────────────────────────────────── */
 .al-nav-tooltip {
   position: absolute;
   left: calc(100% + 10px);
@@ -212,6 +300,35 @@
   z-index: 400;
 }
 .al-collapsed .al-nav-item:hover .al-nav-tooltip { opacity: 1; }
+
+/* Group tooltip — wider, with child links */
+.al-nav-tooltip--group {
+  pointer-events: auto; /* allow clicking child links */
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 130px;
+}
+.al-nav-tooltip-title {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin-bottom: 4px;
+}
+.al-nav-tooltip-child {
+  display: block;
+  padding: 4px 0;
+  color: var(--white-dim);
+  text-decoration: none;
+  font-size: 12px;
+  font-weight: 500;
+  transition: color 0.12s;
+}
+.al-nav-tooltip-child:hover,
+.al-nav-tooltip-child.active { color: var(--gold); }
 
 /* Footer */
 .al-sidebar-footer {
@@ -306,7 +423,7 @@
   inset: 0;
   background: rgba(10,14,26,0.75);
   z-index: 250;
-}   
+}
 
 /* ── Responsive ───────────────────────────────────────────── */
 @media (max-width: 900px) {
@@ -323,4 +440,104 @@
   }
   .al-main { margin-left: 0 !important; }
   .al-collapse-btn { display: none; }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   APPEND these rules to the bottom of AdminLayout.css
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/* ── Desktop topbar (notification bell + user info, top-right) ─────────────── */
+.al-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 28px;
+  height: 56px;
+  background: var(--navy-mid);
+  border-bottom: 1px solid var(--gold-border);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  flex-shrink: 0;
+}
+
+.al-topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.al-topbar-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--white-dim);
+  white-space: nowrap;
+}
+
+.al-topbar-avatar {
+  width: 32px;
+  height: 32px;
+  background: var(--gold-dim);
+  border: 1px solid var(--gold-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--gold);
+  font-family: 'Playfair Display', serif;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+/* Hide desktop topbar on mobile — mobile topbar takes over */
+@media (max-width: 900px) {
+  .al-topbar { display: none; }
+}
+
+
+
+/* ── StaffLayout desktop topbar (notification bell + user, top-right) ───────── */
+.sl-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 28px;
+  height: 56px;
+  background: var(--navy-mid);
+  border-bottom: 1px solid var(--gold-border);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  flex-shrink: 0;
+}
+
+.sl-topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sl-topbar-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--white-dim);
+  white-space: nowrap;
+}
+
+.sl-topbar-avatar {
+  width: 32px;
+  height: 32px;
+  background: var(--gold-dim);
+  border: 1px solid var(--gold-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--gold);
+  font-family: 'Playfair Display', serif;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+/* Hide desktop topbar on mobile — mobile topbar takes over */
+@media (max-width: 768px) {
+  .sl-topbar { display: none; }
 }

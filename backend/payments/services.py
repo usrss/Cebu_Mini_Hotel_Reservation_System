@@ -18,26 +18,25 @@ PAYMONGO_BASE       = "https://api.paymongo.com/v1"
 PAYPAL_SANDBOX_BASE = "https://api-m.sandbox.paypal.com"
 PAYPAL_LIVE_BASE    = "https://api-m.paypal.com"
 
-# ── All PayMongo payment methods available on the checkout page ────────────────
-# When provider=paymongo we always show ALL methods so the guest can choose.
-# PayMongo checkout page handles method selection on their end.
+# ── All PayMongo payment methods — used as fallback when method is unrecognised ─
 PAYMONGO_ALL_METHODS = [
-    "card",       # Visa / Mastercard / JCB
-    "gcash",      # GCash e-wallet
-    "paymaya",    # Maya (PayMaya) e-wallet
-    "dob",        # Direct Online Banking (BPI, UnionBank, etc.)
-    "dob_ubp",    # UnionBank Online
-    "brankas_bdo", # BDO
-    "brankas_landbank", # Landbank
+    "card",              # Visa / Mastercard / JCB
+    "gcash",             # GCash e-wallet
+    "paymaya",           # Maya (PayMaya) e-wallet
+    "dob",               # Direct Online Banking (BPI, UnionBank, etc.)
+    "dob_ubp",           # UnionBank Online
+    "brankas_bdo",       # BDO
+    "brankas_landbank",  # Landbank
     "brankas_metrobank", # Metrobank
 ]
 
-# ── Single method map — used when a specific method is forced ──────────────────
+# ── Method map — maps our internal method names to PayMongo method type lists ──
+# Using lists so bank_transfer can show multiple bank options at once.
 PAYMONGO_METHOD_MAP = {
-    "card":          "card",
-    "gcash":         "gcash",
-    "bank_transfer": "dob",
-    "paymaya":       "paymaya",
+    "card":          ["card"],
+    "gcash":         ["gcash"],
+    "bank_transfer": ["dob", "dob_ubp", "brankas_bdo", "brankas_landbank", "brankas_metrobank"],
+    "paymaya":       ["paymaya"],
 }
 
 
@@ -80,8 +79,10 @@ class PayMongoService:
         Creates a PayMongo Checkout Session and returns:
             { "checkout_url": str, "session_id": str }
 
-        Always enables ALL available payment methods so the guest can choose
-        on the PayMongo checkout page (card, GCash, Maya, online banking, etc.)
+        Uses the specific payment method the guest selected on the frontend.
+        This prevents the guest from having to select a method twice.
+
+        Falls back to ALL methods if the payment method is unrecognised.
 
         PayMongo amounts are in CENTS (PHP x 100).
         Minimum amount is PHP 100.00 (10000 cents).
@@ -95,9 +96,11 @@ class PayMongoService:
                 f"PayMongo minimum is PHP 100.00 (got {amount_cents} cents)."
             )
 
-        # Always offer all payment methods — guest picks on checkout page
-        # PayMongo will only show methods available for the account's enabled list
-        payment_method_types = PAYMONGO_ALL_METHODS
+        # Use the specific method the guest picked — fall back to all methods
+        # if the payment method is not in our map (e.g. paypal goes to PayPal directly)
+        payment_method_types = PAYMONGO_METHOD_MAP.get(
+            payment.payment_method, PAYMONGO_ALL_METHODS
+        )
 
         payload = {
             "data": {
@@ -265,6 +268,10 @@ class PayPalService:
         """
         Creates a PayPal Order and returns:
             { "order_id": str, "checkout_url": str }
+
+        PayPal handles its own payment method selection (PayPal balance,
+        linked card, bank account) on their own checkout page — no method
+        map needed on our side.
         """
         payload = {
             "intent": "CAPTURE",

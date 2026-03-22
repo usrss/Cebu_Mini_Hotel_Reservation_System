@@ -3,8 +3,8 @@
  */
 
 import { useState, useEffect } from 'react';
-import { shiftsApi } from '../services/staffApi';
-import { getStoredUser } from '../../../services/api';
+import { myShiftsApi } from '../services/staffApi';
+import { getStoredUser, getCurrentUser } from '../../../services/api';
 import '../Staff.css';
 
 const STATUS_CLASS = {
@@ -20,16 +20,45 @@ export default function MyShiftPage() {
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState(null);
 
-  const user    = getStoredUser();
-  const profile = user?.staff_profile;
-
   useEffect(() => {
-    if (!profile?.id) { setLoading(false); return; }
-    shiftsApi.list({ staff_id: profile.id })
-      .then((data) => setShifts(Array.isArray(data) ? data : (data.results ?? [])))
-      .catch((err) => setError(err.response?.data?.detail || err.message))
-      .finally(() => setLoading(false));
-  }, [profile?.id]);
+    async function load() {
+      try {
+        // 1. Try stored user first (fast, no network)
+        let user    = getStoredUser();
+        let profile = user?.staff_profile;
+
+        // 2. If staff_profile missing or has no id, fetch fresh from API
+        //    This happens when the login response didn't include staff_profile
+        if (!profile?.id) {
+          user    = await getCurrentUser();
+          profile = user?.staff_profile;
+        }
+
+        // 3. Still no profile — this user has no staff record
+        if (!profile?.id) {
+          setError('No staff profile found for your account. Please contact an administrator.');
+          setLoading(false);
+          return;
+        }
+
+        // myShiftsApi calls /staff/my-shifts/ — backend scopes to current user,
+        // no staff_id param needed, works for ALL roles (IsStaff permission).
+        const data = await myShiftsApi.list();
+        setShifts(Array.isArray(data) ? data : (data.results ?? []));
+      } catch (err) {
+        const status = err.response?.status;
+        if (status === 403) {
+          setError('Shifts are not available for your role. Contact your administrator.');
+        } else {
+          setError(err.response?.data?.detail || err.message || 'Failed to load shifts.');
+        }
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    load();
+  }, []);
 
   const upcoming = shifts.filter((s) => ['scheduled', 'in_shift'].includes(s.status));
   const past     = shifts.filter((s) => !['scheduled', 'in_shift'].includes(s.status));

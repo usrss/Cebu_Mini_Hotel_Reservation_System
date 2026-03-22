@@ -273,3 +273,118 @@ class IsAssignedStaffOrAdmin(BasePermission):
             return False
         assigned = getattr(obj, "assigned_to", None)
         return assigned is not None and assigned.pk == profile.pk
+
+
+class CanSubmitMaintenanceRequest(BasePermission):
+    """
+    Roles that can CREATE MaintenanceRequests (the reporting layer):
+      Front Desk, Housekeeping — they report issues.
+      Admin, Manager           — also allowed for completeness.
+
+    Maintenance staff CANNOT submit requests — they only execute tasks.
+    Security CANNOT submit maintenance requests.
+    """
+    message = "Only Front Desk or Housekeeping staff can submit maintenance requests."
+
+    def has_permission(self, request, view):
+        return _has_role(
+            request.user,
+            StaffRole.ADMIN,
+            StaffRole.MANAGER,
+            StaffRole.FRONT_DESK,
+            StaffRole.HOUSEKEEPING,
+        )
+
+
+class CanViewMaintenanceRequests(BasePermission):
+    """
+    Roles that can VIEW the MaintenanceRequest list:
+      Admin, Manager         — see ALL requests.
+      Front Desk, Housekeeping — see ONLY their own (filtered in get_queryset).
+
+    Maintenance and Security: no access.
+    """
+    message = "Only Admin, Manager, Front Desk, or Housekeeping staff can view maintenance requests."
+
+    def has_permission(self, request, view):
+        return _has_role(
+            request.user,
+            StaffRole.ADMIN,
+            StaffRole.MANAGER,
+            StaffRole.FRONT_DESK,
+            StaffRole.HOUSEKEEPING,
+        )
+
+
+class CanManageMaintenanceRequests(BasePermission):
+    """
+    Roles that can REVIEW and CONVERT MaintenanceRequests:
+      Admin, Manager only.
+
+    Front Desk / Housekeeping can submit but NOT review or convert.
+    """
+    message = "Only Admin or Manager can review and convert maintenance requests."
+
+    def has_permission(self, request, view):
+        return _has_role(request.user, StaffRole.ADMIN, StaffRole.MANAGER)
+
+
+# ─── Incident reporting (expanded to FD + HK) ────────────────────────────────
+
+class CanReportIncident(BasePermission):
+    """
+    Roles that can CREATE incident reports:
+      Admin, Security           — original creators.
+      Front Desk, Housekeeping  — NEW: can now report incidents.
+
+    Manager: view-only (cannot create).
+    Maintenance: no access to incidents.
+    """
+    message = "Only Admin, Security, Front Desk, or Housekeeping staff can report incidents."
+
+    def has_permission(self, request, view):
+        return _has_role(
+            request.user,
+            StaffRole.ADMIN,
+            StaffRole.SECURITY,
+            StaffRole.FRONT_DESK,
+            StaffRole.HOUSEKEEPING,
+        )
+
+
+class CanViewOwnIncidents(BasePermission):
+    """
+    Allows Front Desk and Housekeeping to see ONLY their own incidents.
+    Admin, Manager, Security see all (handled in get_queryset on the view).
+    """
+    message = "You do not have permission to view incidents."
+
+    def has_permission(self, request, view):
+        return _has_role(
+            request.user,
+            StaffRole.ADMIN,
+            StaffRole.MANAGER,
+            StaffRole.SECURITY,
+            StaffRole.FRONT_DESK,
+            StaffRole.HOUSEKEEPING,
+        )
+
+
+class IsIncidentOwnerOrAdmin(BasePermission):
+    """
+    Object-level permission for incident edit/update.
+
+    - Admin / Manager: always allowed on any incident.
+    - Security: only if they are logged_by on the incident.
+    - Front Desk / Housekeeping: never allowed to edit (blocked at view level
+      before this check is even reached).
+    """
+    message = "You can only edit incidents that you created."
+
+    def has_object_permission(self, request, view, obj):
+        if _has_role(request.user, StaffRole.ADMIN, StaffRole.MANAGER):
+            return True
+        profile = getattr(request.user, "staff_profile", None)
+        if profile is None:
+            return False
+        return obj.logged_by is not None and obj.logged_by.pk == profile.pk

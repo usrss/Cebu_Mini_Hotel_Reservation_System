@@ -6,8 +6,8 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import {
-  Plus, Search, Filter, Users, UserCheck,
-  Clock, AlertTriangle, Edit2, Trash2,
+  Plus, Search, Users, UserCheck,
+  Clock, Edit2, Trash2,
   ShieldCheck, ShieldOff, CalendarDays, X,
 } from 'lucide-react';
 import { staffApi } from '../../../services/staffApi';
@@ -68,26 +68,27 @@ function OnlineDot({ status }) {
 
 export default function StaffManagement() {
   const { role } = useAdminRole();
-  const [activeTab,   setActiveTab]   = useState('staff');
-  const [staff,       setStaff]       = useState([]);
-  const [loading,     setLoading]     = useState(true);
-  const [search,      setSearch]      = useState('');
-  const [roleFilter,  setRoleFilter]  = useState('');
-  const [statusFilter,setStatusFilter]= useState('');
+  const [activeTab,    setActiveTab]    = useState('staff');
+  const [staff,        setStaff]        = useState([]);
+  const [loading,      setLoading]      = useState(true);
+  const [search,       setSearch]       = useState('');
+  const [roleFilter,   setRoleFilter]   = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
 
   // Modals
-  const [createOpen,     setCreateOpen]     = useState(false);
-  const [editTarget,     setEditTarget]     = useState(null);
-  const [promoteTarget,  setPromoteTarget]  = useState(null);
-  const [tempTarget,     setTempTarget]     = useState(null);
+  const [createOpen,       setCreateOpen]       = useState(false);
+  const [editTarget,       setEditTarget]       = useState(null);
+  const [promoteTarget,    setPromoteTarget]    = useState(null);
+  const [tempTarget,       setTempTarget]       = useState(null);
   const [deactivateTarget, setDeactivateTarget] = useState(null);
-  const [deleteTarget,   setDeleteTarget]   = useState(null);
-  const [deleteLoading,  setDeleteLoading]  = useState(false);
+  const [deleteLoading,    setDeleteLoading]    = useState(false);
 
   const loadStaff = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await staffApi.list({ search, role: roleFilter,
+      const data = await staffApi.list({
+        search,
+        role: roleFilter,
         is_active: statusFilter === 'active' ? true : statusFilter === 'inactive' ? false : undefined,
       });
       setStaff(data.results ?? data);
@@ -98,7 +99,11 @@ export default function StaffManagement() {
   useEffect(() => { loadStaff(); }, [loadStaff]);
 
   if (role !== 'admin') {
-    return <div style={{ padding:60, color:'#F87171', textAlign:'center', fontFamily:'Raleway,sans-serif' }}>Access denied — Admin only.</div>;
+    return (
+      <div style={{ padding:60, color:'#F87171', textAlign:'center', fontFamily:'Raleway,sans-serif' }}>
+        Access denied — Admin only.
+      </div>
+    );
   }
 
   // KPI counts
@@ -127,9 +132,11 @@ export default function StaffManagement() {
   };
 
   const initials = (s) => {
-    const name = s.user?.full_name ?? s.user?.email ?? '';
+    const name  = s.user?.full_name ?? s.user?.email ?? '';
     const parts = name.split(' ');
-    return parts.length >= 2 ? parts[0][0]+parts[1][0] : name.slice(0,2).toUpperCase();
+    return parts.length >= 2
+      ? parts[0][0] + parts[1][0]
+      : name.slice(0, 2).toUpperCase();
   };
 
   return (
@@ -149,20 +156,24 @@ export default function StaffManagement() {
 
       {/* KPIs */}
       <div className="sm-kpis">
-        <KPI label="Total Staff"   value={total}    color="var(--gold)"  />
-        <KPI label="Active Staff"  value={active}   color="#6EE7B7" sub={`${inactive} inactive`} />
-        <KPI label="Online Now"    value={online}   color="#93C5FD" sub="currently logged in" />
-        <KPI label="Inactive"      value={inactive} color="#F87171" sub="pending activation" />
+        <KPI label="Total Staff"  value={total}    color="var(--gold)" />
+        <KPI label="Active Staff" value={active}   color="#6EE7B7" sub={`${inactive} inactive`} />
+        <KPI label="Online Now"   value={online}   color="#93C5FD" sub="currently logged in" />
+        <KPI label="Inactive"     value={inactive} color="#F87171" sub="pending activation" />
       </div>
 
       {/* Tabs */}
       <div className="sm-tabs">
-        <button className={`sm-tab${activeTab==='staff'?' sm-tab--active':''}`}
-          onClick={() => setActiveTab('staff')}>
+        <button
+          className={`sm-tab${activeTab === 'staff' ? ' sm-tab--active' : ''}`}
+          onClick={() => setActiveTab('staff')}
+        >
           <Users size={14} /> Staff List
         </button>
-        <button className={`sm-tab${activeTab==='shifts'?' sm-tab--active':''}`}
-          onClick={() => setActiveTab('shifts')}>
+        <button
+          className={`sm-tab${activeTab === 'shifts' ? ' sm-tab--active' : ''}`}
+          onClick={() => setActiveTab('shifts')}
+        >
           <CalendarDays size={14} /> Shift Scheduler
         </button>
       </div>
@@ -174,8 +185,12 @@ export default function StaffManagement() {
           <div className="sm-toolbar">
             <div className="sm-search-wrap">
               <Search size={14} className="sm-search-icon" />
-              <input className="sm-search" placeholder="Search name or email…"
-                value={search} onChange={e => setSearch(e.target.value)} />
+              <input
+                className="sm-search"
+                placeholder="Search name or email…"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+              />
             </div>
             <select className="sm-select" value={roleFilter} onChange={e => setRoleFilter(e.target.value)}>
               {ROLE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
@@ -187,9 +202,14 @@ export default function StaffManagement() {
 
           {/* Table */}
           {loading ? (
-            <div className="sm-loading"><div className="sm-spinner" /><span>Loading staff…</span></div>
+            <div className="sm-loading">
+              <div className="sm-spinner" /><span>Loading staff…</span>
+            </div>
           ) : staff.length === 0 ? (
-            <div className="sm-empty"><div className="sm-empty-icon">👥</div><p>No staff members found.</p></div>
+            <div className="sm-empty">
+              <div className="sm-empty-icon">👥</div>
+              <p>No staff members found.</p>
+            </div>
           ) : (
             <div className="sm-table-wrap">
               <table className="sm-table">
@@ -200,7 +220,6 @@ export default function StaffManagement() {
                     <th>Temp Role</th>
                     <th>Status</th>
                     <th>Online</th>
-                    <th>Last Seen</th>
                     <th>Employee ID</th>
                     <th>Actions</th>
                   </tr>
@@ -208,6 +227,8 @@ export default function StaffManagement() {
                 <tbody>
                   {staff.map(s => (
                     <tr key={s.id}>
+
+                      {/* Name + Email */}
                       <td>
                         <div className="sm-staff-cell">
                           <div className="sm-avatar">{initials(s)}</div>
@@ -217,20 +238,35 @@ export default function StaffManagement() {
                           </div>
                         </div>
                       </td>
+
+                      {/* Role */}
                       <td><RoleBadge role={s.effective_role ?? s.role} /></td>
+
+                      {/* Temp Role */}
                       <td>
                         {s.temp_role ? (
                           <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-                            <span className="sm-badge sm-badge--temp">{ROLE_LABELS[s.temp_role] ?? s.temp_role}</span>
-                            <button className="sm-action-btn sm-action-btn--danger"
-                              style={{ padding:'2px 6px' }} onClick={() => handleRemoveTemp(s)}
-                              title="Remove temp role">
+                            <span className="sm-badge sm-badge--temp">
+                              {ROLE_LABELS[s.temp_role] ?? s.temp_role}
+                            </span>
+                            <button
+                              className="sm-action-btn sm-action-btn--danger"
+                              style={{ padding:'2px 6px' }}
+                              onClick={() => handleRemoveTemp(s)}
+                              title="Remove temp role"
+                            >
                               <X size={10} />
                             </button>
                           </div>
-                        ) : <span style={{ color:'var(--white-dim)', fontSize:11 }}>—</span>}
+                        ) : (
+                          <span style={{ color:'var(--white-dim)', fontSize:11 }}>—</span>
+                        )}
                       </td>
+
+                      {/* Status */}
                       <td><StatusBadge active={s.is_active} /></td>
+
+                      {/* Online */}
                       <td>
                         <div style={{ display:'flex', alignItems:'center', gap:6 }}>
                           <OnlineDot status={s.online_status} />
@@ -239,12 +275,13 @@ export default function StaffManagement() {
                           </span>
                         </div>
                       </td>
+
+                      {/* Employee ID */}
                       <td style={{ fontSize:11, fontFamily:'DM Mono,monospace' }}>
-                        {s.last_seen_at
-                          ? new Date(s.last_seen_at).toLocaleString('en-PH', { dateStyle:'short', timeStyle:'short' })
-                          : '—'}
+                        {s.employee_id ?? '—'}
                       </td>
-                      <td style={{ fontSize:11, fontFamily:'DM Mono,monospace' }}>{s.employee_id ?? '—'}</td>
+
+                      {/* Actions */}
                       <td>
                         <div className="sm-actions">
                           <button className="sm-action-btn" onClick={() => setEditTarget(s)}
@@ -271,11 +308,13 @@ export default function StaffManagement() {
                             </button>
                           )}
                           <button className="sm-action-btn sm-action-btn--danger"
-                            onClick={() => handleDelete(s)} title="Delete" disabled={deleteLoading}>
+                            onClick={() => handleDelete(s)} title="Delete"
+                            disabled={deleteLoading}>
                             <Trash2 size={11} />
                           </button>
                         </div>
                       </td>
+
                     </tr>
                   ))}
                 </tbody>
@@ -325,6 +364,7 @@ export default function StaffManagement() {
           onSaved={() => { setDeactivateTarget(null); loadStaff(); }}
         />
       )}
+
     </div>
   );
 }

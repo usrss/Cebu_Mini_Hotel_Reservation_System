@@ -73,9 +73,21 @@ class RoomDetailView(generics.RetrieveAPIView):
 class RoomAvailabilityView(APIView):
     """
     POST /api/rooms/availability/
+
     Checks which rooms are available for a given date range.
     Used by BOTH online booking flow and staff offline booking.
-    Server-side check prevents double-booking.
+
+    Availability is determined by THREE exclusion sets — never by room
+    status alone:
+
+    1. Active bookings that overlap the requested dates.
+    2. Temporary room locks (during checkout flow race-condition window).
+    3. Active cleaning schedules whose window overlaps the requested check-in.
+
+    A room in CLEANING status is still returned as available if its
+    cleaning window ends before the requested check-in date.
+
+    MAINTENANCE rooms are always excluded regardless of dates.
     """
     permission_classes = [AllowAny]
 
@@ -87,20 +99,24 @@ class RoomAvailabilityView(APIView):
         data = req_serializer.validated_data
         check_in = data["check_in"]
         check_out = data["check_out"]
+        now = timezone.now()
 
-        # Import here to avoid circular dependency with bookings app
+        # ── Exclusion set 1: active booking overlap ───────────────────────────
         try:
             from bookings.models import Booking, BookingStatus
             booked_room_ids = Booking.objects.filter(
-                status__in=[BookingStatus.CONFIRMED, BookingStatus.PENDING],
+                status__in=[
+                    BookingStatus.PENDING_PAYMENT,
+                    BookingStatus.CONFIRMED,
+                    BookingStatus.CHECKED_IN,
+                ],
                 check_in__lt=check_out,
                 check_out__gt=check_in,
             ).values_list("room_id", flat=True)
         except ImportError:
             booked_room_ids = []
 
-        # Also exclude rooms locked temporarily by active booking sessions
-        now = timezone.now()
+        # ── Exclusion set 2: active temporary locks ───────────────────────────
         locked_room_ids = RoomTemporaryLock.objects.filter(
             check_in__lt=check_out,
             check_out__gt=check_in,
@@ -108,14 +124,46 @@ class RoomAvailabilityView(APIView):
             expires_at__gt=now,
         ).values_list("room_id", flat=True)
 
+        # ── Exclusion set 3: active cleaning schedule overlap ─────────────────
+        # Only exclude rooms whose cleaning window has NOT yet ended by
+        # the requested check-in date.
+        # Convert check_in date to datetime at start of day for comparison.
+        from datetime import datetime, time as dt_time
+        tz = timezone.get_current_timezone()
+        check_in_dt = datetime.combine(check_in, dt_time.min).replace(tzinfo=tz)
+
+        try:
+            from staff.models import CleaningTask, CleaningStatus
+            cleaning_blocked_ids = CleaningTask.objects.filter(
+                status__in=[
+                    CleaningStatus.DIRTY,
+                    CleaningStatus.CLEANING,
+                ],
+                cleaning_end_at__isnull=False,
+                cleaning_end_at__gt=check_in_dt,  # cleaning window overlaps check-in
+            ).values_list("room_id", flat=True)
+        except Exception:
+            cleaning_blocked_ids = []
+
+        # ── Combine all exclusion sets ────────────────────────────────────────
+        excluded_ids = (
+                list(booked_room_ids)
+                + list(locked_room_ids)
+                + list(cleaning_blocked_ids)
+        )
+
+        # ── Base queryset — exclude MAINTENANCE always ────────────────────────
+        # Do NOT filter by status=AVAILABLE — rooms in CLEANING or RESERVED
+        # may still be available for future dates.
         queryset = Room.objects.filter(
             is_active=True,
-            status=RoomStatus.AVAILABLE,
         ).exclude(
-            id__in=list(booked_room_ids) + list(locked_room_ids)
+            status=RoomStatus.MAINTENANCE,
+        ).exclude(
+            id__in=excluded_ids,
         ).prefetch_related("images", "amenity_assignments__amenity")
 
-        # Apply optional filters
+        # ── Optional filters ──────────────────────────────────────────────────
         if data.get("room_type"):
             queryset = queryset.filter(room_type=data["room_type"])
         if data.get("capacity"):
@@ -244,9 +292,7 @@ class AdminRoomListCreateView(generics.ListCreateAPIView):
 
     def get_permissions(self):
         if self.request.method == "POST":
-            # Only Admin can create
             return [IsAuthenticated(), IsAdminRoomManager()]
-        # Admin or Manager can list
         return [IsAuthenticated(), IsAdminOrManagerRoom()]
 
 
@@ -283,7 +329,7 @@ class AdminRoomStatusView(APIView):
     PATCH /api/admin/rooms/<id>/status/
     Quick endpoint to update room status (available, maintenance, etc.).
     """
-    permission_classes = [IsAdminOrManagerRoom ]
+    permission_classes = [IsAdminOrManagerRoom]
 
     def patch(self, request, pk):
         try:
@@ -356,7 +402,7 @@ class AdminRoomPriceHistoryView(generics.ListAPIView):
     GET /api/admin/rooms/<id>/price-history/
     Returns historical price changes for a specific room.
     """
-    permission_classes = [IsAdminOrManagerRoom ]
+    permission_classes = [IsAdminOrManagerRoom]
     serializer_class = RoomPriceHistorySerializer
 
     def get_queryset(self):
@@ -375,7 +421,7 @@ class RoomReviewCreateView(APIView):
     POST /api/rooms/reviews/
     Allow guest to submit a review after checkout.
     """
-    permission_classes = [AllowAny]  # Will check in validation
+    permission_classes = [AllowAny]
 
     def post(self, request):
         from .serializers import RoomReviewCreateSerializer
@@ -406,10 +452,9 @@ class GuestPendingReviewsView(APIView):
     GET /api/rooms/reviews/pending/
     Get list of completed bookings that need reviews.
     """
-    permission_classes = [AllowAny]  # Will check in view
+    permission_classes = [AllowAny]
 
     def get(self, request):
-        # Must be authenticated
         if not request.user.is_authenticated:
             return Response(
                 {"detail": "Authentication required"},
@@ -421,8 +466,6 @@ class GuestPendingReviewsView(APIView):
         except ImportError:
             return Response({"detail": "Booking module not available"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
-        # Get checked-out bookings without reviews
-        # Use exclude with hasattr-safe pattern for reverse OneToOne
         reviewed_booking_ids = RoomReview.objects.values_list('booking_id', flat=True)
         pending = Booking.objects.filter(
             user=request.user,
@@ -458,14 +501,12 @@ class ReviewHelpfulnessVoteView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request, review_id):
-        # Must be authenticated
         if not request.user.is_authenticated:
             return Response(
                 {"detail": "You must be logged in to vote"},
                 status=status.HTTP_401_UNAUTHORIZED
             )
 
-        # Get is_helpful from request body
         is_helpful = request.data.get('is_helpful')
         if is_helpful is None:
             return Response(
@@ -473,7 +514,6 @@ class ReviewHelpfulnessVoteView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Get the review
         try:
             review = RoomReview.objects.get(id=review_id, is_visible=True)
         except RoomReview.DoesNotExist:
@@ -482,21 +522,18 @@ class ReviewHelpfulnessVoteView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        # Prevent voting on your own review
         if review.guest == request.user:
             return Response(
                 {"error": "You cannot vote on your own review"},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Create or update vote
         vote, created = ReviewHelpfulness.objects.update_or_create(
             review=review,
             user=request.user,
             defaults={'is_helpful': is_helpful}
         )
 
-        # Get updated counts
         helpful_count = review.helpful_count
         not_helpful_count = review.not_helpful_count
 
@@ -527,7 +564,6 @@ class ReviewHelpfulnessVoteView(APIView):
             )
             vote.delete()
 
-            # Get updated counts
             review = RoomReview.objects.get(id=review_id)
 
             return Response({
@@ -547,44 +583,16 @@ class ReviewHelpfulnessVoteView(APIView):
 class RoomPriceCalculationView(APIView):
     """
     POST /api/rooms/<id>/calculate-price/
-
     Calculate total price for a room across a date range.
     Uses seasonal pricing, weekend rates, and discounts.
-
-    Request Body:
-    {
-        "check_in": "2026-12-24",
-        "check_out": "2026-12-26"
-    }
-
-    Response:
-    {
-        "total": 12000.00,
-        "nights": 2,
-        "base_total": 10000.00,
-        "breakdown": [
-            {
-                "date": "2026-12-24",
-                "price": 6000.00,
-                "reason": "Peak Season Rate"
-            },
-            {
-                "date": "2026-12-25",
-                "price": 6000.00,
-                "reason": "Peak Season Rate"
-            }
-        ]
-    }
     """
     permission_classes = [AllowAny]
 
     def post(self, request, pk):
-        # Validate request
         req_serializer = PriceCalculationRequestSerializer(data=request.data)
         if not req_serializer.is_valid():
             return Response(req_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        # Get room
         try:
             room = Room.objects.get(pk=pk, is_active=True)
         except Room.DoesNotExist:
@@ -593,11 +601,9 @@ class RoomPriceCalculationView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        # Extract dates
         check_in = req_serializer.validated_data["check_in"]
         check_out = req_serializer.validated_data["check_out"]
 
-        # Calculate price breakdown
         breakdown = []
         current_date = check_in
         total = 0
@@ -608,7 +614,6 @@ class RoomPriceCalculationView(APIView):
             total += daily_price
             base_total += room.price_per_night
 
-            # Determine reason for price
             reason = self._get_price_reason(room, current_date, daily_price)
 
             breakdown.append({
@@ -620,7 +625,6 @@ class RoomPriceCalculationView(APIView):
 
             current_date += timedelta(days=1)
 
-        # Prepare response
         response_data = {
             "total": float(total),
             "nights": len(breakdown),
@@ -632,19 +636,12 @@ class RoomPriceCalculationView(APIView):
         return Response(response_data, status=status.HTTP_200_OK)
 
     def _get_price_reason(self, room, date, price):
-        """Determine why this price is being charged."""
-        # Check if discounted base price
         if price == room.discounted_price and room.discount_percentage > 0:
             return f"Base Rate with {room.discount_percentage}% Discount"
 
-        # Check if base price
         if price == room.price_per_night:
             return "Standard Rate"
 
-        # Must be seasonal pricing
-        is_weekend = date.weekday() in [4, 5]
-
-        # Find matching seasonal price
         matching_price = room.seasonal_prices.filter(
             is_active=True,
             start_date__lte=date,
@@ -663,7 +660,6 @@ class RoomPriceCalculationView(APIView):
 class FeaturedRoomsView(generics.ListAPIView):
     """
     GET /api/rooms/featured/
-
     Returns all featured rooms for homepage carousel.
     """
     serializer_class = RoomListSerializer
@@ -674,14 +670,13 @@ class FeaturedRoomsView(generics.ListAPIView):
             Room.objects
             .filter(is_active=True, is_featured=True, status="available")
             .prefetch_related("images", "amenity_assignments__amenity", "room_inclusions__inclusion")
-            .order_by("-created_at")[:10]  # Limit to 10 featured rooms
+            .order_by("-created_at")[:10]
         )
 
 
 class TrendingRoomsView(generics.ListAPIView):
     """
     GET /api/rooms/trending/
-
     Returns trending rooms (high ratings + many reviews).
     """
     serializer_class = RoomListSerializer
@@ -702,14 +697,13 @@ class TrendingRoomsView(generics.ListAPIView):
                 avg_rating__gte=4.5
             )
             .prefetch_related("images", "amenity_assignments__amenity", "room_inclusions__inclusion")
-            .order_by("-avg_rating", "-review_cnt")[:10]  # Top 10 trending
+            .order_by("-avg_rating", "-review_cnt")[:10]
         )
 
 
 class RoomsByViewTypeView(generics.ListAPIView):
     """
     GET /api/rooms/by-view/?view_type=sea
-
     Returns rooms filtered by view type.
     """
     serializer_class = RoomListSerializer

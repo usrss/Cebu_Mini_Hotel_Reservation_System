@@ -11,14 +11,31 @@ import api from '../../../../services/api';
 
 export const frontDeskRoomsApi = {
   /**
-   * GET /admin/rooms/
+   * GET /rooms/
    * All rooms with their current status.
-   * Uses the admin endpoint which accepts Bearer token (staff are always authenticated).
-   * Falls back to public /rooms/ endpoint if needed.
-   * Used for the Room Status Board and Walk-In Booking room selector.
+   * Used for the Room Status Board.
    */
   list: (params = {}) =>
     api.get('/rooms/', { params: { ...params } }).then((r) => r.data),
+
+  /**
+   * POST /rooms/availability/
+   * Returns only rooms available for the given date range.
+   * Used by Walk-In Booking to filter rooms by check-in/check-out.
+   *
+   * @param {string} checkIn  - YYYY-MM-DD
+   * @param {string} checkOut - YYYY-MM-DD
+   * @returns {Promise<Array>} - list of available room objects
+   */
+  available: (checkIn, checkOut) =>
+    api.post('/rooms/availability/', {
+      check_in:  checkIn,
+      check_out: checkOut,
+    }).then((r) => {
+      const data = r.data;
+      // Backend may return { results: [...] } or a plain array
+      return Array.isArray(data) ? data : (data.results ?? data.available_rooms ?? []);
+    }),
 };
 
 // ─── Bookings ──────────────────────────────────────────────────────────────────
@@ -53,9 +70,8 @@ export const frontDeskBookingsApi = {
    * POST /bookings/
    * Create a walk-in booking (Phase 1 — PENDING_PAYMENT).
    */
-// ✅ Use the admin walk-in endpoint that accepts guest details from the body
   createWalkIn: (body) =>
-  api.post('/bookings/', body).then((r) => r.data),
+    api.post('/bookings/', body).then((r) => r.data),
 
   /**
    * POST /bookings/admin/<pk>/confirm/
@@ -79,7 +95,6 @@ export const frontDeskPaymentsApi = {
   /**
    * POST /payments/admin/<pk>/confirm/
    * Manually confirm a cash / walk-in payment.
-   * Used after creating a walk-in booking with manual payment.
    */
   confirmManual: (pk, note = '') =>
     api.post(`/payments/admin/${pk}/confirm/`, { note }).then((r) => r.data),
@@ -87,7 +102,6 @@ export const frontDeskPaymentsApi = {
   /**
    * POST /payments/initiate/
    * Create a payment record for a walk-in booking.
-   * For cash payments use provider=manual, payment_method=cash.
    */
   initiate: (body) =>
     api.post('/payments/initiate/', body).then((r) => r.data),
@@ -122,11 +136,11 @@ export function formatTime(dtStr) {
 
 // Room status config
 export const ROOM_STATUS_CONFIG = {
-  available:   { label: 'Available',        color: 'var(--green)',  bg: 'var(--green-bg)',  border: 'var(--green-border)'  },
-  occupied:    { label: 'Occupied',          color: 'var(--gold)',   bg: 'var(--gold-dim)',  border: 'var(--gold-border)'   },
-  cleaning:    { label: 'Cleaning',          color: 'var(--amber)',  bg: 'var(--amber-bg)',  border: 'var(--amber-border)'  },
-  maintenance: { label: 'Maintenance',       color: 'var(--red)',    bg: 'var(--red-bg)',    border: 'var(--red-border)'    },
-  reserved:    { label: 'Reserved',          color: 'var(--blue)',   bg: 'var(--blue-bg)',   border: 'var(--blue-border)'   },
+  available:   { label: 'Available',   color: 'var(--green)',  bg: 'var(--green-bg)',  border: 'var(--green-border)'  },
+  occupied:    { label: 'Occupied',    color: 'var(--gold)',   bg: 'var(--gold-dim)',  border: 'var(--gold-border)'   },
+  cleaning:    { label: 'Cleaning',    color: 'var(--amber)',  bg: 'var(--amber-bg)',  border: 'var(--amber-border)'  },
+  maintenance: { label: 'Maintenance', color: 'var(--red)',    bg: 'var(--red-bg)',    border: 'var(--red-border)'    },
+  reserved:    { label: 'Reserved',    color: 'var(--blue)',   bg: 'var(--blue-bg)',   border: 'var(--blue-border)'   },
 };
 
 export const ROOM_TYPE_LABELS = {

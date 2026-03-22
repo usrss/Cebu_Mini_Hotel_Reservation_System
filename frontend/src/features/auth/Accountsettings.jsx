@@ -459,11 +459,36 @@ function SessionsSection() {
   );
 }
 
+// ─── Back destination resolver ─────────────────────────────────────────────────
+// Maps the ?from + ?role query params to the correct dashboard route.
+//
+// from=admin      → /admin/dashboard      (admin / manager / receptionist)
+// from=frontdesk  → /staff/front-desk     (front_desk)
+// from=staff      → role-specific home    (housekeeping / maintenance / security)
+//   role=housekeeping → /staff/cleaning
+//   role=maintenance  → /staff/maintenance
+//   role=security     → /staff/incidents
+// (no from)       → /dashboard            (guest)
+
+const STAFF_ROLE_HOME = {
+  housekeeping: '/staff/cleaning',
+  maintenance:  '/staff/maintenance',
+  security:     '/staff/incidents',
+};
+
+function resolveBackRoute(from, role) {
+  if (from === 'admin')     return '/admin/dashboard';
+  if (from === 'frontdesk') return '/staff/front-desk';
+  if (from === 'staff')     return STAFF_ROLE_HOME[role] ?? '/staff/cleaning';
+  return '/dashboard';
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function AccountSettings() {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();          // ← moved here
-  const from = searchParams.get('from');             // ← moved here
+  const [searchParams] = useSearchParams();
+  const from = searchParams.get('from');
+  const role = searchParams.get('role');   // present when from=staff
 
   const [user, setUser] = useState(getStoredUser());
   const [loading, setLoading] = useState(true);
@@ -508,7 +533,7 @@ export default function AccountSettings() {
       <header className="as-topbar">
         <button
           className="as-back-btn"
-          onClick={() => navigate(from === 'admin' ? '/admin/dashboard' : '/dashboard')}
+          onClick={() => navigate(resolveBackRoute(from, role))}
         >
           <ArrowLeft size={18} />
           <span>Back to Dashboard</span>

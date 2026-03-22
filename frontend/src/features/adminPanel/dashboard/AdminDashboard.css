@@ -2,13 +2,20 @@
 
 .ad-page {
   padding: 44px 48px 80px;
-  max-width: 1200px;
+  max-width: 1300px;
   margin: 0 auto;
   font-family: 'Raleway', sans-serif;
   color: var(--white);
 }
 
 /* ── Header ──────────────────────────────────────────────── */
+.ad-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
 .ad-eyebrow {
   font-size: 10px;
   font-weight: 600;
@@ -33,21 +40,41 @@
 .ad-divider {
   width: 44px; height: 1px;
   background: linear-gradient(90deg, var(--gold), transparent);
-  margin-bottom: 40px;
+  margin-bottom: 0;
+}
+.ad-refresh-note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: rgba(248,246,240,0.3);
+  letter-spacing: 0.3px;
+  margin-top: 6px;
+  flex-shrink: 0;
+}
+
+/* ── Section labels ──────────────────────────────────────── */
+.ad-section-label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: rgba(248,246,240,0.25);
+  margin: 36px 0 12px;
 }
 
 /* ── KPI cards ───────────────────────────────────────────── */
 .ad-kpis {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 18px;
-  margin-bottom: 44px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  margin-bottom: 14px;
 }
 
 .ad-stat-card {
   background: var(--navy-card);
   border: 1px solid var(--gold-border);
-  padding: 24px;
+  padding: 22px 24px;
   display: flex;
   align-items: center;
   gap: 16px;
@@ -61,40 +88,44 @@
   height: 1px;
   background: linear-gradient(90deg, var(--gold), transparent);
 }
-.ad-stat-card--link {
-  cursor: pointer;
-}
+.ad-stat-card--link { cursor: pointer; }
 .ad-stat-card--link:hover {
   border-color: var(--gold);
   transform: translateY(-2px);
   box-shadow: 0 12px 32px rgba(0,0,0,0.4);
 }
+.ad-stat-card--alert {
+  border-color: var(--red-border) !important;
+}
+.ad-stat-card--alert::before {
+  background: linear-gradient(90deg, var(--red), transparent) !important;
+}
 .ad-stat-icon {
   flex-shrink: 0;
-  width: 48px; height: 48px;
+  width: 46px; height: 46px;
   background: var(--gold-dim);
   border: 1px solid var(--gold-border);
   display: flex; align-items: center; justify-content: center;
 }
-.ad-stat-body { flex: 1; }
+.ad-stat-body { flex: 1; min-width: 0; }
 .ad-stat-value {
   font-family: 'Playfair Display', serif;
-  font-size: 28px;
+  font-size: 26px;
   color: var(--white);
   line-height: 1;
   margin-bottom: 4px;
 }
 .ad-stat-label {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
-  letter-spacing: 1px;
+  letter-spacing: 1.5px;
   text-transform: uppercase;
   color: var(--white-dim);
 }
 .ad-stat-sub {
   font-size: 11px;
   color: var(--gold);
-  margin-top: 2px;
+  margin-top: 3px;
 }
 .ad-stat-arrow {
   color: var(--gold-border);
@@ -103,36 +134,191 @@
 }
 .ad-stat-card--link:hover .ad-stat-arrow { color: var(--gold); }
 
-/* ── Quick links section ─────────────────────────────────── */
-.ad-section { margin-bottom: 44px; }
-.ad-section-head { margin-bottom: 20px; }
-.ad-section-eyebrow {
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 3px;
+/* ── Status strips ───────────────────────────────────────── */
+.ad-strips {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  margin: 28px 0 36px;
+}
+
+.ad-strip {
+  background: var(--navy-card);
+  border: 1px solid var(--gold-border);
+  padding: 16px 18px;
+  position: relative;
+  overflow: hidden;
+}
+.ad-strip::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, var(--gold), transparent);
+}
+.ad-strip-label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 2.5px;
   text-transform: uppercase;
   color: var(--gold);
-  margin: 0 0 6px;
+  margin-bottom: 14px;
 }
-.ad-section-title {
+.ad-strip-items {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.ad-strip-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.ad-strip-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.ad-strip-value {
   font-family: 'Playfair Display', serif;
-  font-size: 22px;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1;
+  min-width: 28px;
+}
+.ad-strip-name {
+  font-size: 11px;
+  color: var(--white-dim);
+  letter-spacing: 0.3px;
+}
+
+/* ── Bottom two-column grid ──────────────────────────────── */
+.ad-bottom-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+}
+
+/* ── Card (activity + quick actions) ────────────────────── */
+.ad-card {
+  background: var(--navy-card);
+  border: 1px solid var(--gold-border);
+  padding: 24px 26px;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.ad-card::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, var(--gold), transparent);
+}
+.ad-card-header { margin-bottom: 18px; }
+.ad-card-eyebrow {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin: 0 0 4px;
+}
+.ad-card-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 18px;
   color: var(--white);
   margin: 0;
 }
 
-.ad-quick-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 14px;
+/* ── Activity feed ───────────────────────────────────────── */
+.ad-activity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  flex: 1;
+  overflow-y: auto;
+  max-height: 420px;
+}
+.ad-activity-item {
+  display: flex;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(201,168,76,0.07);
+}
+.ad-activity-item:last-child { border-bottom: none; }
+.ad-activity-bar {
+  width: 2px;
+  background: var(--gold-border);
+  border-radius: 2px;
+  flex-shrink: 0;
+  align-self: stretch;
+}
+.ad-activity-body { flex: 1; min-width: 0; }
+.ad-activity-action {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin: 0 0 2px;
+}
+.ad-activity-desc {
+  font-size: 12px;
+  color: var(--white-dim);
+  margin: 0 0 3px;
+  line-height: 1.5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ad-activity-meta {
+  font-size: 10px;
+  color: rgba(248,246,240,0.3);
+  margin: 0;
+  letter-spacing: 0.3px;
+}
+.ad-empty {
+  font-size: 12px;
+  color: rgba(248,246,240,0.2);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  text-align: center;
+  padding: 32px 0;
+}
+.ad-view-all {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  color: var(--gold);
+  font-family: 'Raleway', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  cursor: pointer;
+  padding: 12px 0 0;
+  margin-top: auto;
+  transition: opacity 0.15s;
+}
+.ad-view-all:hover { opacity: 0.75; }
+
+/* ── Quick actions list ──────────────────────────────────── */
+.ad-quick-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
 }
 
+/* ── Quick link (shared by grid + list variants) ─────────── */
 .ad-quick-link {
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 16px 20px;
-  background: var(--navy-card);
+  padding: 13px 16px;
+  background: var(--navy-mid);
   border: 1px solid var(--gold-border);
   color: var(--white);
   cursor: pointer;
@@ -156,20 +342,22 @@
 }
 .ad-quick-link:hover::before { background: var(--gold); }
 .ad-quick-icon {
-  width: 38px; height: 38px;
+  width: 34px; height: 34px;
   background: var(--gold-dim);
   border: 1px solid var(--gold-border);
   display: flex; align-items: center; justify-content: center;
-  color: var(--gold);
   flex-shrink: 0;
 }
-.ad-quick-body { flex: 1; }
+.ad-quick-body { flex: 1; min-width: 0; }
 .ad-quick-label {
   display: block;
   font-size: 13px;
   font-weight: 600;
   color: var(--white);
   margin-bottom: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .ad-quick-desc {
   display: block;
@@ -186,7 +374,32 @@
   transform: translateX(3px);
 }
 
-/* ── Role info card ──────────────────────────────────────── */
+/* ── Quick grid (kept for FrontDeskDashboard etc.) ───────── */
+.ad-quick-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+}
+
+/* ── Legacy section styles (kept for compatibility) ──────── */
+.ad-section { margin-bottom: 44px; }
+.ad-section-head { margin-bottom: 20px; }
+.ad-section-eyebrow {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin: 0 0 6px;
+}
+.ad-section-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 22px;
+  color: var(--white);
+  margin: 0;
+}
+
+/* ── Role info card (kept for compatibility) ─────────────── */
 .ad-role-card {
   display: flex;
   align-items: flex-start;
@@ -195,33 +408,32 @@
   background: var(--gold-dim);
   border: 1px solid var(--gold-border);
 }
-.ad-role-icon {
-  color: var(--gold);
-  flex-shrink: 0;
-  margin-top: 2px;
-}
+.ad-role-icon { color: var(--gold); flex-shrink: 0; margin-top: 2px; }
 .ad-role-body { display: flex; flex-direction: column; gap: 3px; }
 .ad-role-title {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 1px;
-  text-transform: uppercase;
+  font-size: 11px; font-weight: 700;
+  letter-spacing: 1px; text-transform: uppercase;
   color: var(--gold);
 }
-.ad-role-desc {
-  font-size: 13px;
-  color: var(--white-dim);
-  line-height: 1.5;
-}
+.ad-role-desc { font-size: 13px; color: var(--white-dim); line-height: 1.5; }
 .ad-role-desc strong { color: var(--white); }
 
 /* ── Responsive ──────────────────────────────────────────── */
+@media (max-width: 1100px) {
+  .ad-kpis   { grid-template-columns: repeat(2, 1fr); }
+  .ad-strips { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 900px) {
+  .ad-bottom-grid { grid-template-columns: 1fr; }
+}
 @media (max-width: 768px) {
-  .ad-page { padding: 28px 20px 60px; }
-  .ad-title { font-size: 24px; }
-  .ad-kpis { grid-template-columns: repeat(2, 1fr); }
+  .ad-page   { padding: 28px 20px 60px; }
+  .ad-title  { font-size: 24px; }
+  .ad-kpis   { grid-template-columns: repeat(2, 1fr); }
+  .ad-strips { grid-template-columns: repeat(2, 1fr); }
   .ad-quick-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 480px) {
-  .ad-kpis { grid-template-columns: 1fr; }
+  .ad-kpis   { grid-template-columns: 1fr; }
+  .ad-strips { grid-template-columns: 1fr; }
 }

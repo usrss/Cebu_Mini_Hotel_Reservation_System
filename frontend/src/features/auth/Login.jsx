@@ -52,11 +52,20 @@ export default function Login() {
           'https://www.googleapis.com/oauth2/v3/userinfo',
           { headers: { Authorization: `Bearer ${tokenResponse.access_token}` } }
         );
+
+        // loginUser stores the user in localStorage — await it fully
         await loginUser({
           email: data.email,
           auth_provider: 'google',
           access_token: tokenResponse.access_token
         });
+
+        // Wait one tick for localStorage to be fully written before reading
+        // getStoredUser(). Without this, getPostLoginRoute() may read stale
+        // data and fall back to the wrong layout (StaffLayout instead of
+        // FrontDeskLayout for front_desk role).
+        await new Promise(resolve => setTimeout(resolve, 50));
+
         navigate(getPostLoginRoute());
       } catch (err) {
         console.error('Google sign-in error:', err);

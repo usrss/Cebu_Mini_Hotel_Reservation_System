@@ -1,0 +1,284 @@
+/* StaffMonitoringPage.css
+   Extends Staff.css — uses the same CSS variables.
+*/
+
+/* ── Summary grid ────────────────────────────────────────── */
+.sm-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.sm-summary-card {
+  background: var(--navy-card);
+  border: 1px solid var(--gold-border);
+  padding: 20px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  position: relative;
+  overflow: hidden;
+}
+.sm-summary-card::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, var(--gold), transparent);
+}
+.sm-summary-icon { opacity: 0.8; }
+.sm-summary-value {
+  font-family: 'Playfair Display', serif;
+  font-size: 30px;
+  line-height: 1;
+}
+.sm-summary-label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--white-dim);
+}
+
+/* ── Presence bar ────────────────────────────────────────── */
+.sm-presence-bar-wrap {
+  margin-bottom: 24px;
+}
+.sm-presence-bar {
+  display: flex;
+  height: 6px;
+  background: rgba(248,246,240,0.06);
+  overflow: hidden;
+  border-radius: 3px;
+  margin-bottom: 8px;
+}
+.sm-presence-segment {
+  height: 100%;
+  transition: width 0.6s ease;
+}
+.sm-presence-segment--online  { background: var(--green); }
+.sm-presence-segment--idle    { background: var(--amber); }
+.sm-presence-segment--offline { background: rgba(248,246,240,0.15); }
+
+.sm-presence-legend {
+  display: flex;
+  gap: 20px;
+  font-size: 11px;
+  color: var(--white-dim);
+}
+.sm-presence-legend span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ── Refresh note ────────────────────────────────────────── */
+.sm-refresh-note {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: rgba(248,246,240,0.3);
+  letter-spacing: 0.3px;
+  transition: color 0.3s;
+}
+.sm-refresh-note--pulse {
+  color: var(--green);
+}
+
+/* ── Status dot ──────────────────────────────────────────── */
+.sm-dot {
+  display: inline-block;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* ── Role groups ─────────────────────────────────────────── */
+.sm-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sm-role-group {
+  background: var(--navy-card);
+  border: 1px solid var(--gold-border);
+  overflow: hidden;
+  position: relative;
+}
+.sm-role-group::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, var(--gold), transparent);
+}
+
+.sm-role-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  background: var(--gold-dim);
+  border: none;
+  cursor: pointer;
+  font-family: 'Raleway', sans-serif;
+  transition: background 0.15s;
+  gap: 12px;
+}
+.sm-role-header:hover { background: rgba(201,168,76,0.15); }
+
+.sm-role-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.sm-role-name {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+.sm-role-count {
+  font-size: 10px;
+  color: var(--white-dim);
+  letter-spacing: 0.5px;
+}
+
+.sm-role-pills {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sm-role-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border: 1px solid;
+  letter-spacing: 0.3px;
+}
+.sm-role-pill--online  { color: var(--green); border-color: var(--green-border); background: var(--green-bg); }
+.sm-role-pill--idle    { color: var(--amber); border-color: var(--amber-border); background: var(--amber-bg); }
+.sm-role-pill--offline { color: var(--white-dim); border-color: rgba(248,246,240,0.12); background: var(--white-faint); }
+
+.sm-role-chevron {
+  font-size: 9px;
+  color: var(--gold);
+  margin-left: 4px;
+}
+
+.sm-role-members {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Member row ──────────────────────────────────────────── */
+.sm-member-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  border-bottom: 1px solid rgba(201,168,76,0.06);
+  gap: 12px;
+  transition: background 0.15s;
+}
+.sm-member-row:last-child { border-bottom: none; }
+.sm-member-row:hover { background: var(--white-faint); }
+.sm-member-row--offline { opacity: 0.55; }
+.sm-member-row--offline:hover { opacity: 0.8; }
+
+.sm-member-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.sm-avatar {
+  width: 36px; height: 36px;
+  background: var(--gold-dim);
+  border: 1px solid var(--gold-border);
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Playfair Display', serif;
+  font-size: 13px;
+  color: var(--gold);
+  flex-shrink: 0;
+  position: relative;
+}
+.sm-avatar .sm-dot {
+  position: absolute;
+  bottom: -2px; right: -2px;
+  border: 2px solid var(--navy-card);
+}
+
+.sm-member-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.sm-member-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--white);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sm-member-id {
+  font-size: 10px;
+  color: rgba(248,246,240,0.3);
+  letter-spacing: 0.5px;
+}
+.sm-member-task {
+  font-size: 11px;
+  color: var(--gold);
+  font-style: italic;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+}
+
+.sm-member-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 5px;
+  flex-shrink: 0;
+}
+
+.sm-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  padding: 3px 9px;
+  border: 1px solid;
+}
+
+.sm-last-seen {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: rgba(248,246,240,0.3);
+  letter-spacing: 0.3px;
+}
+
+/* ── Responsive ──────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .sm-summary-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 600px) {
+  .sm-summary-grid { grid-template-columns: repeat(2, 1fr); }
+  .sm-member-task  { display: none; }
+  .sm-role-pills   { gap: 5px; }
+}
