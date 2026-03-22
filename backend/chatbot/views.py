@@ -94,7 +94,8 @@ class ChatView(APIView):
     Works for both authenticated and unauthenticated users.
     Unauthenticated users get general info only (no booking data).
     """
-    permission_classes = [AllowAny]
+    permission_classes     = [AllowAny]
+    authentication_classes = []  # Skip JWT auth entirely — we handle user manually below
 
     def post(self, request):
         serializer = ChatInputSerializer(data=request.data)
@@ -104,7 +105,29 @@ class ChatView(APIView):
         conversation_id = serializer.validated_data.get("conversation_id")
         session_key     = serializer.validated_data.get("session_key", "")
 
-        user = request.user if request.user.is_authenticated else None
+        # ── Manually resolve user from JWT if present ──────────────────────
+        user = _get_user_from_request(request)
+
+        # ── Staff recognition — redirect to support dashboard ─────────────
+        # Staff should use the Support Dashboard, not the guest chat widget.
+        if user and getattr(user, 'is_staff', False):
+            profile = getattr(user, 'staff_profile', None)
+            role = profile.effective_role if profile else 'staff'
+            return Response({
+                "conversation_id": None,
+                "message":         (
+                    f"Hi {user.first_name or user.email}! 👋 "
+                    f"As a **{role.replace('_', ' ').title()}**, you can manage guest support tickets "
+                    f"directly from the **Support Dashboard** at `/admin/support`.\n\n"
+                    f"This chat widget is for hotel guests only."
+                ),
+                "intent":          "STAFF_REDIRECT",
+                "data":            {"redirect": "/admin/support"},
+                "escalated":       False,
+                "quick_replies":   [],
+                "user_message_id": None,
+                "bot_message_id":  None,
+            })
 
         # ── Get or create conversation ─────────────────────────────────────
         conversation, is_new = _get_or_create_conversation(
@@ -190,7 +213,8 @@ class ChatView(APIView):
             response_data = route(
                 intent_result=intent_result,
                 conversation=conversation,
-                user=request.user,
+                user=user,
+                user_message=user_message,
             )
         except Exception as exc:
             logger.error("Intent router crashed: %s", exc, exc_info=True)
@@ -459,17 +483,14 @@ class SupportTicketAssignView(APIView):
 class PollMessagesView(APIView):
     """
     GET /api/chat/poll/<conversation_id>/?after=<message_id>
-
-    Returns any messages newer than `after` message ID.
-    Used by the chat widget to receive admin/support replies in real time.
-    Works for both authenticated and anonymous users (session_key required for anon).
     """
-    permission_classes = [AllowAny]
+    permission_classes     = [AllowAny]
+    authentication_classes = []
 
     def get(self, request, conversation_id):
         after_id    = request.query_params.get("after", 0)
         session_key = request.query_params.get("session_key", "")
-        user        = request.user if request.user.is_authenticated else None
+        user        = _get_user_from_request(request)
 
         try:
             conv = Conversation.objects.get(pk=conversation_id)
@@ -513,6 +534,27 @@ class DebugIntentView(APIView):
                 {"error": str(exc), "traceback": traceback.format_exc()},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+
+
+def _get_user_from_request(request):
+    """
+    Manually extract authenticated user from JWT Bearer token.
+    Returns the user if token is valid, None otherwise.
+    Used by views with authentication_classes=[] so they never return 401.
+    """
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        return None
+    token = auth_header.split(" ", 1)[1].strip()
+    if not token:
+        return None
+    try:
+        from rest_framework_simplejwt.authentication import JWTAuthentication
+        jwt_auth = JWTAuthentication()
+        validated = jwt_auth.get_validated_token(token)
+        return jwt_auth.get_user(validated)
+    except Exception:
+        return None
 
 
 def _is_admin_or_manager(user) -> bool:

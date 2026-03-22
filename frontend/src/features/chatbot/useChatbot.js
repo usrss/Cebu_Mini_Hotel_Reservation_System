@@ -190,6 +190,23 @@ export function useChatbot() {
         storeConversationId(data.conversation_id);
       }
 
+      // Staff redirect — show message but no conversation saved
+      if (data.intent === 'STAFF_REDIRECT') {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id:        Date.now() + 1,
+            sender:    'bot',
+            text:      data.message,
+            intent:    'STAFF_REDIRECT',
+            data:      data.data,
+            timestamp: new Date().toISOString(),
+          },
+        ]);
+        setQuickReplies([]);
+        return;
+      }
+
       // Add bot response — skip if no message returned (support mode quiet ack)
       if (data.message && data.bot_message_id !== null) {
         setMessages((prev) => [

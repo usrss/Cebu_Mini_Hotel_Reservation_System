@@ -117,7 +117,7 @@ HOTEL_ADDRESS = "123 Sample Street, Cebu City, Philippines 6000"
 HOTEL_PHONE  = "+63 32 123 4567"
 SUPPORT_EMAIL = "support@cebuMinihotel.com"
 
-GEMINI_API_KEY = config('GEMINI_API_KEY', default='')
+GROQ_API_KEY = config('GROQ_API_KEY', default='')
 
 
 # Cancellation policy shown in every confirmation email

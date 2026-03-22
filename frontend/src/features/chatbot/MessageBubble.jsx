@@ -22,10 +22,14 @@ function resolveImageUrl(url) {
 // ─── Simple markdown renderer (bold + line breaks only) ──────────────────────
 function renderText(text) {
   if (!text) return null;
-  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  // Split on bold (**text**) and strikethrough (~~text~~)
+  const parts = text.split(/(\*\*[^*]+\*\*|~~[^~]+~~)/g);
   return parts.map((part, i) => {
     if (part.startsWith('**') && part.endsWith('**')) {
       return <strong key={i}>{part.slice(2, -2)}</strong>;
+    }
+    if (part.startsWith('~~') && part.endsWith('~~')) {
+      return <s key={i}>{part.slice(2, -2)}</s>;
     }
     return part.split('\n').map((line, j, arr) => (
       <span key={`${i}-${j}`}>
@@ -58,7 +62,7 @@ function RoomCard({ room }) {
             <>
               <span className="cmh-price-original">₱{parseFloat(room.price_per_night).toLocaleString()}</span>
               <span className="cmh-price-current">₱{parseFloat(room.discounted_price).toLocaleString()}</span>
-              <span className="cmh-discount-badge">-{room.discount_percentage}%</span>
+              <span className="cmh-discount-badge">-{Math.abs(parseFloat(room.discount_percentage)).toFixed(0)}%</span>
             </>
           ) : (
             <span className="cmh-price-current">₱{parseFloat(room.price_per_night).toLocaleString()}</span>
