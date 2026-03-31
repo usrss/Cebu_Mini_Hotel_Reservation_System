@@ -1,20 +1,28 @@
 /**
  * src/features/staff/frontdesk/WalkInBookingPage.jsx
  *
- * Front Desk creates a walk-in booking and collects payment.
+ * Walk-In Booking — Front Desk creates a booking and collects payment.
+ *
+ * Payment flow:
+ *   Manual (Cash / GCash / Card / Bank Transfer)
+ *     → POST /payments/initiate/ → status=PROCESSING
+ *     → POST /payments/admin/<pk>/confirm/ → CONFIRMED immediately
+ *     → Shows success screen with reference number + PIN
+ *
+ *   PayMongo / PayPal
+ *     → POST /payments/initiate/ → returns checkout_url + payment_id
+ *     → payment_id + booking_id saved to sessionStorage (survives redirect)
+ *     → window.location.href = checkout_url  (same as guest booking flow)
+ *     → PayMongo webhook marks payment PAID and confirms booking server-side
+ *     → Browser redirects back to /payments/success?payment_id=<id>
+ *     → WalkInPaymentReturnPage reads payment_id from sessionStorage and polls
+ *       GET /payments/my/<paymentId>/verify/ — same endpoint as PaymentSuccessPage
  *
  * Availability flow:
  *   1. Staff selects check-in + check-out dates
- *   2. System calls POST /rooms/availability/ with the date range
- *   3. Only available rooms are shown in the room selector
- *   4. Changing dates clears the selected room and re-fetches availability
- *   5. Before confirming the booking, availability is re-validated on the backend
- *
- * Payment flow by method:
- *   Cash / GCash / Card / Bank Transfer
- *     → provider=manual → POST /payments/admin/<pk>/confirm/ → CONFIRMED immediately
- *   PayMongo / PayPal
- *     → provider=paymongo|paypal → returns checkout_url → show link to guest
+ *   2. POST /rooms/availability/ returns only available rooms for that range
+ *   3. Changing dates clears the selected room and re-fetches
+ *   4. Availability is re-validated on the backend before booking is created
  */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -32,28 +40,47 @@ import '../Staff.css';
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
-const STEP = { FORM: 'form', PAYMENT: 'payment', SUCCESS: 'success' };
+const STEP = { FORM: 'form', PAYMENT: 'payment', REDIRECTING: 'redirecting', SUCCESS: 'success' };
 
 const PAYMENT_TYPES = [
   { value: 'full_payment', label: 'Full Payment',  desc: '100% of total' },
   { value: 'deposit',      label: 'Deposit (30%)', desc: '30% now, rest at check-in' },
 ];
 
-const MANUAL_METHODS = ['cash', 'gcash', 'card', 'bank_transfer'];
-
 const PAYMENT_METHODS = [
-  { value: 'cash',          label: 'Cash',          icon: '💵', provider: 'manual',   group: 'immediate' },
-  { value: 'gcash',         label: 'GCash',         icon: '📱', provider: 'manual',   group: 'immediate' },
-  { value: 'card',          label: 'Card',          icon: '💳', provider: 'manual',   group: 'immediate' },
-  { value: 'bank_transfer', label: 'Bank Transfer', icon: '🏦', provider: 'manual',   group: 'immediate' },
-  { value: 'paymongo',      label: 'PayMongo',      icon: '🔗', provider: 'paymongo', group: 'online'    },
-  { value: 'paypal',        label: 'PayPal',        icon: '🅿',  provider: 'paypal',  group: 'online'    },
+  // Manual — confirmed immediately at the desk
+  { value: 'cash',          label: 'Cash',          icon: '💵', group: 'immediate' },
+  { value: 'gcash',         label: 'GCash',         icon: '📱', group: 'immediate' },
+  { value: 'card',          label: 'Card',          icon: '💳', group: 'immediate' },
+  { value: 'bank_transfer', label: 'Bank Transfer', icon: '🏦', group: 'immediate' },
+  // Online — browser redirects to provider checkout
+  { value: 'paymongo',      label: 'PayMongo',      icon: '🔗', group: 'online'    },
+  { value: 'paypal',        label: 'PayPal',        icon: '🅿',  group: 'online'    },
 ];
 
-const ONLINE_METHOD_MAP = {
-  paymongo: 'card',
-  paypal:   'paypal',
+/**
+ * Maps UI method values to the payment_method field the backend expects.
+ * InitiatePaymentSerializer derives provider automatically from payment_method:
+ *   cash           → provider=manual
+ *   gcash/card/
+ *   bank_transfer  → provider=paymongo
+ *   paypal         → provider=paypal
+ *
+ * For the online UI options (paymongo/paypal), we map to their respective
+ * backend payment_method values so the serializer picks the right provider.
+ */
+const BACKEND_METHOD_MAP = {
+  cash:          'cash',
+  gcash:         'gcash',
+  card:          'card',
+  bank_transfer: 'bank_transfer',
+  paymongo:      'card',    // serializer sees 'card' → sets provider=paymongo
+  paypal:        'paypal',  // serializer sees 'paypal' → sets provider=paypal
 };
+
+// sessionStorage keys used to pass payment context across the provider redirect
+const SS_PAYMENT_ID = 'walkin_payment_id';
+const SS_BOOKING_ID = 'walkin_booking_id';
 
 // ── Price calculator ───────────────────────────────────────────────────────────
 
@@ -88,71 +115,59 @@ export default function WalkInBookingPage() {
 
   const [step, setStep] = useState(STEP.FORM);
 
-  // ── Availability state ─────────────────────────────────────────────────────
-  // availableRooms: rooms returned by the backend for the selected date range.
-  // availLoading:   true while the availability request is in flight.
-  // availError:     string if the request failed or dates are invalid.
-  // availFetched:   true once at least one successful fetch has completed —
-  //                 used to distinguish "not yet checked" from "no results".
+  // ── Availability ───────────────────────────────────────────────────────────
   const [availableRooms, setAvailableRooms] = useState([]);
   const [availLoading,   setAvailLoading]   = useState(false);
   const [availError,     setAvailError]     = useState(null);
   const [availFetched,   setAvailFetched]   = useState(false);
 
-  // Step 1 — form fields
+  // ── Step 1: Booking form ───────────────────────────────────────────────────
   const [form, setForm] = useState({
     full_name: '', email: '', phone: '',
     room_id: '', check_in: today, check_out: tomorrow, guests_count: 1,
   });
   const [formErrors, setFormErrors] = useState({});
   const [formBusy,   setFormBusy]   = useState(false);
+  const [booking,    setBooking]    = useState(null);
 
-  // Step 1 result
-  const [booking, setBooking] = useState(null);
-
-  // Step 2 — payment
+  // ── Step 2: Payment ────────────────────────────────────────────────────────
   const [paymentType,    setPaymentType]    = useState('full_payment');
   const [selectedMethod, setSelectedMethod] = useState(null);
   const [payBusy,        setPayBusy]        = useState(false);
   const [payError,       setPayError]       = useState(null);
 
-  // Step 3 — result
+  // ── Step 3: Success (manual only — online redirects away) ─────────────────
   const [confirmed,   setConfirmed]   = useState(null);
-  const [checkoutUrl, setCheckoutUrl] = useState(null);
   const [checkInBusy, setCheckInBusy] = useState(false);
   const [checkedIn,   setCheckedIn]   = useState(false);
 
-  // ── Fetch available rooms whenever dates change ────────────────────────────
+  // ── Fetch available rooms ──────────────────────────────────────────────────
   const fetchAvailability = useCallback(async (checkIn, checkOut) => {
-    // Guard: both dates must be present and logically valid
     if (!datesAreValid(checkIn, checkOut, today)) {
       setAvailableRooms([]);
       setAvailFetched(false);
       setAvailError(null);
       return;
     }
-
     setAvailLoading(true);
     setAvailError(null);
     setAvailFetched(false);
-
     try {
       const rooms = await frontDeskRoomsApi.available(checkIn, checkOut);
       setAvailableRooms(rooms);
       setAvailFetched(true);
     } catch (err) {
-      const msg =
+      setAvailError(
         err.response?.data?.detail ||
         err.response?.data?.error  ||
-        'Failed to check availability. Please try again.';
-      setAvailError(msg);
+        'Failed to check availability. Please try again.',
+      );
       setAvailableRooms([]);
     } finally {
       setAvailLoading(false);
     }
   }, [today]);
 
-  // Run on initial mount with default dates
   useEffect(() => {
     fetchAvailability(form.check_in, form.check_out);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -160,24 +175,16 @@ export default function WalkInBookingPage() {
   // ── Field change handler ───────────────────────────────────────────────────
   const setField = (field) => (e) => {
     const value = e.target.value;
-
     setForm((f) => {
       const next = { ...f, [field]: value };
-
-      // When either date changes:
-      //  1. Clear the selected room — it may no longer be available
-      //  2. Re-fetch availability for the new date range
       if (field === 'check_in' || field === 'check_out') {
         next.room_id = '';
         const newCheckIn  = field === 'check_in'  ? value : f.check_in;
         const newCheckOut = field === 'check_out' ? value : f.check_out;
-        // Schedule fetch after state update
         setTimeout(() => fetchAvailability(newCheckIn, newCheckOut), 0);
       }
-
       return next;
     });
-
     setFormErrors((fe) => ({ ...fe, [field]: null }));
   };
 
@@ -204,16 +211,13 @@ export default function WalkInBookingPage() {
     if (nights <= 0)            errors.check_out = 'Check-out must be after check-in';
     if (Object.keys(errors).length) { setFormErrors(errors); return; }
 
-    // ── Backend re-validation before creating the booking ──────────────────
-    // Re-check availability so we never create a booking on a room that was
-    // taken between when staff loaded the form and when they hit "Continue".
     setFormBusy(true);
-    try {
-      const freshRooms = await frontDeskRoomsApi.available(form.check_in, form.check_out);
-      const stillAvailable = freshRooms.some((r) => String(r.id) === String(form.room_id));
 
+    // Re-validate availability before submitting
+    try {
+      const freshRooms     = await frontDeskRoomsApi.available(form.check_in, form.check_out);
+      const stillAvailable = freshRooms.some((r) => String(r.id) === String(form.room_id));
       if (!stillAvailable) {
-        // Update the room list so the UI reflects current state
         setAvailableRooms(freshRooms);
         setForm((f) => ({ ...f, room_id: '' }));
         setFormErrors({ room_id: 'This room was just booked. Please select another.' });
@@ -221,11 +225,9 @@ export default function WalkInBookingPage() {
         return;
       }
     } catch {
-      // If availability re-check fails, let the backend booking call handle it
-      // — don't block the staff from proceeding on a network hiccup.
+      // Network hiccup — let the backend booking call handle it
     }
 
-    // ── Create the booking ─────────────────────────────────────────────────
     try {
       const created = await frontDeskBookingsApi.createWalkIn({
         room_id:      parseInt(form.room_id),
@@ -257,39 +259,75 @@ export default function WalkInBookingPage() {
   // ── Step 2: Process payment ────────────────────────────────────────────────
   async function handlePayment() {
     if (!selectedMethod) { setPayError('Please select a payment method.'); return; }
-    setPayBusy(true); setPayError(null);
+    setPayBusy(true);
+    setPayError(null);
 
-    const isManual = selectedMethod.group === 'immediate';
-    const provider = selectedMethod.provider;
-    const paymentMethod = isManual
-      ? selectedMethod.value
-      : ONLINE_METHOD_MAP[provider];
+    const isManual      = selectedMethod.group === 'immediate';
+    const paymentMethod = BACKEND_METHOD_MAP[selectedMethod.value];
 
     try {
+      // Only send what InitiatePaymentSerializer accepts.
+      // Do NOT send provider, success_url, or cancel_url — the serializer
+      // ignores unknown fields and derives provider from payment_method itself.
+      // Amount is always computed server-side.
       const payment = await frontDeskPaymentsApi.initiate({
         booking_id:     booking.id,
         payment_type:   paymentType,
         payment_method: paymentMethod,
-        provider:       provider,
-        amount:         amountToPay,
       });
 
       if (isManual) {
+        // ── Manual: confirm immediately at desk ────────────────────────────
         const paymentId = payment.payment_id ?? payment.id;
         await frontDeskPaymentsApi.confirmManual(
           paymentId,
           `Walk-in payment at front desk via ${selectedMethod.label}.`,
         );
+        // Fetch confirmed booking — now has reference_number + checkin_pin
         const updated = await frontDeskBookingsApi.detail(booking.id);
         setConfirmed(updated);
-        setCheckoutUrl(null);
+        setStep(STEP.SUCCESS);
+
       } else {
-        setCheckoutUrl(payment.checkout_url);
-        const updated = await frontDeskBookingsApi.detail(booking.id);
-        setConfirmed(updated);
+        // ── Online: sessionStorage → redirect ──────────────────────────────
+        //
+        // The backend always redirects PayMongo back to:
+        //   /payments/success?payment_id=<id>
+        // We cannot change this without a backend change (Option A).
+        //
+        // Instead we store the IDs in sessionStorage before navigating away.
+        // sessionStorage is per-tab and survives the redirect within the same tab.
+        //
+        // WalkInPaymentReturnPage reads these keys and polls
+        // GET /payments/my/<paymentId>/verify/ — the exact same endpoint and
+        // polling pattern used by the guest-facing PaymentSuccessPage.
+        // No new backend endpoints needed.
+
+        const checkoutUrl = payment.checkout_url;
+
+        if (!checkoutUrl) {
+          setPayError('No checkout URL returned by the payment gateway. Please try again.');
+          setPayBusy(false);
+          return;
+        }
+
+        // Persist across the redirect
+        sessionStorage.setItem(SS_PAYMENT_ID, String(payment.payment_id ?? payment.id));
+        sessionStorage.setItem(SS_BOOKING_ID, String(booking.id));
+
+        // Show a brief redirecting screen so staff knows what's happening
+        setStep(STEP.REDIRECTING);
+
+        // Small delay so the screen renders before navigation
+        setTimeout(() => {
+          window.location.href = checkoutUrl;
+        }, 800);
+
+        // Intentionally do NOT call setPayBusy(false) here.
+        // Keep the button locked until the page navigates away
+        // to prevent double-submits during the 800ms delay.
       }
 
-      setStep(STEP.SUCCESS);
     } catch (err) {
       const d = err.response?.data;
       if (d && typeof d === 'object') {
@@ -302,15 +340,14 @@ export default function WalkInBookingPage() {
           err.response?.data?.error  ||
           err.response?.data?.detail ||
           err.message                ||
-          'Payment failed. Please try again.'
+          'Payment failed. Please try again.',
         );
       }
-    } finally {
       setPayBusy(false);
     }
   }
 
-  // ── Optional: check in immediately after confirming ────────────────────────
+  // ── Check in immediately after manual confirm ──────────────────────────────
   async function handleCheckInNow() {
     if (!confirmed) return;
     setCheckInBusy(true);
@@ -324,26 +361,29 @@ export default function WalkInBookingPage() {
     }
   }
 
+  // ── Reset to clean form ────────────────────────────────────────────────────
   function reset() {
     setStep(STEP.FORM);
-    setBooking(null); setConfirmed(null);
-    setCheckoutUrl(null); setCheckedIn(false);
-    setPayError(null); setFormErrors({});
-    setSelectedMethod(null); setPaymentType('full_payment');
-    setAvailableRooms([]); setAvailFetched(false); setAvailError(null);
+    setBooking(null);
+    setConfirmed(null);
+    setCheckedIn(false);
+    setPayError(null);
+    setFormErrors({});
+    setSelectedMethod(null);
+    setPaymentType('full_payment');
+    setAvailableRooms([]);
+    setAvailFetched(false);
+    setAvailError(null);
     const newForm = {
       full_name: '', email: '', phone: '',
       room_id: '', check_in: today, check_out: tomorrow, guests_count: 1,
     };
     setForm(newForm);
-    // Fetch availability for the reset dates
     fetchAvailability(today, tomorrow);
   }
 
-  // ── Room selector content ──────────────────────────────────────────────────
-  // Separated out to keep the JSX readable.
+  // ── Room selector helper ───────────────────────────────────────────────────
   function renderRoomSelector() {
-    // Dates not yet valid — prompt staff to fill them in first
     if (!datesAreValid(form.check_in, form.check_out, today)) {
       return (
         <div className="fd-notice fd-notice-amber">
@@ -352,8 +392,6 @@ export default function WalkInBookingPage() {
         </div>
       );
     }
-
-    // Loading
     if (availLoading) {
       return (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--white-dim)', fontSize: 13 }}>
@@ -362,8 +400,6 @@ export default function WalkInBookingPage() {
         </div>
       );
     }
-
-    // Availability fetch failed
     if (availError) {
       return (
         <div className="fd-notice fd-notice-error">
@@ -372,8 +408,6 @@ export default function WalkInBookingPage() {
         </div>
       );
     }
-
-    // Fetch completed but no rooms available
     if (availFetched && availableRooms.length === 0) {
       return (
         <div className="fd-notice fd-notice-amber">
@@ -382,8 +416,6 @@ export default function WalkInBookingPage() {
         </div>
       );
     }
-
-    // Rooms available — show selector
     if (availFetched && availableRooms.length > 0) {
       return (
         <select
@@ -394,14 +426,12 @@ export default function WalkInBookingPage() {
           <option value="">Select available room…</option>
           {availableRooms.map((r) => (
             <option key={r.id} value={r.id}>
-              Room {r.room_number} — {ROOM_TYPE_LABELS[r.room_type] || r.room_type} · {r.bed_type} bed · {r.capacity} guests · {formatPHP(r.discounted_price || r.price_per_night)}/night
+              Room {r.room_number} — {ROOM_TYPE_LABELS[r.room_type] || r.room_type} · {r.bed_type} bed · {r.capacity} guest{r.capacity !== 1 ? 's' : ''} · {formatPHP(r.discounted_price || r.price_per_night)}/night
             </option>
           ))}
         </select>
       );
     }
-
-    // Default: not yet fetched (e.g. initial render before first fetch resolves)
     return (
       <div style={{ color: 'var(--white-dim)', fontSize: 13 }}>
         Select dates above to see available rooms.
@@ -422,6 +452,24 @@ export default function WalkInBookingPage() {
           </div>
           <button className="fd-btn" onClick={() => navigate('/staff/front-desk')}>← Back</button>
         </div>
+
+        {/* ════ REDIRECTING ════ */}
+        {step === STEP.REDIRECTING && (
+          <div className="fd-card">
+            <div style={{ textAlign: 'center', padding: '48px 20px' }}>
+              <div className="fd-spinner" style={{ margin: '0 auto 24px' }} />
+              <p style={{
+                fontFamily: "'Playfair Display', serif",
+                fontSize: 22, color: 'var(--white)', marginBottom: 8,
+              }}>
+                Redirecting to {selectedMethod?.label}
+              </p>
+              <p style={{ fontSize: 13, color: 'var(--white-dim)' }}>
+                Please wait — you're being sent to the payment gateway.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* ════ STEP 1: BOOKING FORM ════ */}
         {step === STEP.FORM && (
@@ -445,8 +493,10 @@ export default function WalkInBookingPage() {
                   <label className="fd-label fd-label-req">Full Name</label>
                   <input
                     className={`fd-input-lg${formErrors.full_name ? ' error' : ''}`}
-                    value={form.full_name} onChange={setField('full_name')}
-                    placeholder="Juan dela Cruz" autoFocus
+                    value={form.full_name}
+                    onChange={setField('full_name')}
+                    placeholder="Juan dela Cruz"
+                    autoFocus
                   />
                   {formErrors.full_name && <p style={{ color: 'var(--red)', fontSize: 11, marginTop: 4 }}>{formErrors.full_name}</p>}
                 </div>
@@ -455,7 +505,8 @@ export default function WalkInBookingPage() {
                   <input
                     type="email"
                     className={`fd-input-lg${formErrors.email ? ' error' : ''}`}
-                    value={form.email} onChange={setField('email')}
+                    value={form.email}
+                    onChange={setField('email')}
                     placeholder="juan@example.com"
                   />
                   {formErrors.email && <p style={{ color: 'var(--red)', fontSize: 11, marginTop: 4 }}>{formErrors.email}</p>}
@@ -464,7 +515,8 @@ export default function WalkInBookingPage() {
                   <label className="fd-label fd-label-req">Phone Number</label>
                   <input
                     className={`fd-input-lg${formErrors.phone ? ' error' : ''}`}
-                    value={form.phone} onChange={setField('phone')}
+                    value={form.phone}
+                    onChange={setField('phone')}
                     placeholder="09XX-XXX-XXXX"
                   />
                   {formErrors.phone && <p style={{ color: 'var(--red)', fontSize: 11, marginTop: 4 }}>{formErrors.phone}</p>}
@@ -472,15 +524,18 @@ export default function WalkInBookingPage() {
                 <div className="fd-form-group">
                   <label className="fd-label">Number of Guests</label>
                   <input
-                    type="number" min={1} max={selectedRoom?.capacity || 10}
-                    className="fd-input-lg" value={form.guests_count}
+                    type="number"
+                    min={1}
+                    max={selectedRoom?.capacity || 10}
+                    className="fd-input-lg"
+                    value={form.guests_count}
                     onChange={setField('guests_count')}
                   />
                 </div>
               </div>
             </div>
 
-            {/* Dates first, then room — availability depends on dates */}
+            {/* Stay Dates */}
             <div className="fd-card">
               <div className="fd-card-label">Stay Dates</div>
               <div className="fd-form-grid">
@@ -489,7 +544,8 @@ export default function WalkInBookingPage() {
                   <input
                     type="date"
                     className={`fd-input-lg${formErrors.check_in ? ' error' : ''}`}
-                    value={form.check_in} min={today}
+                    value={form.check_in}
+                    min={today}
                     onChange={setField('check_in')}
                   />
                   {formErrors.check_in && <p style={{ color: 'var(--red)', fontSize: 11, marginTop: 4 }}>{formErrors.check_in}</p>}
@@ -499,7 +555,8 @@ export default function WalkInBookingPage() {
                   <input
                     type="date"
                     className={`fd-input-lg${formErrors.check_out ? ' error' : ''}`}
-                    value={form.check_out} min={form.check_in || today}
+                    value={form.check_out}
+                    min={form.check_in || today}
                     onChange={setField('check_out')}
                   />
                   {formErrors.check_out && <p style={{ color: 'var(--red)', fontSize: 11, marginTop: 4 }}>{formErrors.check_out}</p>}
@@ -507,31 +564,27 @@ export default function WalkInBookingPage() {
               </div>
             </div>
 
-            {/* Room selector — shown after dates, always reflects current availability */}
+            {/* Available Room */}
             <div className="fd-card">
               <div className="fd-card-label">Available Room</div>
-
-              {/* Availability count badge */}
               {availFetched && !availLoading && (
                 <p style={{ fontSize: 12, color: 'var(--white-dim)', marginBottom: 12, marginTop: -6 }}>
                   {availableRooms.length} room{availableRooms.length !== 1 ? 's' : ''} available
                   {' '}for {form.check_in} → {form.check_out}
                 </p>
               )}
-
               <div className="fd-form-group" style={{ marginBottom: 0 }}>
                 {renderRoomSelector()}
                 {formErrors.room_id && <p style={{ color: 'var(--red)', fontSize: 11, marginTop: 4 }}>{formErrors.room_id}</p>}
               </div>
 
-              {/* Price preview — only shown when a room is selected */}
               {prices && (
                 <div className="fd-price-box" style={{ marginTop: 16 }}>
                   {[
                     ['Room rate / night', formatPHP(selectedRoom?.discounted_price || selectedRoom?.price_per_night)],
                     [`Subtotal (${nights} night${nights !== 1 ? 's' : ''})`, formatPHP(prices.subtotal)],
-                    ['Tax (12%)',        formatPHP(prices.tax)],
-                    ['Service Fee (5%)', formatPHP(prices.serviceFee)],
+                    ['Tax (12%)',         formatPHP(prices.tax)],
+                    ['Service Fee (5%)',  formatPHP(prices.serviceFee)],
                   ].map(([label, val]) => (
                     <div className="fd-price-row" key={label}>
                       <span className="fd-price-label">{label}</span>
@@ -566,6 +619,8 @@ export default function WalkInBookingPage() {
         {/* ════ STEP 2: PAYMENT ════ */}
         {step === STEP.PAYMENT && booking && prices && (
           <div>
+
+            {/* Booking summary */}
             <div className="fd-card">
               <div className="fd-card-label">Booking Created</div>
               <div className="fd-notice fd-notice-blue" style={{ marginBottom: 0 }}>
@@ -595,12 +650,17 @@ export default function WalkInBookingPage() {
                 <label className="fd-label">Payment Type</label>
                 <div style={{ display: 'flex', gap: 10 }}>
                   {PAYMENT_TYPES.map((pt) => (
-                    <button key={pt.value} type="button"
+                    <button
+                      key={pt.value}
+                      type="button"
                       className={`fd-btn${paymentType === pt.value ? ' fd-btn-primary' : ''}`}
                       style={{ flex: 1, padding: '11px', flexDirection: 'column', gap: 2 }}
-                      onClick={() => setPaymentType(pt.value)}>
+                      onClick={() => setPaymentType(pt.value)}
+                    >
                       <span>{pt.label}</span>
-                      <span style={{ fontSize: 9, opacity: 0.7, letterSpacing: 0.5, textTransform: 'none', fontWeight: 400 }}>{pt.desc}</span>
+                      <span style={{ fontSize: 9, opacity: 0.7, letterSpacing: 0.5, textTransform: 'none', fontWeight: 400 }}>
+                        {pt.desc}
+                      </span>
                     </button>
                   ))}
                 </div>
@@ -610,57 +670,93 @@ export default function WalkInBookingPage() {
               <div className="fd-form-group">
                 <label className="fd-label">Payment Method</label>
 
-                <p style={{ fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--white-dim)', margin: '0 0 8px' }}>
+                {/* Manual */}
+                <p style={{
+                  fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase',
+                  color: 'var(--white-dim)', margin: '0 0 8px',
+                }}>
                   Collect at Desk — Confirmed Immediately
                 </p>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10, marginBottom: 16 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10, marginBottom: 20 }}>
                   {PAYMENT_METHODS.filter((m) => m.group === 'immediate').map((pm) => (
-                    <button key={pm.value} type="button"
+                    <button
+                      key={pm.value}
+                      type="button"
                       onClick={() => { setSelectedMethod(pm); setPayError(null); }}
                       style={{
-                        background: selectedMethod?.value === pm.value ? 'var(--gold-dim)' : 'var(--navy-mid)',
-                        border: `1px solid ${selectedMethod?.value === pm.value ? 'var(--gold)' : 'var(--gold-border)'}`,
-                        color: selectedMethod?.value === pm.value ? 'var(--gold)' : 'var(--white-dim)',
-                        padding: '12px 8px', cursor: 'pointer',
-                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
-                        fontFamily: "'Raleway', sans-serif",
-                        fontSize: 11, fontWeight: 600, letterSpacing: 1,
-                        transition: 'all 0.18s',
-                      }}>
+                        background:    selectedMethod?.value === pm.value ? 'var(--gold-dim)' : 'var(--navy-mid)',
+                        border:        `1px solid ${selectedMethod?.value === pm.value ? 'var(--gold)' : 'var(--gold-border)'}`,
+                        color:         selectedMethod?.value === pm.value ? 'var(--gold)' : 'var(--white-dim)',
+                        padding:       '12px 8px',
+                        cursor:        'pointer',
+                        display:       'flex',
+                        flexDirection: 'column',
+                        alignItems:    'center',
+                        gap:           6,
+                        fontFamily:    "'Raleway', sans-serif",
+                        fontSize:      11,
+                        fontWeight:    600,
+                        letterSpacing: 1,
+                        transition:    'all 0.18s',
+                      }}
+                    >
                       <span style={{ fontSize: 20 }}>{pm.icon}</span>
                       {pm.label}
                     </button>
                   ))}
                 </div>
 
-                <p style={{ fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--white-dim)', margin: '0 0 8px' }}>
-                  Online — Guest Pays via Checkout Link
+                {/* Online */}
+                <p style={{
+                  fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase',
+                  color: 'var(--white-dim)', margin: '0 0 8px',
+                }}>
+                  Online — Redirect to Payment Gateway
                 </p>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 10 }}>
                   {PAYMENT_METHODS.filter((m) => m.group === 'online').map((pm) => (
-                    <button key={pm.value} type="button"
+                    <button
+                      key={pm.value}
+                      type="button"
                       onClick={() => { setSelectedMethod(pm); setPayError(null); }}
                       style={{
                         background: selectedMethod?.value === pm.value ? 'var(--blue-bg)' : 'var(--navy-mid)',
-                        border: `1px solid ${selectedMethod?.value === pm.value ? 'var(--blue-border)' : 'var(--gold-border)'}`,
-                        color: selectedMethod?.value === pm.value ? 'var(--blue)' : 'var(--white-dim)',
-                        padding: '12px 14px', cursor: 'pointer',
-                        display: 'flex', alignItems: 'center', gap: 12,
+                        border:     `1px solid ${selectedMethod?.value === pm.value ? 'var(--blue-border)' : 'var(--gold-border)'}`,
+                        color:      selectedMethod?.value === pm.value ? 'var(--blue)' : 'var(--white-dim)',
+                        padding:    '12px 14px',
+                        cursor:     'pointer',
+                        display:    'flex',
+                        alignItems: 'center',
+                        gap:        12,
                         fontFamily: "'Raleway', sans-serif",
-                        fontSize: 12, fontWeight: 600,
+                        fontSize:   12,
+                        fontWeight: 600,
                         transition: 'all 0.18s',
-                      }}>
+                      }}
+                    >
                       <span style={{ fontSize: 22 }}>{pm.icon}</span>
                       <div style={{ textAlign: 'left' }}>
                         <div>{pm.label}</div>
                         <div style={{ fontSize: 10, opacity: 0.6, fontWeight: 400, marginTop: 2 }}>
-                          Sends checkout link to guest
+                          Browser redirects to checkout page
                         </div>
                       </div>
                     </button>
                   ))}
                 </div>
               </div>
+
+              {/* Online notice */}
+              {selectedMethod?.group === 'online' && (
+                <div className="fd-notice fd-notice-blue" style={{ marginBottom: 14 }}>
+                  <span className="fd-notice-icon">ℹ</span>
+                  <span style={{ fontSize: 12 }}>
+                    Clicking <strong>Proceed to {selectedMethod.label}</strong> will open the{' '}
+                    {selectedMethod.label} hosted checkout page. The booking is confirmed
+                    automatically once payment is completed. You will be redirected back after payment.
+                  </span>
+                </div>
+              )}
 
               {/* Amount summary */}
               <div className="fd-price-box" style={{ marginBottom: 18 }}>
@@ -676,29 +772,26 @@ export default function WalkInBookingPage() {
                 </div>
               </div>
 
-              {selectedMethod?.group === 'online' && (
-                <div className="fd-notice fd-notice-blue" style={{ marginBottom: 14 }}>
-                  <span className="fd-notice-icon">ℹ</span>
-                  <span style={{ fontSize: 12 }}>
-                    A checkout link will be generated. Share it with the guest or open it on their device.
-                    The booking will be confirmed automatically once payment is completed.
-                  </span>
-                </div>
-              )}
-
+              {/* Action buttons */}
               <div style={{ display: 'flex', gap: 10 }}>
-                <button className="fd-btn" onClick={() => setStep(STEP.FORM)} style={{ flex: 1 }}>
+                <button
+                  className="fd-btn"
+                  onClick={() => setStep(STEP.FORM)}
+                  style={{ flex: 1 }}
+                  disabled={payBusy}
+                >
                   ← Back
                 </button>
                 <button
                   className="fd-btn fd-btn-success"
                   style={{ flex: 2, padding: '13px' }}
                   onClick={handlePayment}
-                  disabled={payBusy || !selectedMethod}>
+                  disabled={payBusy || !selectedMethod}
+                >
                   {payBusy ? (
                     <><span className="fd-spinner-sm" /> Processing…</>
                   ) : selectedMethod?.group === 'online' ? (
-                    `Generate ${selectedMethod.label} Checkout Link`
+                    `Proceed to ${selectedMethod.label} →`
                   ) : (
                     `✓ Confirm ${formatPHP(amountToPay)} Payment`
                   )}
@@ -708,126 +801,77 @@ export default function WalkInBookingPage() {
           </div>
         )}
 
-        {/* ════ STEP 3: SUCCESS ════ */}
+        {/* ════ STEP 3: SUCCESS (manual payments only) ════ */}
         {step === STEP.SUCCESS && confirmed && (
           <div className="fd-card">
-            {checkoutUrl ? (
-              <div className="fd-success">
-                <div className="fd-success-icon" style={{ background: 'var(--blue-bg)', borderColor: 'var(--blue-border)', color: 'var(--blue)' }}>
-                  🔗
+            <div className="fd-success">
+              <div className="fd-success-icon">✓</div>
+              <h2 className="fd-success-title">Booking Confirmed</h2>
+              <p className="fd-success-sub">
+                Walk-in booking for <strong>{confirmed.full_name}</strong> is confirmed and paid.
+                Share the credentials below with the guest.
+              </p>
+
+              <dl className="fd-success-creds">
+                {[
+                  ['Reference Number', confirmed.reference_number],
+                  ['Check-In PIN',     confirmed.checkin_pin],
+                  ['Room',             `${confirmed.room_number} — ${confirmed.room_type}`],
+                  ['Stay', `${confirmed.check_in
+                    ? new Date(confirmed.check_in + 'T00:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })
+                    : '—'} → ${confirmed.check_out
+                    ? new Date(confirmed.check_out + 'T00:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })
+                    : '—'}`],
+                  ['Amount Paid', formatPHP(confirmed.amount_paid)],
+                  ...(parseFloat(confirmed.amount_due || '0') > 0
+                    ? [['Balance Due', formatPHP(confirmed.amount_due)]]
+                    : []),
+                ].map(([label, value]) => (
+                  <div className="fd-cred-item" key={label}>
+                    <dt>{label}</dt>
+                    <dd className={['Reference Number', 'Check-In PIN'].includes(label) ? 'highlight' : ''}>
+                      {value || '—'}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+
+              {!checkedIn && confirmed.status === 'confirmed' && (
+                <div className="fd-notice fd-notice-blue" style={{ maxWidth: 420, margin: '0 auto 20px', textAlign: 'left' }}>
+                  <span className="fd-notice-icon">ℹ</span>
+                  <div>
+                    <strong>Guest is here now?</strong>
+                    <p style={{ margin: '4px 0 0', fontSize: 12 }}>
+                      Check them in immediately — no PIN flow needed.
+                    </p>
+                  </div>
                 </div>
-                <h2 className="fd-success-title" style={{ color: 'var(--blue)' }}>Checkout Link Ready</h2>
-                <p className="fd-success-sub">
-                  Share this link with the guest to complete their{' '}
-                  {selectedMethod?.label} payment of {formatPHP(amountToPay)}.
-                </p>
-
-                <div style={{
-                  background: 'var(--navy-mid)', border: '1px solid var(--blue-border)',
-                  padding: '14px 16px', maxWidth: 500, margin: '0 auto 20px',
-                  wordBreak: 'break-all', fontSize: 12, color: 'var(--blue)',
-                  textAlign: 'left',
-                }}>
-                  <p style={{ fontSize: 9, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--white-dim)', margin: '0 0 6px' }}>
-                    Checkout URL
-                  </p>
-                  <a href={checkoutUrl} target="_blank" rel="noopener noreferrer"
-                    style={{ color: 'var(--blue)', textDecoration: 'underline' }}>
-                    {checkoutUrl}
-                  </a>
+              )}
+              {checkedIn && (
+                <div className="fd-notice fd-notice-success" style={{ maxWidth: 420, margin: '0 auto 20px', textAlign: 'left' }}>
+                  <span className="fd-notice-icon">✓</span>
+                  <strong>Guest checked in. Room {confirmed.room_number} is now Occupied.</strong>
                 </div>
+              )}
 
-                <div className="fd-notice fd-notice-amber" style={{ maxWidth: 460, margin: '0 auto 20px', textAlign: 'left' }}>
-                  <span className="fd-notice-icon">⚠</span>
-                  <span style={{ fontSize: 12 }}>
-                    The booking is <strong>pending payment</strong>. Reference number and PIN will be
-                    generated automatically once the guest completes payment online.
-                  </span>
-                </div>
-
-                <dl className="fd-success-creds">
-                  {[
-                    ['Guest',     confirmed.full_name],
-                    ['Room',      confirmed.room_number],
-                    ['Check-In',  confirmed.check_in ? new Date(confirmed.check_in + 'T00:00:00').toLocaleDateString('en-PH') : '—'],
-                    ['Check-Out', confirmed.check_out ? new Date(confirmed.check_out + 'T00:00:00').toLocaleDateString('en-PH') : '—'],
-                  ].map(([label, value]) => (
-                    <div className="fd-cred-item" key={label}>
-                      <dt>{label}</dt>
-                      <dd>{value || '—'}</dd>
-                    </div>
-                  ))}
-                </dl>
-
-                <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
-                  <button className="fd-btn" onClick={() => { navigator.clipboard.writeText(checkoutUrl); }}>
-                    Copy Link
-                  </button>
-                  <a href={checkoutUrl} target="_blank" rel="noopener noreferrer"
-                    className="fd-btn fd-btn-primary" style={{ textDecoration: 'none' }}>
-                    Open Link →
-                  </a>
-                  <button className="fd-btn fd-btn-primary" onClick={reset}>+ New Walk-In</button>
-                </div>
-              </div>
-            ) : (
-              <div className="fd-success">
-                <div className="fd-success-icon">✓</div>
-                <h2 className="fd-success-title">Booking Confirmed</h2>
-                <p className="fd-success-sub">
-                  Walk-in booking for {confirmed.full_name} is confirmed and paid.
-                  Share the credentials below with the guest.
-                </p>
-
-                <dl className="fd-success-creds">
-                  {[
-                    ['Reference Number', confirmed.reference_number],
-                    ['Check-In PIN',     confirmed.checkin_pin],
-                    ['Room',             `${confirmed.room_number} — ${confirmed.room_type}`],
-                    ['Stay',             `${confirmed.check_in ? new Date(confirmed.check_in + 'T00:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric' }) : '—'} → ${confirmed.check_out ? new Date(confirmed.check_out + 'T00:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}`],
-                    ['Amount Paid',      formatPHP(confirmed.amount_paid)],
-                    ...(parseFloat(confirmed.amount_due || '0') > 0
-                      ? [['Balance Due', formatPHP(confirmed.amount_due)]]
-                      : []),
-                  ].map(([label, value]) => (
-                    <div className="fd-cred-item" key={label}>
-                      <dt>{label}</dt>
-                      <dd className={['Reference Number', 'Check-In PIN'].includes(label) ? 'highlight' : ''}>
-                        {value || '—'}
-                      </dd>
-                    </div>
-                  ))}
-                </dl>
-
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+                <button className="fd-btn" onClick={() => window.print()}>🖨 Print Receipt</button>
                 {!checkedIn && confirmed.status === 'confirmed' && (
-                  <div className="fd-notice fd-notice-blue" style={{ maxWidth: 420, margin: '0 auto 20px', textAlign: 'left' }}>
-                    <span className="fd-notice-icon">ℹ</span>
-                    <div>
-                      <strong>Guest is here now?</strong>
-                      <p style={{ margin: '4px 0 0', fontSize: 12 }}>
-                        Check the guest in immediately — no need to go through the PIN flow again.
-                      </p>
-                    </div>
-                  </div>
+                  <button
+                    className="fd-btn fd-btn-success"
+                    onClick={handleCheckInNow}
+                    disabled={checkInBusy}
+                  >
+                    {checkInBusy
+                      ? <><span className="fd-spinner-sm" /> Checking In…</>
+                      : '✓ Check In Guest Now'}
+                  </button>
                 )}
-                {checkedIn && (
-                  <div className="fd-notice fd-notice-success" style={{ maxWidth: 420, margin: '0 auto 20px', textAlign: 'left' }}>
-                    <span className="fd-notice-icon">✓</span>
-                    <strong>Guest checked in. Room {confirmed.room_number} is now Occupied.</strong>
-                  </div>
-                )}
-
-                <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
-                  <button className="fd-btn" onClick={() => window.print()}>🖨 Print Receipt</button>
-                  {!checkedIn && confirmed.status === 'confirmed' && (
-                    <button className="fd-btn fd-btn-success" onClick={handleCheckInNow} disabled={checkInBusy}>
-                      {checkInBusy ? <><span className="fd-spinner-sm" /> Checking In…</> : '✓ Check In Guest Now'}
-                    </button>
-                  )}
-                  <button className="fd-btn fd-btn-primary" onClick={reset}>+ New Walk-In</button>
-                </div>
+                <button className="fd-btn fd-btn-primary" onClick={reset}>
+                  + New Walk-In
+                </button>
               </div>
-            )}
+            </div>
           </div>
         )}
 

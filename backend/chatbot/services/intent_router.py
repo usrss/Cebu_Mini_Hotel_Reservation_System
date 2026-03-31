@@ -332,31 +332,31 @@ def _handle_view_booking(user, language: str = "english") -> dict:
         if lang == "tagalog":
             message = (
                 f"Ang iyong pinakabagong booking ay **Kwarto {b['room_number']} ({b['room_type']})**.\n"
-                f"📅 Check-in: {b['check_in']} · Check-out: {b['check_out']}\n"
+                f" Check-in: {b['check_in']} · Check-out: {b['check_out']}\n"
                 f"Status: **{b['status']}**"
             )
             if b["has_credentials"]:
-                message += f"\n🔑 Check-in PIN: **{b['checkin_pin']}**"
+                message += f"\n Check-in PIN: **{b['checkin_pin']}**"
             if data["booking_count"] > 1:
                 message += f"\n\nMayroon kang {data['booking_count']} booking(s) sa kabuuan."
         elif lang == "bisaya":
             message = (
                 f"Ang imong pinakabag-o nga booking mao ang **Kwarto {b['room_number']} ({b['room_type']})**.\n"
-                f"📅 Check-in: {b['check_in']} · Check-out: {b['check_out']}\n"
+                f" Check-in: {b['check_in']} · Check-out: {b['check_out']}\n"
                 f"Status: **{b['status']}**"
             )
             if b["has_credentials"]:
-                message += f"\n🔑 Check-in PIN: **{b['checkin_pin']}**"
+                message += f"\n Check-in PIN: **{b['checkin_pin']}**"
             if data["booking_count"] > 1:
                 message += f"\n\nNaa kay {data['booking_count']} booking(s) sa tanan."
         else:
             message = (
                 f"Your most recent booking is **Room {b['room_number']} ({b['room_type']})**.\n"
-                f"📅 Check-in: {b['check_in']} · Check-out: {b['check_out']}\n"
+                f" Check-in: {b['check_in']} · Check-out: {b['check_out']}\n"
                 f"Status: **{b['status']}**"
             )
             if b["has_credentials"]:
-                message += f"\n🔑 Check-in PIN: **{b['checkin_pin']}**"
+                message += f"\n  Check-in PIN: **{b['checkin_pin']}**"
             if data["booking_count"] > 1:
                 message += f"\n\nYou have {data['booking_count']} booking(s) total."
 
@@ -440,8 +440,13 @@ def _handle_cancel_booking(user=None, language: str = "english") -> dict:
     }
 
     booking_list = "\n".join(
-        f"• **{b['reference_number'] or f'#{b[\"id\"]}'}** — Room {b['room_number']} "
-        f"({b['check_in']} → {b['check_out']}) — {b['status']}"
+        "• **{}** — Room {} ({} → {}) — {}".format(
+            b['reference_number'] or f"#{b['id']}",
+            b['room_number'],
+            b['check_in'],
+            b['check_out'],
+            b['status'],
+        )
         for b in cancellable
     )
 
