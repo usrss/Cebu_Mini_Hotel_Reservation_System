@@ -87,6 +87,12 @@ export const frontDeskBookingsApi = {
    */
   checkIn: (pk, method = 'manual_entry') =>
     api.post(`/bookings/admin/${pk}/check-in/`, { method }).then((r) => r.data),
+
+    checkout: (pk, note = '') =>
+      api.post(`/bookings/admin/${pk}/checkout/`, { note }).then((r) => r.data),
+
+    extend: (pk, body) =>
+      api.post(`/bookings/admin/${pk}/extend/`, body).then((r) => r.data),
 };
 
 // ─── Payments ──────────────────────────────────────────────────────────────────

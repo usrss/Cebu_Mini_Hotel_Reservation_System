@@ -46,6 +46,16 @@ const NAV_STRUCTURE = [
     to: '/admin/guests',
     roles: ['admin','manager','receptionist','front_desk'],
   },
+
+   {
+       type: 'link',
+       key: 'reports',
+       label: 'Reports',
+       icon: <BarChart2 size={18} />,
+       to: '/admin/reports',
+       roles: ['admin', 'manager']
+   },
+
   {
     type: 'group',
     key: 'payments-group',

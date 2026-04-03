@@ -24,7 +24,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # SECURITY WARNING: keep the secret key used in production secret!
 # ── Core ──────────────────────────────────────────────────────────────────────
 SECRET_KEY = config('SECRET_KEY')
-DEBUG      = config('DEBUG', cast=bool, default=False)
+DEBUG      = config('DEBUG', cast=bool, default=True)
 
 ALLOWED_HOSTS = ["*"]
 AUTH_USER_MODEL = 'users.CustomUser'
@@ -64,6 +64,7 @@ INSTALLED_APPS = [
     'staff',
     'admin_panel',
     'chatbot',
+    'reports',
     'bookings.apps.BookingsConfig',
     'rest_framework',
     'rest_framework_simplejwt',
@@ -126,6 +127,25 @@ CANCELLATION_POLICY = (
     "50% refund for cancellations within 48 hours of check-in. "
     "No refund for same-day cancellations or no-shows."
 )
+
+if DEBUG:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        }
+    }
+else:
+    CACHES = {
+        "default": {
+            "BACKEND": "django_redis.cache.RedisCache",
+            "LOCATION": "redis://127.0.0.1:6379/1",
+            "OPTIONS": {
+                "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            }
+        }
+    }
+
+# Report results are cached for 5 minutes (CACHE_TTL in services.py)
 
 
 

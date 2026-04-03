@@ -23,14 +23,11 @@ urlpatterns = [
     path("admin/<int:pk>/images/", views.AdminRoomImageUploadView.as_view(), name="admin-room-images"),
     path("admin/<int:pk>/price-history/", views.AdminRoomPriceHistoryView.as_view(), name="admin-room-price-history"),
 
-    path(
-            "<int:pk>/calculate-price/",
-            views.RoomPriceCalculationView.as_view(),
-            name="room-price-calculation"
-        ),
+    path("<int:pk>/calculate-price/", views.RoomPriceCalculationView.as_view(), name="room-price-calculation"),
 
     path("featured/", views.FeaturedRoomsView.as_view(), name="featured-rooms"),
     path("trending/", views.TrendingRoomsView.as_view(), name="trending-rooms"),
     path("by-view/", views.RoomsByViewTypeView.as_view(), name="rooms-by-view"),
 
+    path("reviews/token/<uuid:token>/", views.ReviewTokenValidateView.as_view(),  name="review-token-validate"),
 ]

@@ -34,6 +34,12 @@ import AnalyticsDashboard from '../features/adminPanel/analytics/AnalyticsDashbo
 // Chatbot Support
 import SupportDashboard from '../features/chatbot/SupportDashboard';
 
+// Reports
+import ReportPage from '../features/staff/reports/ReportPage';
+import CustomReportPage from '../features/adminPanel/reports/CustomReportPage';
+
+
+
 
 // ── Role groups — mirror permissions.py & AdminLayout NAV_ITEMS exactly ───────
 const ALL_STAFF_ROLES = ['admin', 'manager', 'receptionist', 'front_desk', 'housekeeping', 'maintenance', 'security'];
@@ -132,4 +138,10 @@ export const adminPanelRoutes = [
     path="/admin/support"
     element={<AdminRoute allowedRoles={ADMIN_MANAGER} element={<SupportDashboard />} />}
   />,
+
+//   Custom Reports
+  <Route key="admin-reports" path="/admin/reports"
+    element={<AdminRoute allowedRoles={ADMIN_MANAGER} element={<CustomReportPage />} />}
+  />
+
 ];

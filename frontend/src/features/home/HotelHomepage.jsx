@@ -15,7 +15,7 @@ const ROOMS = [
 ];
 
 const SERVICES = [
-  { icon: '🍽', title: 'Fine Dining',    desc: 'Savor artisanal cuisine crafted by award-winning chefs using locally-sourced Cebuano ingredients.',      image: 'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=600&q=80' },
+  { icon: '', title: 'Fine Dining',    desc: 'Savor artisanal cuisine crafted by award-winning chefs using locally-sourced Cebuano ingredients.',      image: 'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=600&q=80' },
   { icon: '',  title: 'Spa & Wellness', desc: 'Rejuvenate with signature Filipino hilot massages and bespoke wellness rituals in a tranquil setting.',  image: 'https://images.unsplash.com/photo-1600334129128-685c5582fd35?w=600&q=80' },
   { icon: '',  title: 'Infinity Pool',  desc: 'Float above the city skyline in our rooftop infinity pool, open 24 hours exclusively for hotel guests.', image: 'https://images.unsplash.com/photo-1439130490301-25e322d88054?w=600&q=80' },
   { icon: '',  title: 'Airport Transfer', desc: 'Seamless door-to-door luxury transfers with professional drivers available around the clock.',          image: 'https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=600&q=80' },
@@ -609,10 +609,10 @@ export default function HotelHomepage() {
           <div>
             <div className="hp-contact-info-list">
               {[
-                { icon: '📍', label: 'Address',       value: '123 Colon St., Cebu City, 6000\nCentral Visayas, Philippines' },
-                { icon: '📞', label: 'Phone',          value: '+63 32 123 4567\n+63 917 123 4567' },
-                { icon: '✉️', label: 'Email',          value: 'reservations@cebu-mini.ph\nsupport@cebu-mini.ph' },
-                { icon: '🕐', label: 'Hours',          value: 'Front Desk: 24/7\nReservations: 7AM – 10PM daily' },
+                { icon: 'fas fa pin', label: 'Address',       value: '123 Colon St., Cebu City, 6000\nCentral Visayas, Philippines' },
+                { icon: 'fas fa phone', label: 'Phone',          value: '+63 32 123 4567\n+63 917 123 4567' },
+                { icon: 'fas fa envelop', label: 'Email',          value: 'reservations@cebu-mini.ph\nsupport@cebu-mini.ph' },
+                { icon: 'fas fa clock', label: 'Hours',          value: 'Front Desk: 24/7' },
               ].map((item, i) => (
                 <div key={i} className="hp-contact-info-item">
                   <div className="hp-contact-icon">{item.icon}</div>
@@ -760,10 +760,9 @@ export default function HotelHomepage() {
           <div>
             <p className="hp-footer-col-title">Contact</p>
             {[
-              { icon: '📍', text: '123 Colon St., Cebu City, 6000' },
-              { icon: '📞', text: '+63 32 123 4567' },
-              { icon: '✉️', text: 'reservations@cebu-mini.ph' },
-              { icon: '🕐', text: 'Check-in 2PM · Check-out 12PM' },
+              { icon: 'fas fa pin', text: '123 Colon St., Cebu City, 6000' },
+              { icon: 'fas fa phone', text: '+63 32 123 4567' },
+              { icon: 'fas fa envelop', text: 'reservations@cebu-mini.ph' },
               { icon: '🌐', text: 'www.cebu-mini.ph' },
             ].map((item, i) => (
               <div key={i} className="hp-footer-contact-row">

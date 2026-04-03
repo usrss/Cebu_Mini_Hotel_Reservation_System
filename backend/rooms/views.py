@@ -419,32 +419,28 @@ from .models import RoomReview
 class RoomReviewCreateView(APIView):
     """
     POST /api/rooms/reviews/
-    Allow guest to submit a review after checkout.
+
+    Legacy endpoint — kept for authenticated (registered) guest reviews.
+    Walk-in guests use POST /api/rooms/reviews/token/<token>/ instead.
+
+    Requires: IsAuthenticated
+    Body: { "booking_id", "rating", "review_text" }
     """
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
         from .serializers import RoomReviewCreateSerializer
-
         serializer = RoomReviewCreateSerializer(
             data=request.data,
-            context={'request': request}
+            context={"request": request},
         )
-
         if serializer.is_valid():
             review = serializer.save()
             return Response(
-                {
-                    "message": "Thank you for your review!",
-                    "review_id": review.id
-                },
-                status=status.HTTP_201_CREATED
+                {"message": "Thank you for your review!", "review_id": review.id},
+                status=status.HTTP_201_CREATED,
             )
-
-        return Response(
-            serializer.errors,
-            status=status.HTTP_400_BAD_REQUEST
-        )
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class GuestPendingReviewsView(APIView):
@@ -718,3 +714,197 @@ class RoomsByViewTypeView(generics.ListAPIView):
             .prefetch_related("images", "amenity_assignments__amenity", "room_inclusions__inclusion")
             .order_by("price_per_night")
         )
+
+
+class ReviewTokenValidateView(APIView):
+    """
+    GET /api/rooms/reviews/token/<token>/
+
+    Validates a review token and returns booking snapshot data
+    so the frontend can pre-fill the review form (room number,
+    guest name, stay dates) without requiring authentication.
+
+    Returns:
+      200 — token is valid, booking info included
+      400 — token is expired or already used
+      404 — token not found
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request, token):
+        from rooms.models import ReviewToken
+
+        try:
+            rt = ReviewToken.objects.select_related(
+                "booking__room"
+            ).get(token=token)
+        except ReviewToken.DoesNotExist:
+            return Response(
+                {"error": "Review link not found. It may have already been used or never existed."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if rt.is_used:
+            return Response(
+                {"error": "This review link has already been used. Each booking allows one review."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if rt.is_expired:
+            return Response(
+                {
+                    "error": (
+                        f"This review link expired on "
+                        f"{rt.expires_at.strftime('%B %d, %Y')}. "
+                        f"Review links are valid for {rt.EXPIRY_DAYS} days after checkout."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        booking = rt.booking
+        return Response({
+            "valid": True,
+            "token": str(rt.token),
+            "expires_at": rt.expires_at,
+            "booking": {
+                "id": booking.pk,
+                "full_name": booking.full_name,
+                "room_number": booking.room.room_number,
+                "room_type": booking.room.get_room_type_display(),
+                "check_in": str(booking.check_in),
+                "check_out": str(booking.check_out),
+                "nights": booking.nights,
+            },
+        })
+
+
+class ReviewTokenSubmitView(APIView):
+    """
+    POST /api/rooms/reviews/token/<token>/
+
+    Submits a review using a one-time review token.
+    No authentication required — the token is the credential.
+
+    Body:
+      {
+        "rating":      5,             // required, 1–5
+        "review_text": "Great stay!"  // optional
+      }
+
+    On success:
+      - Creates RoomReview linked to booking + room
+      - Marks ReviewToken as used (prevents resubmission)
+      - Returns the created review data
+
+    Returns:
+      201 — review submitted
+      400 — validation error, token expired, or already used
+      404 — token not found
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request, token):
+        from rooms.models import ReviewToken, RoomReview
+        from django.core.validators import MinValueValidator, MaxValueValidator
+        from django.core.exceptions import ValidationError as DjangoValidationError
+
+        try:
+            rt = ReviewToken.objects.select_related(
+                "booking__room"
+            ).get(token=token)
+        except ReviewToken.DoesNotExist:
+            return Response(
+                {"error": "Review link not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if rt.is_used:
+            return Response(
+                {"error": "This review link has already been used."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if rt.is_expired:
+            return Response(
+                {"error": "This review link has expired."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Validate rating
+        try:
+            rating = int(request.data.get("rating", 0))
+        except (TypeError, ValueError):
+            return Response(
+                {"error": "rating must be an integer between 1 and 5."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not 1 <= rating <= 5:
+            return Response(
+                {"error": "rating must be between 1 and 5."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        review_text = str(request.data.get("review_text", "")).strip()
+        booking = rt.booking
+
+        # Guard: only checked-out bookings
+        from bookings.models import BookingStatus
+        if booking.status != BookingStatus.CHECKED_OUT:
+            return Response(
+                {"error": "Reviews can only be submitted after checkout is complete."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Guard: no duplicate (should never fire due to OneToOneField on token,
+        # but protects against race conditions)
+        if RoomReview.objects.filter(booking=booking).exists():
+            rt.mark_used()
+            return Response(
+                {"error": "A review for this booking has already been submitted."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from django.db import transaction as db_transaction
+        with db_transaction.atomic():
+            review = RoomReview.objects.create(
+                room=booking.room,
+                booking=booking,
+                guest=booking.user,  # None for walk-in guests
+                guest_name=booking.full_name,  # always populated from booking
+                guest_email=booking.email,
+                rating=rating,
+                review_text=review_text,
+                is_verified=True,
+                is_visible=True,
+            )
+            rt.mark_used()
+
+        return Response(
+            {
+                "message": "Thank you for your review!",
+                "review_id": review.pk,
+                "rating": review.rating,
+                "room": booking.room.room_number,
+                "is_verified": review.is_verified,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class ReviewTokenView(APIView):
+    """
+    GET  /api/rooms/reviews/token/<token>/ — validate token, get booking info
+    POST /api/rooms/reviews/token/<token>/ — submit review
+
+    Single view handles both methods for cleaner URL config.
+    No authentication required — token is the credential.
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request, token):
+        return ReviewTokenValidateView().get(request, token)
+
+    def post(self, request, token):
+        return ReviewTokenSubmitView().post(request, token)

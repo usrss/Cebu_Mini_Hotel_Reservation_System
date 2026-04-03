@@ -49,7 +49,9 @@ import FrontDeskDashboard  from './frontdesk/FrontDeskDashboard';
 import RoomStatusBoard     from './frontdesk/RoomStatusBoard';
 import TodayArrivalsPage   from './frontdesk/TodayArrivalsPage';
 import WalkInBookingPage   from './frontdesk/WalkInBookingPage';
+import BookingExtensionPage from './frontdesk/BookingExtensionPage';
 import CheckInPage         from './checkin/CheckInPage';
+import GuestReviewPage from '../review/GuestReviewPage';
 
 // Shared admin page rendered inside FrontDeskLayout for front_desk staff
 import PaymentListPage     from '../adminPanel/PaymentListPage';
@@ -144,6 +146,13 @@ export const staffRoutes = [
   }
 />,
 
+<Route path="/review/:token"
+    element={
+        <GuestReviewPage />
+        }
+/>,
+
+
   <Route
     key="front-desk-walk-in"
     path="/staff/front-desk/walk-in"
@@ -155,6 +164,8 @@ export const staffRoutes = [
       </ProtectedRoute>
     }
   />,
+
+
 
   <Route
     key="check-in"

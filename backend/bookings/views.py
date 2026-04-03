@@ -669,3 +669,387 @@ class FrontDeskCheckInWithBalanceView(APIView):
         return Response(data)
 
 
+class StaffExtendBookingView(APIView):
+    """
+    POST /api/bookings/admin/<pk>/extend/
+
+    Staff-only endpoint to extend an active (CHECKED_IN) booking.
+    No guest account required — staff locates the booking and handles
+    all payment at the desk.
+
+    Flow:
+      1. Staff provides new_check_out + payment_method (cash | card).
+      2. Availability is checked for the extension window only
+         (booking.check_out → new_check_out).
+      3. Additional charge is calculated (new total − original total).
+      4. A BookingModification record is created (type=extend).
+      5. A Payment record is created (provider=manual).
+      6. payment.mark_paid_for_extension() is called which:
+           - Marks payment PAID + generates receipt
+           - Updates booking.payment_status
+           - Calls modification.commit_to_booking() → updates check_out + totals
+           - Writes BookingStatusHistory entry
+      7. Returns the updated booking.
+
+    Body:
+      {
+        "new_check_out":   "YYYY-MM-DD",   // required
+        "payment_method":  "cash" | "card", // required
+        "note":            "optional note"  // optional
+      }
+
+    Returns: BookingDetailSerializer data + extension_summary
+
+    Permission: CanHandleCheckInOut (front_desk, admin, manager)
+    """
+    permission_classes = [CanHandleCheckInOut]
+
+    def post(self, request, pk):
+        try:
+            booking = Booking.objects.select_related("room").get(pk=pk)
+        except Booking.DoesNotExist:
+            return Response(
+                {"error": "Booking not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # ── Validate booking status ────────────────────────────────────────────
+        if booking.status != BookingStatus.CHECKED_IN:
+            return Response(
+                {
+                    "error": (
+                        f"Only CHECKED_IN bookings can be extended "
+                        f"(current status: '{booking.status}')."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # ── Validate input ─────────────────────────────────────────────────────
+        from datetime import date as date_type
+        from decimal import Decimal
+        from payments.models import (
+            Payment as PaymentModel,
+            PaymentStatus as PStatus,
+            PaymentType,
+            PaymentProvider,
+            PaymentMethod as PMethod,
+        )
+        from bookings.models import BookingModification, ModificationType, ModificationStatus
+
+        raw_new_check_out = request.data.get("new_check_out", "").strip()
+        raw_method = request.data.get("payment_method", "").strip()
+        note = request.data.get("note", "").strip()
+
+        if not raw_new_check_out:
+            return Response(
+                {"error": "new_check_out is required (YYYY-MM-DD)."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        VALID_METHODS = [PMethod.CASH, PMethod.CARD]
+        if raw_method not in VALID_METHODS:
+            return Response(
+                {"error": f"payment_method must be 'cash' or 'card'. Got: '{raw_method}'."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            from datetime import datetime
+            new_check_out = datetime.strptime(raw_new_check_out, "%Y-%m-%d").date()
+        except ValueError:
+            return Response(
+                {"error": "new_check_out must be in YYYY-MM-DD format."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        today = timezone.now().date()
+
+        if new_check_out <= booking.check_out:
+            return Response(
+                {
+                    "error": (
+                        f"new_check_out ({new_check_out}) must be after "
+                        f"the current check-out ({booking.check_out})."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if today >= booking.check_out:
+            return Response(
+                {"error": "Cannot extend a stay that has already ended."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if (new_check_out - booking.check_in).days > 90:
+            return Response(
+                {"error": "Total stay cannot exceed 90 nights."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # ── Check availability for the extension window only ──────────────────
+        # The current booking already blocks check_in → current check_out.
+        # We only need to verify check_out → new_check_out is free.
+        from bookings.serializers import check_overlapping_bookings
+
+        if check_overlapping_bookings(
+                booking.room,
+                booking.check_out,
+                new_check_out,
+                exclude_id=booking.pk,
+        ):
+            return Response(
+                {
+                    "error": (
+                        "The room is not available for the requested extension dates. "
+                        "Another booking exists for that period."
+                    )
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        # ── Recalculate prices ─────────────────────────────────────────────────
+        from bookings.modification_serializers import _recalculate
+
+        room = booking.room
+        price_data = _recalculate(room, booking.check_in, new_check_out)
+        price_diff = (price_data["new_total"] - booking.total_price).quantize(Decimal("0.01"))
+
+        if price_diff <= Decimal("0"):
+            # Edge case: same or cheaper — no charge needed but still update dates
+            price_diff = Decimal("0")
+
+        with transaction.atomic():
+            # ── Lock room row to prevent race conditions ───────────────────────
+            room = room.__class__.objects.select_for_update().get(pk=room.pk)
+
+            # Re-check overlap inside transaction
+            if check_overlapping_bookings(
+                    room, booking.check_out, new_check_out, exclude_id=booking.pk
+            ):
+                return Response(
+                    {"error": "Room was just booked for those dates. Please try again."},
+                    status=status.HTTP_409_CONFLICT,
+                )
+
+            # ── Create BookingModification ─────────────────────────────────────
+            from bookings.models import BookingModification, ModificationType, ModificationStatus
+            mod = BookingModification.objects.create(
+                booking=booking,
+                requested_by=request.user,
+                modification_type=ModificationType.EXTEND,
+                status=ModificationStatus.AWAITING_PAYMENT,
+                original_check_in=booking.check_in,
+                original_check_out=booking.check_out,
+                original_nights=booking.nights,
+                original_total=booking.total_price,
+                new_check_in=booking.check_in,
+                new_check_out=new_check_out,
+                new_nights=price_data["nights"],
+                new_room_price_snapshot=price_data["new_room_price_snapshot"],
+                new_subtotal=price_data["new_subtotal"],
+                new_tax=price_data["new_tax"],
+                new_service_fee=price_data["new_service_fee"],
+                new_total=price_data["new_total"],
+                price_difference=price_diff,
+                note=note or f"Extension by staff {request.user.email}.",
+            )
+
+            # ── Create Payment record ──────────────────────────────────────────
+            payment = PaymentModel.objects.create(
+                booking=booking,
+                user=request.user,  # staff member who processed payment
+                amount=price_diff if price_diff > 0 else Decimal("0.01"),
+                payment_type=PaymentType.MODIFICATION,
+                provider=PaymentProvider.MANUAL,
+                payment_method=raw_method,
+                status=PStatus.PENDING,
+            )
+
+            # ── Settle payment + commit extension ──────────────────────────────
+            # mark_paid_for_extension() handles the full chain:
+            #   payment PAID → booking.payment_status updated →
+            #   mod.commit_to_booking() → BookingStatusHistory logged
+            payment.mark_paid_for_extension(
+                modification=mod,
+                transaction_id=f"DESK-EXT-{booking.reference_number}-{payment.pk}",
+                payload={
+                    "extended_by": request.user.email,
+                    "payment_method": raw_method,
+                    "extended_at": timezone.now().isoformat(),
+                    "note": note,
+                },
+            )
+
+        # Log to StaffActivityLog
+        try:
+            from staff.models import StaffActivityLog
+            profile = getattr(request.user, "staff_profile", None)
+            StaffActivityLog.objects.create(
+                staff=profile,
+                action_type="extend_booking",
+                description=(
+                    f"Extended booking {booking.reference_number} for "
+                    f"'{booking.full_name}' — Room {booking.room.room_number}. "
+                    f"New check-out: {new_check_out}. "
+                    f"Additional charge: ₱{price_diff} via {raw_method}."
+                ),
+                booking_id=booking.pk,
+                room_id=booking.room_id,
+                metadata={
+                    "old_check_out": str(mod.original_check_out),
+                    "new_check_out": str(new_check_out),
+                    "price_diff": str(price_diff),
+                    "payment_method": raw_method,
+                    "modification_id": mod.pk,
+                },
+            )
+        except Exception:
+            pass
+
+        booking.refresh_from_db()
+        data = BookingDetailSerializer(booking).data
+        data["extension_summary"] = {
+            "modification_id": mod.pk,
+            "old_check_out": str(mod.original_check_out),
+            "new_check_out": str(new_check_out),
+            "additional_nights": price_data["nights"] - mod.original_nights,
+            "additional_charge": str(price_diff),
+            "payment_method": raw_method,
+            "receipt_number": payment.receipt_number,
+        }
+
+        return Response(data, status=status.HTTP_200_OK)
+
+
+class StaffCheckOutView(APIView):
+    """
+    POST /api/bookings/admin/<pk>/checkout/
+
+    Transitions a CHECKED_IN booking to CHECKED_OUT.
+    Automatically generates a ReviewToken and sends the review
+    invitation email to the guest.
+
+    Body: { "note": "optional note" }
+
+    Returns: BookingDetailSerializer data
+
+    Permission: CanHandleCheckInOut (front_desk, admin, manager)
+    """
+    permission_classes = [CanHandleCheckInOut]
+
+    def post(self, request, pk):
+        try:
+            booking = Booking.objects.select_related("room").get(pk=pk)
+        except Booking.DoesNotExist:
+            return Response(
+                {"error": "Booking not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if booking.status != BookingStatus.CHECKED_IN:
+            return Response(
+                {
+                    "error": (
+                        f"Only CHECKED_IN bookings can be checked out "
+                        f"(current status: '{booking.status}')."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        note = request.data.get("note", "").strip()
+
+        with transaction.atomic():
+            booking = booking.transition_to(
+                BookingStatus.CHECKED_OUT,
+                changed_by=request.user,
+                note=note or f"Checked out by {request.user.email}.",
+            )
+
+            # ── Generate ReviewToken ───────────────────────────────────────────
+            # One token per booking — get_or_create is safe here since
+            # OneToOneField prevents duplicates, but transition_to only
+            # fires once so create() is fine too.
+            from rooms.models import ReviewToken
+            token, created = ReviewToken.objects.get_or_create(booking=booking)
+
+        # ── Send review invitation email ───────────────────────────────────────
+        # Outside transaction so email failure never rolls back the checkout.
+        if created:
+            try:
+                _send_review_invitation_email(booking, token)
+            except Exception as exc:
+                import logging
+                logging.getLogger(__name__).warning(
+                    "Review invitation email failed for booking %s: %s",
+                    booking.reference_number, exc,
+                )
+
+        # Log to StaffActivityLog
+        try:
+            from staff.models import StaffActivityLog
+            profile = getattr(request.user, "staff_profile", None)
+            StaffActivityLog.objects.create(
+                staff=profile,
+                action_type="check_out_guest",
+                description=(
+                    f"Guest '{booking.full_name}' checked out from "
+                    f"Room {booking.room.room_number} "
+                    f"(Booking {booking.reference_number})."
+                ),
+                booking_id=booking.pk,
+                room_id=booking.room_id,
+            )
+        except Exception:
+            pass
+
+        return Response(BookingDetailSerializer(booking).data)
+
+
+# ─── Review invitation email helper ──────────────────────────────────────────
+
+def _send_review_invitation_email(booking, token):
+    """
+    Sends a post-checkout review invitation to the guest.
+    Called by StaffCheckOutView after checkout is confirmed.
+    Uses Django's built-in email backend (Gmail SMTP as configured).
+    """
+    from django.core.mail import send_mail
+    from django.conf import settings as django_settings
+
+    frontend_url = getattr(django_settings, "FRONTEND_URL", "http://localhost:5173")
+    review_url = f"{frontend_url}/review/{token.token}/"
+    site_name = getattr(django_settings, "SITE_NAME", "Cebu Mini Hotel")
+    from_email = getattr(django_settings, "DEFAULT_FROM_EMAIL", "")
+
+    subject = f"{site_name} — Share Your Experience"
+    message = f"""
+Dear {booking.full_name},
+
+Thank you for staying with us at {site_name}!
+
+We hope you had a wonderful experience in Room {booking.room.room_number}.
+
+We would love to hear your feedback. Please take a moment to leave a review
+by clicking the link below:
+
+{review_url}
+
+This link is valid for {token.EXPIRY_DAYS} days and can only be used once.
+
+Thank you for choosing {site_name}. We hope to welcome you back soon!
+
+Warm regards,
+The {site_name} Team
+    """.strip()
+
+    send_mail(
+        subject=subject,
+        message=message,
+        from_email=from_email,
+        recipient_list=[booking.email],
+        fail_silently=False,
+    )
+

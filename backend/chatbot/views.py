@@ -28,6 +28,7 @@ from .serializers import (
     ChatInputSerializer, ConversationSerializer,
     MessageSerializer, SupportTicketSerializer, SupportReplySerializer,
 )
+
 from .services.gemini import detect_intent
 from .services.intent_router import route
 from .services.support_service import close_ticket

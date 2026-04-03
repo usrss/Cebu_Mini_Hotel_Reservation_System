@@ -7,6 +7,7 @@ from django.db.models import Avg
 from bookings.models import Booking, BookingStatus
 from django.core.exceptions import ValidationError
 from datetime import timedelta
+import uuid as _uuid
 
 
 
@@ -440,9 +441,23 @@ class RoomReview(models.Model):
     )
     guest = models.ForeignKey(
         settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        related_name="room_reviews"
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="room_reviews",
+        help_text="Null for walk-in guests who have no account.",
     )
+
+    guest_name = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Full name of the reviewing guest. Populated from booking.full_name.",
+    )
+    guest_email = models.EmailField(
+        blank=True,
+        help_text="Email of the reviewing guest. Populated from booking.email.",
+    )
+
 
     rating = models.PositiveIntegerField(
         validators=[MinValueValidator(1), MaxValueValidator(5)],
@@ -482,10 +497,20 @@ class RoomReview(models.Model):
         return f"Review by {self.guest.email} for Room {self.room.room_number} - {self.rating}★"
 
     @property
-    def guest_name(self):
-        if self.guest.first_name:
-            return f"{self.guest.first_name} {self.guest.last_name[0]}." if self.guest.last_name else self.guest.first_name
-        return self.guest.email.split('@')[0]
+    def display_name(self):
+        """
+        Returns the best available name for display in the UI.
+        Prefers the registered user's name, falls back to guest_name field.
+        """
+        if self.guest and self.guest.first_name:
+            last = self.guest.last_name
+            return f"{self.guest.first_name} {last[0]}." if last else self.guest.first_name
+        if self.guest_name:
+            parts = self.guest_name.strip().split()
+            if len(parts) >= 2:
+                return f"{parts[0]} {parts[-1][0]}."
+            return self.guest_name
+        return "Guest"
 
     @property
     def star_display(self):
@@ -677,3 +702,84 @@ class SeasonalPrice(models.Model):
     def save(self, *args, **kwargs):
         self.clean()
         super().save(*args, **kwargs)
+
+
+
+
+
+class ReviewToken(models.Model):
+    """
+    One-time secure token for submitting a post-checkout review.
+
+    Design:
+      - Generated automatically when a booking transitions to CHECKED_OUT.
+      - Sent to the guest via email (link: /review/<token>/).
+      - One token per booking (OneToOneField enforces this).
+      - Expires after EXPIRY_DAYS days — reviews must be submitted promptly.
+      - Marked is_used=True after the review is submitted, preventing
+        multiple submissions for the same booking.
+      - No user account required — the token itself is the authentication.
+
+    Token URL format:
+      {FRONTEND_URL}/review/{token}/
+
+    The frontend ReviewPage reads the token from the URL, calls:
+      GET  /api/rooms/reviews/token/<token>/   → validate + get booking info
+      POST /api/rooms/reviews/token/<token>/   → submit review
+    """
+
+    EXPIRY_DAYS = 14  # Guest has 14 days after checkout to submit a review
+
+    booking = models.OneToOneField(
+        "bookings.Booking",
+        on_delete=models.CASCADE,
+        related_name="review_token",
+        help_text="One review token per booking.",
+    )
+    token = models.UUIDField(
+        default=_uuid.uuid4,
+        unique=True,
+        editable=False,
+        db_index=True,
+        help_text="Secure random UUID used in the review URL.",
+    )
+    is_used = models.BooleanField(
+        default=False,
+        help_text="True after the guest submits their review.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField(
+        help_text="Token is invalid after this datetime.",
+    )
+
+    class Meta:
+        db_table = "review_tokens"
+        indexes = [
+            models.Index(fields=["token"]),
+            models.Index(fields=["is_used", "expires_at"]),
+        ]
+
+    def __str__(self):
+        booking_ref = self.booking.reference_number or f"(booking #{self.booking_id})"
+        status = "used" if self.is_used else ("expired" if self.is_expired else "active")
+        return f"ReviewToken [{status}] — {booking_ref}"
+
+    def save(self, *args, **kwargs):
+        if not self.expires_at:
+            from datetime import timedelta
+            self.expires_at = timezone.now() + timedelta(days=self.EXPIRY_DAYS)
+        super().save(*args, **kwargs)
+
+    @property
+    def is_expired(self):
+        return timezone.now() > self.expires_at
+
+    @property
+    def is_valid(self):
+        """True only if the token has not been used and has not expired."""
+        return not self.is_used and not self.is_expired
+
+    def mark_used(self):
+        """Call this after the review is successfully submitted."""
+        self.is_used = True
+        self.save(update_fields=["is_used"])

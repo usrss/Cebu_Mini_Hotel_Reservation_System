@@ -39,12 +39,20 @@ const QUICK_LINKS = [
     desc:  'Live view of all room statuses',
     to:    '/staff/front-desk/rooms',
   },
-  {
-    icon: '🚶',
-    label: 'Walk-In Booking',
-    desc:  'Create and pay for a new booking on the spot',
-    to:    '/staff/front-desk/walk-in',
-  },
+    {
+      icon:  '🚶',
+      label: 'Walk-In Booking',
+      desc:  'Cash & card · No guest account required',
+      to:    '/staff/front-desk/walk-in',
+    },
+
+     {
+      icon:  '📆',
+      label: 'Extend Stay',
+      desc:  'Extend an active booking · Cash & card',
+      to:    '/staff/front-desk/extend',
+    },
+
   {
     icon: '📋',
     label: 'My Shifts',

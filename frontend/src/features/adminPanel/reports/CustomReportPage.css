@@ -1,0 +1,654 @@
+/**
+ * src/features/adminPanel/reports/CustomReportPage.css
+ *
+ * Styles for the custom report generation pages.
+ * Uses the existing CSS variable set from the project theme:
+ *   --navy, --navy-mid, --gold, --gold-border, --gold-dim,
+ *   --white, --white-dim, --green, --amber, --red
+ */
+
+/* ── Tabs ──────────────────────────────────────────────────────────────────── */
+
+.crp-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--gold-border);
+  margin-bottom: 24px;
+}
+
+.crp-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 18px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--white-dim);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: all 0.18s;
+  margin-bottom: -1px;
+}
+
+.crp-tab:hover {
+  color: var(--white);
+}
+
+.crp-tab--active {
+  color: var(--gold);
+  border-bottom-color: var(--gold);
+}
+
+/* ── Body ──────────────────────────────────────────────────────────────────── */
+
+.crp-body {
+  min-height: 300px;
+}
+
+/* ── Build: two-column layout ─────────────────────────────────────────────── */
+
+.crp-two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+@media (max-width: 860px) {
+  .crp-two-col { grid-template-columns: 1fr; }
+}
+
+/* ── Sections inside the builder ──────────────────────────────────────────── */
+
+.crp-section {
+  background: var(--navy-mid);
+  border: 1px solid var(--gold-border);
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+/* ── Report type grid ─────────────────────────────────────────────────────── */
+
+.crp-type-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 0;
+}
+
+.crp-type-btn {
+  padding: 8px 16px;
+  background: transparent;
+  border: 1px solid var(--gold-border);
+  color: var(--white-dim);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.18s;
+  letter-spacing: 0.3px;
+}
+
+.crp-type-btn:hover {
+  border-color: var(--gold);
+  color: var(--white);
+}
+
+.crp-type-btn--active {
+  background: var(--gold-dim);
+  border-color: var(--gold);
+  color: var(--gold);
+  font-weight: 600;
+}
+
+.crp-type-label {
+  font-size: 12px;
+}
+
+/* ── Period buttons ───────────────────────────────────────────────────────── */
+
+.crp-period-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.crp-period-btn {
+  padding: 5px 12px;
+  background: transparent;
+  border: 1px solid var(--gold-border);
+  color: var(--white-dim);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s;
+  letter-spacing: 0.3px;
+}
+
+.crp-period-btn:hover {
+  border-color: var(--gold);
+  color: var(--white);
+}
+
+.crp-period-btn--active {
+  background: var(--gold-dim);
+  border-color: var(--gold);
+  color: var(--gold);
+  font-weight: 600;
+}
+
+.crp-period-btn--disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* Fix #1 — date range hint below custom date pickers */
+.crp-date-hint {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  color: rgba(248, 246, 240, 0.4);
+  margin-top: 6px;
+  letter-spacing: 0.3px;
+}
+
+.crp-date-hint--warn {
+  color: var(--amber);
+}
+
+/* ── Date row ─────────────────────────────────────────────────────────────── */
+
+.crp-date-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+/* ── Filter row ───────────────────────────────────────────────────────────── */
+
+.crp-filters-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.crp-filter-item {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 140px;
+}
+
+.crp-filter-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: rgba(248, 246, 240, 0.4);
+}
+
+.crp-filter-select {
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+/* ── Metric chips ─────────────────────────────────────────────────────────── */
+
+.crp-metrics-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.crp-metric-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  background: transparent;
+  border: 1px solid var(--gold-border);
+  color: var(--white-dim);
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-transform: lowercase;
+}
+
+.crp-metric-chip:hover {
+  border-color: var(--gold);
+  color: var(--white);
+}
+
+.crp-metric-chip--on {
+  background: var(--gold-dim);
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+.crp-clear-btn {
+  background: none;
+  border: none;
+  color: rgba(212, 175, 55, 0.5);
+  font-size: 10px;
+  cursor: pointer;
+  padding: 6px 0 0 0;
+  text-decoration: underline;
+}
+
+.crp-clear-btn:hover {
+  color: var(--gold);
+}
+
+/* ── Actions row ──────────────────────────────────────────────────────────── */
+
+.crp-actions {
+  display: flex;
+  gap: 10px;
+  padding-top: 8px;
+}
+
+.crp-run-btn {
+  min-width: 140px;
+  justify-content: center;
+}
+
+.crp-spin {
+  animation: crp-spin 0.8s linear infinite;
+}
+
+@keyframes crp-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Error ────────────────────────────────────────────────────────────────── */
+
+.crp-error {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 14px;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #f87171;
+  font-size: 12px;
+  margin-bottom: 12px;
+}
+
+/* ── List (templates + schedules) ─────────────────────────────────────────── */
+
+.crp-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.crp-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  background: var(--navy-mid);
+  border: 1px solid var(--gold-border);
+  transition: border-color 0.15s;
+}
+
+.crp-list-item:hover {
+  border-color: rgba(212, 175, 55, 0.4);
+}
+
+.crp-list-item--muted {
+  opacity: 0.5;
+}
+
+.crp-list-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.crp-list-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--white);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 3px;
+}
+
+.crp-list-meta {
+  font-size: 10px;
+  color: var(--white-dim);
+  letter-spacing: 0.3px;
+}
+
+.crp-list-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.crp-shared-badge {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--gold);
+  background: var(--gold-dim);
+  border: 1px solid var(--gold-border);
+  padding: 1px 6px;
+}
+
+/* ── Icon buttons ─────────────────────────────────────────────────────────── */
+
+.crp-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: none;
+  border: 1px solid var(--gold-border);
+  color: var(--white-dim);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.crp-icon-btn:hover {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+.crp-icon-btn--danger:hover {
+  border-color: rgba(239, 68, 68, 0.5);
+  color: #f87171;
+}
+
+.crp-sm-btn {
+  padding: 5px 10px;
+  font-size: 11px;
+}
+
+/* ── Sched tag ────────────────────────────────────────────────────────────── */
+
+.crp-sched-tag {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--amber);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  padding: 1px 5px;
+  margin-left: 6px;
+}
+
+/* ── History table ────────────────────────────────────────────────────────── */
+
+.crp-history {
+  overflow-x: auto;
+}
+
+.crp-hist-table {
+  width: 100%;
+}
+
+/* ── Empty / loading states ───────────────────────────────────────────────── */
+
+.crp-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  text-align: center;
+  color: var(--white-dim);
+  font-size: 13px;
+  background: var(--navy-mid);
+  border: 1px solid var(--gold-border);
+}
+
+.crp-empty p { margin: 3px 0; }
+
+.crp-loading {
+  padding: 40px;
+  text-align: center;
+  color: var(--white-dim);
+  font-size: 12px;
+}
+
+/* ── Result panel ─────────────────────────────────────────────────────────── */
+
+.crp-result {
+  margin-top: 32px;
+  border: 1px solid var(--gold-border);
+  background: var(--navy-mid);
+}
+
+.crp-result-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--gold-border);
+}
+
+.crp-result-eyebrow {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  color: rgba(212, 175, 55, 0.5);
+  margin: 0 0 4px;
+}
+
+.crp-result-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--gold);
+  margin: 0 0 4px;
+  text-transform: capitalize;
+}
+
+.crp-result-sub {
+  font-size: 11px;
+  color: var(--white-dim);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.crp-cached-tag {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: #60A5FA;
+  border: 1px solid rgba(96, 165, 250, 0.3);
+  padding: 1px 5px;
+}
+
+/* ── Summary cards in result ──────────────────────────────────────────────── */
+
+.crp-summary-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--gold-border);
+}
+
+.crp-summary-card {
+  flex: 1 1 140px;
+  padding: 12px 16px;
+  border-right: 1px solid var(--gold-border);
+  min-width: 100px;
+}
+
+.crp-summary-card:last-child { border-right: none; }
+
+.crp-summary-label {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: rgba(248, 246, 240, 0.4);
+  margin: 0 0 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.crp-summary-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--gold);
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Chart in result ──────────────────────────────────────────────────────── */
+
+.crp-chart-wrap {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--gold-border);
+}
+
+.crp-chart-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.crp-chart-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: var(--white-dim);
+  text-transform: capitalize;
+}
+
+.crp-chart-toggle {
+  display: flex;
+  gap: 4px;
+}
+
+/* ── Table in result ──────────────────────────────────────────────────────── */
+
+.crp-table-wrap {
+  border-top: 1px solid var(--gold-border);
+}
+
+.crp-table-header {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--gold-border);
+  background: var(--gold-dim);
+}
+
+.crp-table-count {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
+.crp-no-data {
+  padding: 32px;
+  text-align: center;
+  color: var(--white-dim);
+  font-size: 12px;
+}
+
+/* ── Modals ───────────────────────────────────────────────────────────────── */
+
+.crp-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.crp-modal {
+  background: var(--navy-mid);
+  border: 1px solid var(--gold-border);
+  width: 100%;
+  max-width: 440px;
+  display: flex;
+  flex-direction: column;
+}
+
+.crp-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--gold-border);
+}
+
+.crp-modal-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--gold);
+  margin: 0;
+}
+
+.crp-modal-body {
+  padding: 20px;
+}
+
+.crp-modal-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--gold-dim);
+  border: 1px solid var(--gold-border);
+  font-size: 11px;
+  color: var(--white-dim);
+  margin-bottom: 14px;
+}
+
+.crp-modal-summary b {
+  color: var(--white);
+}
+
+.crp-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--gold-border);
+}
+
+.crp-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--white-dim);
+  cursor: pointer;
+  margin-top: 12px;
+}
+
+.crp-checkbox-row input[type="checkbox"] {
+  accent-color: var(--gold);
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+}

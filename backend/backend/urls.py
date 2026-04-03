@@ -32,6 +32,7 @@ urlpatterns = [
     path("api/staff/", include("staff.urls", namespace="staff")),
     path("api/admin/", include("admin_panel.urls", namespace="admin_panel")),
     path("api/chat/", include("chatbot.urls", namespace="chatbot")),
+    path("api/reports/", include("reports.urls", namespace="reports")),
 
 
 

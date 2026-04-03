@@ -179,6 +179,92 @@ class Payment(models.Model):
                 self.pk, exc,
             )
 
+    def mark_paid_for_extension(self, modification, transaction_id=None, payload=None):
+        """
+        Called exclusively by the extension payment flow.
+
+        Unlike mark_paid() which is designed for PENDING_PAYMENT → CONFIRMED
+        transitions, this method handles payments made against CHECKED_IN
+        bookings (i.e. stay extensions).
+
+        What it does:
+          1. Marks this Payment as PAID and generates a receipt number.
+          2. Updates booking.payment_status to PAID.
+          3. Calls modification.commit_to_booking() to apply the new
+             check_out date and recalculated totals to the parent booking.
+          4. Logs the extension in BookingStatusHistory via commit_to_booking().
+
+        What it does NOT do:
+          - Does not call booking.confirm_after_payment() — that method
+            only works for PENDING_PAYMENT bookings and would raise ValueError.
+          - Does not change booking.status (stays CHECKED_IN).
+          - Does not generate a new reference_number or checkin_pin.
+
+        Args:
+            modification (BookingModification): The AWAITING_PAYMENT
+                extension modification being settled.
+            transaction_id (str, optional): Provider or desk transaction ID.
+            payload (dict, optional): Raw provider response for audit trail.
+
+        Returns:
+            self (Payment): The updated Payment instance.
+        """
+        from bookings.models import BookingStatus, PaymentStatus as BPaymentStatus
+
+        booking = self.booking
+
+        # Guard: only for checked-in bookings
+        if booking.status != BookingStatus.CHECKED_IN:
+            raise ValueError(
+                f"mark_paid_for_extension() requires a CHECKED_IN booking "
+                f"(current status: '{booking.status}')."
+            )
+
+        # ── Step 1: Mark payment as PAID ──────────────────────────────────────
+        self.status = PaymentStatus.PAID
+        self.paid_at = timezone.now()
+        self.receipt_number = generate_receipt_number()
+
+        if transaction_id:
+            self.transaction_id = transaction_id
+        if payload:
+            self.provider_payload = payload
+
+        self.save(update_fields=[
+            "status", "paid_at", "receipt_number",
+            "transaction_id", "provider_payload", "updated_at",
+        ])
+
+        # ── Step 2: Update booking payment status ─────────────────────────────
+        booking.payment_status = BPaymentStatus.PAID
+        booking.save(update_fields=["payment_status", "updated_at"])
+
+        # ── Step 3: Commit extension dates + totals to booking ────────────────
+        # commit_to_booking() updates check_out, nights, total_price and
+        # writes a BookingStatusHistory entry for full audit trail.
+        modification.commit_to_booking(changed_by=None)
+
+        logger.info(
+            "Extension payment settled — booking pk=%s receipt=%s "
+            "new_check_out=%s new_total=%s",
+            booking.pk,
+            self.receipt_number,
+            modification.new_check_out,
+            modification.new_total,
+        )
+
+        # ── Step 4: Notify relevant staff ─────────────────────────────────────
+        try:
+            from notifications.service import NotificationService
+            NotificationService.notify_extension_payment_received(booking, self.amount)
+        except Exception as exc:
+            logger.warning(
+                "Extension payment notification failed for payment pk=%s: %s",
+                self.pk, exc,
+            )
+
+        return self
+
     def mark_failed(self, payload=None):
         self.status = PaymentStatus.FAILED
         if payload:

@@ -1,5 +1,5 @@
 """
-chatbot/services/gemini.py
+chatbot/services/gemini(groq).py
 
 AI intent detection using Groq API (llama-3.1-8b-instant).
 Understands English, Tagalog, and Bisaya/Cebuano.

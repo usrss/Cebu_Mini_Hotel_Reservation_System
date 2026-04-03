@@ -49,4 +49,7 @@ urlpatterns = [
     path("my/modification/<int:mod_id>/cancel/", ModificationCancelView.as_view(), name="my-modification-cancel"),
     path("my/modification/<int:mod_id>/pay/", ModificationPaymentInitiateView.as_view(), name="my-modification-pay"),
     path("my/modification/<int:mod_id>/confirm-refund/", ModificationRefundConfirmView.as_view(), name="my-modification-confirm-refund"),
+
+    path("admin/<int:pk>/extend/",   views.StaffExtendBookingView.as_view(),  name="admin-extend"),
+    path("admin/<int:pk>/checkout/", views.StaffCheckOutView.as_view(),       name="admin-checkout"),
 ]
