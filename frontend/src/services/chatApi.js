@@ -1,7 +1,7 @@
 /**
  * src/services/chatApi.js
  *
- * API calls for the chatbot system.
+ * API calls for the chatbot system with role-based ticket routing.
  * Uses the shared axios instance from api.js — auth headers handled automatically.
  */
 
@@ -24,22 +24,33 @@ export const sendMessage = ({ message, conversationId, sessionKey }) =>
 
 /**
  * Poll for new messages after a given message ID.
- * Used by the widget to receive admin replies in support mode.
+ * Used by the widget to receive staff replies in support mode.
+ * Now also returns ticket info (tier, priority) if in support mode.
  */
 export const pollMessages = (conversationId, afterMessageId, sessionKey = '') =>
-  api.get(`/chat/poll/${conversationId}/`, {
+  api.get(`${BASE}/poll/${conversationId}/`, {
     params: { after: afterMessageId || 0, session_key: sessionKey },
   }).then((r) => r.data);
 
-// ─── Admin / Manager support endpoints ───────────────────────────────────────
+// ─── Staff support endpoints ──────────────────────────────────────────────────
 
 /**
- * List all open support tickets (Admin/Manager only).
+ * List support tickets — role-scoped by backend.
+ *
+ * @param {Object} filters
+ *   status   : 'open' | 'in_progress' | 'escalated' | 'closed' | ''
+ *   tier     : 'front_desk' | 'manager' | 'admin' | ''
+ *   priority : 'low' | 'normal' | 'high' | 'critical' | ''
+ *   category : any TicketCategory value | ''
  */
-export const getSupportTickets = (ticketStatus = '') =>
-  api.get(`${BASE}/support/tickets/`, {
-    params: ticketStatus ? { status: ticketStatus } : {},
-  }).then((r) => r.data);
+export const getSupportTickets = (filters = {}) => {
+  const params = {};
+  if (filters.status)   params.status   = filters.status;
+  if (filters.tier)     params.tier     = filters.tier;
+  if (filters.priority) params.priority = filters.priority;
+  if (filters.category) params.category = filters.category;
+  return api.get(`${BASE}/support/tickets/`, { params }).then((r) => r.data);
+};
 
 /**
  * Get a single ticket + full conversation.
@@ -49,6 +60,7 @@ export const getSupportTicketDetail = (ticketId) =>
 
 /**
  * Staff sends a reply in a support conversation.
+ * Only allowed for tickets in the staff member's tier.
  */
 export const replyToTicket = (ticketId, message) =>
   api.post(`${BASE}/support/${ticketId}/reply/`, { message }).then((r) => r.data);
@@ -60,9 +72,19 @@ export const closeTicket = (ticketId) =>
   api.patch(`${BASE}/support/${ticketId}/close/`).then((r) => r.data);
 
 /**
- * Assign a ticket to a staff member.
+ * Assign a ticket to a staff member (Admin/Manager only).
  */
 export const assignTicket = (ticketId, assignedToUserId) =>
   api.patch(`${BASE}/support/${ticketId}/assign/`, {
     assigned_to: assignedToUserId,
   }).then((r) => r.data);
+
+/**
+ * Escalate a ticket to the next tier in the routing chain.
+ * Front Desk → Manager → Admin
+ *
+ * @param {number} ticketId
+ * @param {string} reason  - Optional reason for escalation
+ */
+export const escalateTicket = (ticketId, reason = '') =>
+  api.post(`${BASE}/support/${ticketId}/escalate/`, { reason }).then((r) => r.data);

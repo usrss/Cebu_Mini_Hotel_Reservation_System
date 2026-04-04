@@ -1,0 +1,452 @@
+/* AmenitiesInclusionsModal.css — Cebu Mini Hotel */
+
+.aim-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 14, 26, 0.88);
+  backdrop-filter: blur(6px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.aim-modal {
+  background: #0F1729;
+  border: 1px solid rgba(201, 168, 76, 0.22);
+  width: 100%;
+  max-width: 900px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  font-family: 'Raleway', sans-serif;
+  color: #F8F6F0;
+  overflow: hidden;
+}
+
+/* ── Header ──────────────────────────────────────────────── */
+.aim-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 22px 28px 16px;
+  border-bottom: 1px solid rgba(201, 168, 76, 0.15);
+  flex-shrink: 0;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.aim-eyebrow {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  color: #C9A84C;
+  margin: 0 0 4px;
+}
+
+.aim-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 20px;
+  font-weight: 700;
+  color: #F8F6F0;
+  margin: 0;
+  display: flex;
+  align-items: center;
+}
+
+.aim-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.aim-add-btn {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 18px;
+  background: rgba(201, 168, 76, 0.1);
+  border: 1px solid rgba(201, 168, 76, 0.4);
+  color: #C9A84C;
+  font-family: 'Raleway', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.aim-add-btn:hover {
+  background: rgba(201, 168, 76, 0.18);
+  border-color: #C9A84C;
+  color: #E2C97E;
+}
+
+.aim-close {
+  background: none;
+  border: 1px solid rgba(201, 168, 76, 0.22);
+  color: rgba(248, 246, 240, 0.5);
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.aim-close:hover {
+  border-color: #C9A84C;
+  color: #C9A84C;
+}
+
+/* ── Body: two columns ───────────────────────────────────── */
+.aim-body {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* ── List column ─────────────────────────────────────────── */
+.aim-list-col {
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid rgba(201, 168, 76, 0.12);
+  overflow: hidden;
+}
+
+.aim-filters {
+  display: flex;
+  gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(201, 168, 76, 0.1);
+  flex-shrink: 0;
+}
+
+.aim-search,
+.aim-cat-select {
+  padding: 8px 12px;
+  background: #111827;
+  border: 1px solid rgba(201, 168, 76, 0.18);
+  color: #F8F6F0;
+  font-family: 'Raleway', sans-serif;
+  font-size: 12px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.aim-search { flex: 1; }
+.aim-search::placeholder { color: rgba(248, 246, 240, 0.25); }
+.aim-search:focus,
+.aim-cat-select:focus { border-color: #C9A84C; }
+.aim-cat-select {
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23C9A84C' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 28px;
+  appearance: none;
+}
+.aim-cat-select option { background: #111827; }
+
+.aim-count {
+  padding: 6px 16px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  color: rgba(248, 246, 240, 0.3);
+  text-transform: uppercase;
+  border-bottom: 1px solid rgba(201, 168, 76, 0.08);
+  flex-shrink: 0;
+}
+
+.aim-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+.aim-group { margin-bottom: 4px; }
+.aim-group-label {
+  padding: 6px 16px 4px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: #C9A84C;
+}
+
+.aim-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 16px;
+  transition: background 0.12s;
+  cursor: default;
+}
+.aim-item:hover { background: rgba(201, 168, 76, 0.05); }
+.aim-item--active { background: rgba(201, 168, 76, 0.08) !important; }
+
+.aim-item-icon {
+  font-size: 18px;
+  width: 26px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.aim-item-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.aim-item-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #F8F6F0;
+}
+.aim-item-badge {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  background: rgba(201, 168, 76, 0.12);
+  border: 1px solid rgba(201, 168, 76, 0.3);
+  color: #C9A84C;
+}
+.aim-item-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.aim-action-btn {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: 1px solid rgba(201, 168, 76, 0.18);
+  color: rgba(248, 246, 240, 0.4);
+  cursor: pointer;
+  transition: all 0.13s;
+}
+.aim-action-btn:hover {
+  border-color: #C9A84C;
+  color: #C9A84C;
+  background: rgba(201, 168, 76, 0.08);
+}
+.aim-action-btn--danger:hover {
+  border-color: rgba(248, 113, 113, 0.4);
+  color: #F87171;
+  background: rgba(248, 113, 113, 0.06);
+}
+.aim-action-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.aim-empty {
+  text-align: center;
+  padding: 40px 20px;
+  font-size: 12px;
+  color: rgba(248, 246, 240, 0.25);
+  letter-spacing: 0.5px;
+}
+
+/* ── Form column ─────────────────────────────────────────── */
+.aim-form-col {
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.aim-form-placeholder {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: rgba(248, 246, 240, 0.18);
+  text-align: center;
+  padding: 40px 20px;
+}
+.aim-form-placeholder p {
+  font-size: 13px;
+  line-height: 1.7;
+  margin: 0;
+}
+
+/* ── Item form ───────────────────────────────────────────── */
+.aim-item-form {
+  padding: 20px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.aim-form-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: #C9A84C;
+  margin: 0 0 2px;
+}
+
+.aim-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.aim-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: rgba(248, 246, 240, 0.45);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.aim-required { color: #F87171; }
+.aim-hint { font-size: 9px; color: rgba(248, 246, 240, 0.25); font-weight: 400; letter-spacing: 0; text-transform: none; }
+.aim-error { font-size: 11px; color: #F87171; }
+
+.aim-input,
+.aim-select,
+.aim-textarea {
+  padding: 9px 12px;
+  background: #111827;
+  border: 1px solid rgba(201, 168, 76, 0.22);
+  color: #F8F6F0;
+  font-family: 'Raleway', sans-serif;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.15s;
+  width: 100%;
+  box-sizing: border-box;
+}
+.aim-input:focus,
+.aim-select:focus,
+.aim-textarea:focus { border-color: #C9A84C; }
+.aim-input::placeholder,
+.aim-textarea::placeholder { color: rgba(248, 246, 240, 0.2); }
+.aim-input--error { border-color: rgba(248, 113, 113, 0.5); }
+.aim-select {
+  appearance: none;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23C9A84C' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 28px;
+}
+.aim-select option { background: #111827; }
+.aim-textarea { resize: vertical; line-height: 1.6; }
+
+/* Icon picker grid */
+.aim-icon-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  align-items: center;
+}
+.aim-icon-btn {
+  width: 34px;
+  height: 34px;
+  font-size: 16px;
+  background: #111827;
+  border: 1px solid rgba(201, 168, 76, 0.15);
+  cursor: pointer;
+  transition: all 0.12s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 2px;
+}
+.aim-icon-btn:hover { border-color: #C9A84C; transform: scale(1.1); }
+.aim-icon-btn--active {
+  border-color: #C9A84C;
+  background: rgba(201, 168, 76, 0.15);
+  box-shadow: 0 0 0 1px rgba(201, 168, 76, 0.4);
+}
+.aim-icon-custom { width: 70px !important; font-size: 18px !important; text-align: center; }
+
+/* Checkbox */
+.aim-check-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(248, 246, 240, 0.6);
+  cursor: pointer;
+}
+.aim-check-label input[type=checkbox] {
+  width: 15px;
+  height: 15px;
+  accent-color: #C9A84C;
+  cursor: pointer;
+}
+
+/* Form actions */
+.aim-form-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  padding-top: 4px;
+  border-top: 1px solid rgba(201, 168, 76, 0.1);
+}
+
+.aim-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 18px;
+  font-family: 'Raleway', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.15s;
+  border: 1px solid;
+}
+.aim-btn--ghost {
+  background: none;
+  border-color: rgba(201, 168, 76, 0.2);
+  color: rgba(248, 246, 240, 0.5);
+}
+.aim-btn--ghost:hover {
+  border-color: rgba(248, 246, 240, 0.3);
+  color: rgba(248, 246, 240, 0.8);
+}
+.aim-btn--gold {
+  background: rgba(201, 168, 76, 0.1);
+  border-color: #C9A84C;
+  color: #C9A84C;
+}
+.aim-btn--gold:hover {
+  background: rgba(201, 168, 76, 0.2);
+  color: #E2C97E;
+}
+.aim-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* Spinner */
+.aim-spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(201, 168, 76, 0.25);
+  border-top-color: #C9A84C;
+  border-radius: 50%;
+  animation: aim-spin 0.7s linear infinite;
+  display: inline-block;
+}
+@keyframes aim-spin { to { transform: rotate(360deg); } }
+
+/* ── Responsive ──────────────────────────────────────────── */
+@media (max-width: 700px) {
+  .aim-body { grid-template-columns: 1fr; }
+  .aim-form-col { border-top: 1px solid rgba(201, 168, 76, 0.12); max-height: 50vh; }
+  .aim-list-col { max-height: 40vh; }
+}

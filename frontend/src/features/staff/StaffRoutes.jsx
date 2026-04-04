@@ -4,29 +4,21 @@
  * Route definitions for the entire Staff module.
  * allowedRoles on each ProtectedRoute mirrors staff/permissions.py exactly.
  *
- * In App.jsx:
- *   import { staffRoutes } from './features/staff/StaffRoutes';
- *   // inside <Routes>:
- *   {staffRoutes}
- *
- * Layout matrix:
- *   admin / manager  → AdminLayout     (no wrapper here — AdminLayout is
- *                                       already mounted in App.jsx /admin/*)
- *   front_desk       → FrontDeskLayout
- *   housekeeping     → StaffLayout
- *   maintenance      → StaffLayout
- *   security         → StaffLayout
- *   receptionist     → StaffLayout     (my-shifts / my-activity-logs only)
+ * FIXES:
+ *  1. /staff/front-desk/support — was missing FrontDeskLayout and ProtectedRoute.
+ *     Now properly wrapped and restricted to FRONT_DESK_ROLES.
+ *  2. /front-desk/support (legacy bare path) — redirects to canonical path.
+ *  3. Route ordering: specific paths before wildcard paths.
  */
 
-import { Route } from 'react-router-dom';
+import { Route, Navigate } from 'react-router-dom';
 import ProtectedRoute from '../../components/ProtectedRoute';
 
 // ── Layouts ────────────────────────────────────────────────────────────────────
-import FrontDeskLayout from './frontdesk/FrontDeskLayout';
-import AdminLayout     from '../adminPanel/layout/AdminLayout';
+import FrontDeskLayout     from './frontdesk/FrontDeskLayout';
+import AdminLayout         from '../adminPanel/layout/AdminLayout';
 import StaffMonitoringPage from './monitoring/StaffMonitoringPage';
-import StaffLayout     from './StaffLayout';
+import StaffLayout         from './StaffLayout';
 
 // ── Role-aware layout helper ───────────────────────────────────────────────────
 import { getStoredUser } from '../../services/api';
@@ -37,39 +29,44 @@ function LayoutForRole({ children }) {
   if (['admin', 'manager'].includes(role)) {
     return <AdminLayout>{children}</AdminLayout>;
   }
-  if (role === 'front_desk') {
+  if (['front_desk', 'receptionist'].includes(role)) {
     return <FrontDeskLayout>{children}</FrontDeskLayout>;
   }
-  // housekeeping, maintenance, security, receptionist
+  // housekeeping, maintenance, security
   return <StaffLayout>{children}</StaffLayout>;
 }
 
 // ── Front Desk pages ───────────────────────────────────────────────────────────
-import FrontDeskDashboard  from './frontdesk/FrontDeskDashboard';
-import RoomStatusBoard     from './frontdesk/RoomStatusBoard';
-import TodayArrivalsPage   from './frontdesk/TodayArrivalsPage';
-import WalkInBookingPage   from './frontdesk/WalkInBookingPage';
+import FrontDeskDashboard   from './frontdesk/FrontDeskDashboard';
+import RoomStatusBoard      from './frontdesk/RoomStatusBoard';
+import TodayArrivalsPage    from './frontdesk/TodayArrivalsPage';
+import WalkInBookingPage    from './frontdesk/WalkInBookingPage';
 import BookingExtensionPage from './frontdesk/BookingExtensionPage';
-import CheckInPage         from './checkin/CheckInPage';
-import GuestReviewPage from '../review/GuestReviewPage';
+import CheckInPage          from './checkin/CheckInPage';
+import GuestReviewPage      from '../review/GuestReviewPage';
 
 // Shared admin page rendered inside FrontDeskLayout for front_desk staff
-import PaymentListPage     from '../adminPanel/PaymentListPage';
+import PaymentListPage from '../adminPanel/PaymentListPage';
+
+// ── Support Ticket page for Front Desk ────────────────────────────────────────
+// FrontDeskSupportPage uses the same component as the admin SupportDashboard
+// but is scoped to FRONT_DESK tier tickets by the backend automatically.
+import FrontDeskSupportPage from '../chatbot/FrontDeskSupportPage';
 
 // ── Staff management ───────────────────────────────────────────────────────────
-import StaffListPage           from './profiles/StaffListPage';
-import StaffDetailPage         from './profiles/StaffDetailPage';
-import ShiftCalendarPage       from './shifts/ShiftCalendarPage';
-import MyShiftPage             from './shifts/MyShiftPage';
-import HousekeepingDashboard   from './housekeeping/HouseKeepingDashboard';
-import MaintenanceTaskListPage from './tasks/MaintenanceTaskListPage';
-import IncidentLogListPage     from './incidents/IncidentLogListPage';
-import IncidentLogFormPage     from './incidents/IncidentLogFormPage';
-import ReportPage              from './reports/ReportPage';
-import ActivityLogPage         from './activity/ActivityLogPage';
-import MyActivityLogPage       from './activity/MyActivityLogPage';
+import StaffListPage             from './profiles/StaffListPage';
+import StaffDetailPage           from './profiles/StaffDetailPage';
+import ShiftCalendarPage         from './shifts/ShiftCalendarPage';
+import MyShiftPage               from './shifts/MyShiftPage';
+import HousekeepingDashboard     from './housekeeping/HouseKeepingDashboard';
+import MaintenanceTaskListPage   from './tasks/MaintenanceTaskListPage';
+import IncidentLogListPage       from './incidents/IncidentLogListPage';
+import IncidentLogFormPage       from './incidents/IncidentLogFormPage';
+import ReportPage                from './reports/ReportPage';
+import ActivityLogPage           from './activity/ActivityLogPage';
+import MyActivityLogPage         from './activity/MyActivityLogPage';
 
-// ── Reporting pages (NEW) ──────────────────────────────────────────────────────
+// ── Reporting pages ────────────────────────────────────────────────────────────
 import ReportMaintenancePage        from './reporting/ReportMaintenancePage';
 import MyMaintenanceRequestsPage    from './reporting/MyMaintenanceRequestsPage';
 import ReportIncidentPage           from './reporting/ReportIncidentPage';
@@ -79,7 +76,7 @@ import MaintenanceRequestsDashboard from './reporting/MaintenanceRequestsDashboa
 // ── Role groups — mirror permissions.py exactly ───────────────────────────────
 
 const ADMIN_MANAGER     = ['admin', 'manager'];
-const FRONT_DESK_ROLES  = ['admin', 'manager', 'front_desk'];
+const FRONT_DESK_ROLES  = ['admin', 'manager', 'front_desk', 'receptionist'];
 const CLEANING_ROLES    = ['admin', 'manager', 'housekeeping'];
 const MAINTENANCE_ROLES = ['admin', 'manager', 'maintenance'];
 const INCIDENT_VIEW     = ['admin', 'manager', 'security'];
@@ -87,7 +84,7 @@ const INCIDENT_CREATE   = ['admin', 'security'];
 const ALL_STAFF         = ['admin', 'manager', 'receptionist', 'front_desk',
                            'housekeeping', 'maintenance', 'security'];
 
-// ── Reporting role groups (NEW) ───────────────────────────────────────────────
+// ── Reporting role groups ─────────────────────────────────────────────────────
 const MAINTENANCE_REPORT_ROLES = ['admin', 'manager', 'front_desk', 'housekeeping'];
 const INCIDENT_REPORT_ROLES    = ['admin', 'security', 'front_desk', 'housekeeping'];
 const INCIDENT_VIEW_ROLES      = ['admin', 'manager', 'security', 'front_desk', 'housekeeping'];
@@ -95,7 +92,17 @@ const INCIDENT_VIEW_ROLES      = ['admin', 'manager', 'security', 'front_desk', 
 export const staffRoutes = [
 
   // ════════════════════════════════════════════════════════════════════════════
-  // FRONT DESK PAGES  — always FrontDeskLayout
+  // REVIEW (public — no layout needed)
+  // ════════════════════════════════════════════════════════════════════════════
+
+  <Route
+    key="guest-review"
+    path="/review/:token"
+    element={<GuestReviewPage />}
+  />,
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // FRONT DESK PAGES — FrontDeskLayout
   // ════════════════════════════════════════════════════════════════════════════
 
   <Route
@@ -135,25 +142,6 @@ export const staffRoutes = [
   />,
 
   <Route
-  key="staff-monitoring"
-  path="/staff/monitoring"
-  element={
-    <ProtectedRoute allowedRoles={['admin', 'manager']}>
-      <AdminLayout>
-        <StaffMonitoringPage />
-      </AdminLayout>
-    </ProtectedRoute>
-  }
-/>,
-
-<Route path="/review/:token"
-    element={
-        <GuestReviewPage />
-        }
-/>,
-
-
-  <Route
     key="front-desk-walk-in"
     path="/staff/front-desk/walk-in"
     element={
@@ -165,18 +153,38 @@ export const staffRoutes = [
     }
   />,
 
-
-
   <Route
-    key="check-in"
-    path="/staff/check-in"
+    key="front-desk-extend"
+    path="/staff/front-desk/extend"
     element={
       <ProtectedRoute allowedRoles={FRONT_DESK_ROLES}>
         <FrontDeskLayout>
-          <CheckInPage />
+          <BookingExtensionPage />
         </FrontDeskLayout>
       </ProtectedRoute>
     }
+  />,
+
+  // ── Support Tickets for Front Desk (FIXED) ────────────────────────────────
+  // Previously mounted at /front-desk/support without ProtectedRoute or layout.
+  // Now properly at /staff/front-desk/support with FrontDeskLayout and RBAC.
+  <Route
+    key="front-desk-support"
+    path="/staff/front-desk/support"
+    element={
+      <ProtectedRoute allowedRoles={FRONT_DESK_ROLES}>
+        <FrontDeskLayout>
+          <FrontDeskSupportPage />
+        </FrontDeskLayout>
+      </ProtectedRoute>
+    }
+  />,
+
+  // Legacy path redirect — if anything links to the old bare path
+  <Route
+    key="front-desk-support-legacy"
+    path="/front-desk/support"
+    element={<Navigate to="/staff/front-desk/support" replace />}
   />,
 
   <Route
@@ -191,8 +199,36 @@ export const staffRoutes = [
     }
   />,
 
+  <Route
+    key="check-in"
+    path="/staff/check-in"
+    element={
+      <ProtectedRoute allowedRoles={FRONT_DESK_ROLES}>
+        <FrontDeskLayout>
+          <CheckInPage />
+        </FrontDeskLayout>
+      </ProtectedRoute>
+    }
+  />,
+
   // ════════════════════════════════════════════════════════════════════════════
-  // STAFF MANAGEMENT  (Admin + Manager — AdminLayout)
+  // STAFF MONITORING
+  // ════════════════════════════════════════════════════════════════════════════
+
+  <Route
+    key="staff-monitoring"
+    path="/staff/monitoring"
+    element={
+      <ProtectedRoute allowedRoles={ADMIN_MANAGER}>
+        <AdminLayout>
+          <StaffMonitoringPage />
+        </AdminLayout>
+      </ProtectedRoute>
+    }
+  />,
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // STAFF MANAGEMENT (Admin + Manager — AdminLayout)
   // ════════════════════════════════════════════════════════════════════════════
 
   <Route
@@ -281,9 +317,9 @@ export const staffRoutes = [
 
   // ════════════════════════════════════════════════════════════════════════════
   // INCIDENT LOGS
-  // admin / manager  → AdminLayout   (manager view-only)
-  // security         → StaffLayout   (create + edit own incidents)
-  // front_desk / hk  → own incidents via /staff/my-incidents
+  // admin / manager  → view all (AdminLayout via LayoutForRole)
+  // security         → view all + create + edit own (StaffLayout)
+  // front_desk / hk  → own incidents via /staff/my-incidents only
   // ════════════════════════════════════════════════════════════════════════════
 
   <Route
@@ -323,7 +359,7 @@ export const staffRoutes = [
   />,
 
   // ════════════════════════════════════════════════════════════════════════════
-  // REPORTS & AUDIT LOGS  (Admin + Manager — AdminLayout)
+  // REPORTS & AUDIT LOGS (Admin + Manager — AdminLayout)
   // ════════════════════════════════════════════════════════════════════════════
 
   <Route
@@ -363,7 +399,7 @@ export const staffRoutes = [
   />,
 
   // ════════════════════════════════════════════════════════════════════════════
-  // MAINTENANCE REQUESTS DASHBOARD  (Admin + Manager — AdminLayout)
+  // MAINTENANCE REQUESTS DASHBOARD (Admin + Manager — AdminLayout)
   // ════════════════════════════════════════════════════════════════════════════
 
   <Route
@@ -379,7 +415,7 @@ export const staffRoutes = [
   />,
 
   // ════════════════════════════════════════════════════════════════════════════
-  // REPORT MAINTENANCE  (FD + HK → FrontDeskLayout/StaffLayout; Admin/Manager → AdminLayout)
+  // REPORT MAINTENANCE (FD + HK + Admin/Manager)
   // ════════════════════════════════════════════════════════════════════════════
 
   <Route
@@ -395,7 +431,7 @@ export const staffRoutes = [
   />,
 
   // ════════════════════════════════════════════════════════════════════════════
-  // MY MAINTENANCE REQUESTS  (FD + HK: own; Admin/Manager: all)
+  // MY MAINTENANCE REQUESTS (FD + HK: own; Admin/Manager: all)
   // ════════════════════════════════════════════════════════════════════════════
 
   <Route
@@ -411,7 +447,7 @@ export const staffRoutes = [
   />,
 
   // ════════════════════════════════════════════════════════════════════════════
-  // REPORT INCIDENT  (FD + HK + Security + Admin)
+  // REPORT INCIDENT (FD + HK + Security + Admin)
   // ════════════════════════════════════════════════════════════════════════════
 
   <Route
@@ -427,7 +463,7 @@ export const staffRoutes = [
   />,
 
   // ════════════════════════════════════════════════════════════════════════════
-  // MY INCIDENTS  (FD + HK: own only; Security/Admin/Manager: all)
+  // MY INCIDENTS (FD + HK: own; Security/Admin/Manager: all)
   // ════════════════════════════════════════════════════════════════════════════
 
   <Route

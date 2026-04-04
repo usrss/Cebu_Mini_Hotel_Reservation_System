@@ -3,7 +3,10 @@ chatbot/serializers.py
 """
 
 from rest_framework import serializers
-from .models import Conversation, Message, SupportTicket, SenderType
+from .models import (
+    Conversation, Message, SupportTicket,
+    SenderType, TicketTier, TicketPriority, TicketCategory,
+)
 
 
 class MessageSerializer(serializers.ModelSerializer):
@@ -19,7 +22,7 @@ class MessageSerializer(serializers.ModelSerializer):
 
 
 class ConversationSerializer(serializers.ModelSerializer):
-    messages = MessageSerializer(many=True, read_only=True)
+    messages       = MessageSerializer(many=True, read_only=True)
     status_display = serializers.CharField(source="get_status_display", read_only=True)
 
     class Meta:
@@ -39,24 +42,42 @@ class ChatInputSerializer(serializers.Serializer):
 
 
 class SupportTicketSerializer(serializers.ModelSerializer):
-    user_email    = serializers.SerializerMethodField()
-    assigned_to_name = serializers.SerializerMethodField()
-    status_display   = serializers.CharField(source="get_status_display", read_only=True)
-    message_count    = serializers.SerializerMethodField()
+    user_email        = serializers.SerializerMethodField()
+    assigned_to_name  = serializers.SerializerMethodField()
+    status_display    = serializers.CharField(source="get_status_display",   read_only=True)
+    tier_display      = serializers.CharField(source="get_tier_display",     read_only=True)
+    priority_display  = serializers.CharField(source="get_priority_display", read_only=True)
+    category_display  = serializers.CharField(source="get_category_display", read_only=True)
+    message_count     = serializers.SerializerMethodField()
+    escalated_by_name = serializers.SerializerMethodField()
+    can_escalate      = serializers.BooleanField(read_only=True)
+    next_tier         = serializers.CharField(read_only=True)
 
     class Meta:
         model  = SupportTicket
         fields = [
+            # Identity
             "id", "conversation", "subject",
+            # Status / routing
             "status", "status_display",
+            "tier", "tier_display",
+            "priority", "priority_display",
+            "category", "category_display",
+            # People
             "user_email", "assigned_to", "assigned_to_name",
-            "notes", "message_count",
+            # Escalation audit
+            "escalated_at", "escalated_by_name", "escalation_reason",
+            # Misc
+            "notes", "message_count", "can_escalate", "next_tier",
             "created_at", "updated_at", "closed_at",
         ]
         read_only_fields = [
             "id", "conversation", "user_email",
             "assigned_to_name", "status_display",
-            "message_count", "created_at", "updated_at",
+            "tier_display", "priority_display", "category_display",
+            "message_count", "escalated_by_name",
+            "can_escalate", "next_tier",
+            "created_at", "updated_at",
         ]
 
     def get_user_email(self, obj):
@@ -70,7 +91,22 @@ class SupportTicketSerializer(serializers.ModelSerializer):
     def get_message_count(self, obj):
         return obj.conversation.messages.count()
 
+    def get_escalated_by_name(self, obj):
+        if obj.escalated_by:
+            return obj.escalated_by.get_full_name() or obj.escalated_by.email
+        return None
+
 
 class SupportReplySerializer(serializers.Serializer):
     """Input for staff replying to a support conversation."""
     message = serializers.CharField(max_length=2000)
+
+
+class EscalateTicketSerializer(serializers.Serializer):
+    """Input for escalating a ticket to the next tier."""
+    reason = serializers.CharField(
+        max_length=500,
+        required=False,
+        allow_blank=True,
+        default="",
+    )

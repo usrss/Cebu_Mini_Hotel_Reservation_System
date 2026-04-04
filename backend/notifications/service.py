@@ -5,10 +5,21 @@ Role-based notification service.
 All notification creation goes through this file — never create
 Notification objects directly in views or signals.
 
+FIXES in this revision:
+  - Added notify_incident_resolved() — was called in staff/views.py but missing here,
+    causing silent AttributeError crashes on every incident update.
+  - Added notify_incident_updated() — same issue.
+  - Added notify_support_ticket_created() and notify_support_ticket_escalated()
+    as dedicated helpers (delegating to support_service internals is fine,
+    but having named methods here makes intent clear and avoids confusion).
+  - _get_staff_by_roles() is now shared with chatbot/support_service.py via
+    the staff app — no duplication of logic needed.
+
 Role delivery rules (per spec):
   ADMIN        → system alerts, payment failures, booking conflicts, staff account changes
   MANAGER      → booking activity, complaints, task completions, occupancy alerts
-  FRONT_DESK   → new bookings, updates, check-in/out, payment confirmations
+  FRONT_DESK   → new bookings, updates, check-in/out, payment confirmations,
+                 support tickets (FRONT_DESK tier)
   HOUSEKEEPING → cleaning assignments, overdue alerts, room status
   MAINTENANCE  → maintenance assignments, repair requests, overdue alerts
   SECURITY     → incidents, emergencies, suspicious activity
@@ -34,6 +45,7 @@ User = get_user_model()
 ROLE_ADMIN        = "admin"
 ROLE_MANAGER      = "manager"
 ROLE_FRONT_DESK   = "front_desk"
+ROLE_RECEPTIONIST = "receptionist"
 ROLE_HOUSEKEEPING = "housekeeping"
 ROLE_MAINTENANCE  = "maintenance"
 ROLE_SECURITY     = "security"
@@ -41,7 +53,9 @@ ROLE_SECURITY     = "security"
 
 def _get_staff_by_roles(roles: list) -> list:
     """
-    Return active User objects whose staff_profile.effective_role is in roles.
+    Return active User objects whose staff_profile.role is in `roles`.
+    Uses .role (not effective_role) for batch lookup — temp roles are not
+    considered here because notification routing is based on permanent role.
     """
     users = []
     try:
@@ -56,10 +70,16 @@ def _get_staff_by_roles(roles: list) -> list:
     return users
 
 
-def _create(recipient, event, title, description,
-            recipient_type, booking=None,
-            priority=NotificationPriority.MEDIUM,
-            channel=NotificationChannel.DASHBOARD):
+def _create(
+    recipient,
+    event,
+    title,
+    description,
+    recipient_type,
+    booking=None,
+    priority=NotificationPriority.MEDIUM,
+    channel=NotificationChannel.DASHBOARD,
+):
     """Internal helper — creates one Notification record safely."""
     try:
         Notification.objects.create(
@@ -79,9 +99,15 @@ def _create(recipient, event, title, description,
         )
 
 
-def _bulk_notify(users, event, title, description,
-                 recipient_type, booking=None,
-                 priority=NotificationPriority.MEDIUM):
+def _bulk_notify(
+    users,
+    event,
+    title,
+    description,
+    recipient_type,
+    booking=None,
+    priority=NotificationPriority.MEDIUM,
+):
     """Create one notification per user in the list."""
     for user in users:
         _create(
@@ -107,15 +133,16 @@ class NotificationService:
     def notify_booking_created(booking):
         """
         New booking created (PENDING_PAYMENT).
-        → Front Desk: needs to know about new reservations
-        → Manager: booking activity awareness
+        → Front Desk + Manager awareness.
         NOT sent to Admin (too noisy) or Guest (not confirmed yet).
         """
         room    = booking.room.room_number
         guest   = booking.full_name
         checkin = booking.check_in
 
-        recipients = _get_staff_by_roles([ROLE_FRONT_DESK, ROLE_MANAGER])
+        recipients = _get_staff_by_roles([
+            ROLE_FRONT_DESK, ROLE_RECEPTIONIST, ROLE_MANAGER,
+        ])
         _bulk_notify(
             users          = recipients,
             event          = NotificationEvent.BOOKING_CREATED,
@@ -133,10 +160,8 @@ class NotificationService:
     def notify_booking_confirmed(booking):
         """
         Booking confirmed after payment.
-        → Guest: their booking is confirmed
-        → Front Desk: prepare for arrival
-        → Manager: awareness
-        NOT sent to Admin.
+        → Guest: their booking is confirmed.
+        → Front Desk + Manager: prepare for arrival.
         """
         room    = booking.room.room_number
         guest   = booking.full_name
@@ -158,8 +183,10 @@ class NotificationService:
                 priority       = NotificationPriority.HIGH,
             )
 
-        # Staff notifications
-        staff = _get_staff_by_roles([ROLE_FRONT_DESK, ROLE_MANAGER])
+        # Staff
+        staff = _get_staff_by_roles([
+            ROLE_FRONT_DESK, ROLE_RECEPTIONIST, ROLE_MANAGER,
+        ])
         _bulk_notify(
             users          = staff,
             event          = NotificationEvent.BOOKING_CONFIRMED,
@@ -177,10 +204,8 @@ class NotificationService:
     def notify_booking_cancelled(booking):
         """
         Booking cancelled.
-        → Guest: confirmation of cancellation + refund info
-        → Front Desk: update availability awareness
-        → Manager: awareness
-        NOT sent to Admin.
+        → Guest: confirmation of cancellation + refund info.
+        → Front Desk + Manager: update availability awareness.
         """
         room   = booking.room.room_number
         guest  = booking.full_name
@@ -206,7 +231,9 @@ class NotificationService:
             )
 
         # Staff
-        staff = _get_staff_by_roles([ROLE_FRONT_DESK, ROLE_MANAGER])
+        staff = _get_staff_by_roles([
+            ROLE_FRONT_DESK, ROLE_RECEPTIONIST, ROLE_MANAGER,
+        ])
         _bulk_notify(
             users          = staff,
             event          = NotificationEvent.BOOKING_CANCELLED,
@@ -223,9 +250,9 @@ class NotificationService:
     @staticmethod
     def notify_booking_modified(booking, modification):
         """
-        Booking dates modified (extend or reschedule).
-        → Guest: confirmation
-        → Front Desk: awareness
+        Booking dates modified.
+        → Guest: confirmation.
+        → Front Desk: awareness.
         """
         room = booking.room.room_number
         ref  = booking.reference_number
@@ -244,7 +271,7 @@ class NotificationService:
                 priority       = NotificationPriority.MEDIUM,
             )
 
-        staff = _get_staff_by_roles([ROLE_FRONT_DESK])
+        staff = _get_staff_by_roles([ROLE_FRONT_DESK, ROLE_RECEPTIONIST])
         _bulk_notify(
             users          = staff,
             event          = NotificationEvent.BOOKING_MODIFIED,
@@ -262,17 +289,14 @@ class NotificationService:
 
     @staticmethod
     def notify_deposit_received(booking, amount):
-        """
-        30% deposit received.
-        → Front Desk: payment activity
-        → Manager: revenue awareness
-        NOT sent to Admin.
-        """
+        """30% deposit received. → Front Desk + Manager."""
         room  = booking.room.room_number
         guest = booking.full_name
         ref   = booking.reference_number or f"#{booking.pk}"
 
-        staff = _get_staff_by_roles([ROLE_FRONT_DESK, ROLE_MANAGER])
+        staff = _get_staff_by_roles([
+            ROLE_FRONT_DESK, ROLE_RECEPTIONIST, ROLE_MANAGER,
+        ])
         _bulk_notify(
             users          = staff,
             event          = NotificationEvent.DEPOSIT_RECEIVED,
@@ -288,16 +312,14 @@ class NotificationService:
 
     @staticmethod
     def notify_full_payment_received(booking, amount):
-        """
-        Full payment received.
-        → Front Desk: payment confirmed
-        → Manager: revenue awareness
-        """
+        """Full payment received. → Front Desk + Manager."""
         room  = booking.room.room_number
         guest = booking.full_name
         ref   = booking.reference_number or f"#{booking.pk}"
 
-        staff = _get_staff_by_roles([ROLE_FRONT_DESK, ROLE_MANAGER])
+        staff = _get_staff_by_roles([
+            ROLE_FRONT_DESK, ROLE_RECEPTIONIST, ROLE_MANAGER,
+        ])
         _bulk_notify(
             users          = staff,
             event          = NotificationEvent.FULL_PAYMENT_RECEIVED,
@@ -313,15 +335,11 @@ class NotificationService:
 
     @staticmethod
     def notify_payment_failed(booking):
-        """
-        Payment failed.
-        → Admin: needs to know about payment issues
-        → Front Desk: may need to contact guest
-        """
+        """Payment failed. → Admin + Front Desk."""
         room  = booking.room.room_number
         guest = booking.full_name
 
-        staff = _get_staff_by_roles([ROLE_ADMIN, ROLE_FRONT_DESK])
+        staff = _get_staff_by_roles([ROLE_ADMIN, ROLE_FRONT_DESK, ROLE_RECEPTIONIST])
         _bulk_notify(
             users          = staff,
             event          = NotificationEvent.PAYMENT_FAILED,
@@ -337,10 +355,7 @@ class NotificationService:
 
     @staticmethod
     def notify_balance_collected(booking, amount):
-        """
-        Remaining balance collected at front desk during check-in.
-        → Manager: revenue awareness
-        """
+        """Remaining balance collected at front desk. → Manager."""
         room = booking.room.room_number
         ref  = booking.reference_number
 
@@ -362,11 +377,7 @@ class NotificationService:
 
     @staticmethod
     def notify_guest_checked_in(booking):
-        """
-        Guest checked in.
-        → Housekeeping: no cleaning needed yet, but aware of occupied room
-        → Manager: occupancy awareness
-        """
+        """Guest checked in. → Manager awareness."""
         room  = booking.room.room_number
         guest = booking.full_name
 
@@ -383,12 +394,7 @@ class NotificationService:
 
     @staticmethod
     def notify_guest_checked_out(booking):
-        """
-        Guest checked out.
-        → Housekeeping: room needs cleaning (primary trigger)
-        → Front Desk: room is now free
-        → Manager: awareness
-        """
+        """Guest checked out. → Housekeeping (act), Front Desk + Manager (awareness)."""
         room  = booking.room.room_number
         guest = booking.full_name
 
@@ -408,7 +414,9 @@ class NotificationService:
         )
 
         # Front Desk + Manager
-        staff = _get_staff_by_roles([ROLE_FRONT_DESK, ROLE_MANAGER])
+        staff = _get_staff_by_roles([
+            ROLE_FRONT_DESK, ROLE_RECEPTIONIST, ROLE_MANAGER,
+        ])
         _bulk_notify(
             users          = staff,
             event          = NotificationEvent.GUEST_CHECKED_OUT,
@@ -423,10 +431,7 @@ class NotificationService:
 
     @staticmethod
     def notify_cleaning_assigned(task, assigned_by=None):
-        """
-        Cleaning task assigned to a specific housekeeping staff member.
-        → Assigned housekeeping staff only.
-        """
+        """Cleaning task assigned. → Assigned housekeeping staff only."""
         if not task.assigned_to:
             return
 
@@ -460,13 +465,9 @@ class NotificationService:
 
     @staticmethod
     def notify_cleaning_overdue(task):
-        """
-        Cleaning task exceeded the 2-hour window.
-        → Assigned staff + Manager.
-        """
+        """Cleaning task exceeded 2-hour window. → Assigned staff + Manager."""
         room_number = task.room.room_number if task.room_id else "—"
 
-        # Notify the assigned staff member
         if task.assigned_to:
             _create(
                 recipient      = task.assigned_to.user,
@@ -481,7 +482,6 @@ class NotificationService:
                 priority       = NotificationPriority.URGENT,
             )
 
-        # Notify managers
         managers = _get_staff_by_roles([ROLE_MANAGER])
         _bulk_notify(
             users          = managers,
@@ -498,14 +498,12 @@ class NotificationService:
 
     @staticmethod
     def notify_room_cleaned(task):
-        """
-        Room marked as clean.
-        → Manager: room is ready
-        → Front Desk: can assign room to new guest
-        """
+        """Room marked as clean. → Manager + Front Desk."""
         room_number = task.room.room_number if task.room_id else "—"
 
-        staff = _get_staff_by_roles([ROLE_MANAGER, ROLE_FRONT_DESK])
+        staff = _get_staff_by_roles([
+            ROLE_MANAGER, ROLE_FRONT_DESK, ROLE_RECEPTIONIST,
+        ])
         _bulk_notify(
             users          = staff,
             event          = NotificationEvent.ROOM_CLEANED,
@@ -520,10 +518,7 @@ class NotificationService:
 
     @staticmethod
     def notify_maintenance_assigned(task, assigned_by=None):
-        """
-        Maintenance task assigned.
-        → Assigned maintenance staff only.
-        """
+        """Maintenance task assigned. → Assigned maintenance staff only."""
         if not task.assigned_to:
             return
 
@@ -546,14 +541,12 @@ class NotificationService:
 
     @staticmethod
     def notify_maintenance_completed(task):
-        """
-        Maintenance task completed.
-        → Manager: awareness
-        → Front Desk: room may be available again
-        """
+        """Maintenance task completed. → Manager + Front Desk."""
         room_number = task.room.room_number if task.room_id else "—"
 
-        staff = _get_staff_by_roles([ROLE_MANAGER, ROLE_FRONT_DESK])
+        staff = _get_staff_by_roles([
+            ROLE_MANAGER, ROLE_FRONT_DESK, ROLE_RECEPTIONIST,
+        ])
         _bulk_notify(
             users          = staff,
             event          = NotificationEvent.MAINTENANCE_COMPLETED,
@@ -572,10 +565,10 @@ class NotificationService:
     @staticmethod
     def notify_incident_reported(incident):
         """
-        Incident logged by security.
-        → Admin: critical incidents
-        → Manager: all incidents
-        → Security: team awareness
+        Incident logged.
+        → Admin: urgent/high severity only.
+        → Manager: all incidents.
+        → Security: team awareness.
         """
         severity = getattr(incident, "severity", "medium")
         loc      = getattr(incident, "location", "—")
@@ -587,13 +580,12 @@ class NotificationService:
             else NotificationPriority.HIGH
         )
 
-        # Admin — urgent/high only
         if severity in ("high", "critical"):
             admins = _get_staff_by_roles([ROLE_ADMIN])
             _bulk_notify(
                 users          = admins,
                 event          = NotificationEvent.INCIDENT_REPORTED,
-                title          = f"Critical Incident — {loc}",
+                title          = f"🚨 Critical Incident — {loc}",
                 description    = (
                     f"A {inc_type} incident has been reported at {loc}. "
                     f"Severity: {severity}. Immediate attention required."
@@ -602,7 +594,6 @@ class NotificationService:
                 priority       = NotificationPriority.URGENT,
             )
 
-        # Manager — all incidents
         managers = _get_staff_by_roles([ROLE_MANAGER])
         _bulk_notify(
             users          = managers,
@@ -616,7 +607,6 @@ class NotificationService:
             priority       = priority,
         )
 
-        # Security team
         security = _get_staff_by_roles([ROLE_SECURITY])
         _bulk_notify(
             users          = security,
@@ -631,11 +621,58 @@ class NotificationService:
         )
 
     @staticmethod
+    def notify_incident_updated(incident):
+        """
+        Incident status updated (not yet resolved).
+        → Manager: awareness.
+        → Security: team awareness.
+        Added to fix the AttributeError crash in staff/views.py IncidentLogDetailView.
+        """
+        loc      = getattr(incident, "location", "—")
+        inc_type = getattr(incident, "incident_type", "incident")
+        status   = getattr(incident, "status", "unknown")
+        title_txt = getattr(incident, "title", "") or inc_type
+
+        staff = _get_staff_by_roles([ROLE_MANAGER, ROLE_SECURITY])
+        _bulk_notify(
+            users          = staff,
+            event          = NotificationEvent.INCIDENT_REPORTED,
+            title          = f"Incident Updated — {loc}",
+            description    = (
+                f"Incident '{title_txt}' at {loc} has been updated. "
+                f"New status: {status}."
+            ),
+            recipient_type = NotificationRecipientType.SECURITY,
+            priority       = NotificationPriority.MEDIUM,
+        )
+
+    @staticmethod
+    def notify_incident_resolved(incident):
+        """
+        Incident marked as resolved.
+        → Manager: closure awareness.
+        → Security: team closure notification.
+        Added to fix the AttributeError crash in staff/views.py IncidentLogDetailView.
+        """
+        loc      = getattr(incident, "location", "—")
+        title_txt = getattr(incident, "title", "") or getattr(incident, "incident_type", "incident")
+
+        staff = _get_staff_by_roles([ROLE_MANAGER, ROLE_SECURITY])
+        _bulk_notify(
+            users          = staff,
+            event          = NotificationEvent.INCIDENT_REPORTED,
+            title          = f"✅ Incident Resolved — {loc}",
+            description    = (
+                f"Incident '{title_txt}' at {loc} has been marked as resolved. "
+                f"Resolution notes: {getattr(incident, 'resolution_notes', '') or 'None provided'}."
+            ),
+            recipient_type = NotificationRecipientType.SECURITY,
+            priority       = NotificationPriority.LOW,
+        )
+
+    @staticmethod
     def notify_emergency(description, reported_by=None):
-        """
-        Emergency alert.
-        → Security + Admin — urgent priority.
-        """
+        """Emergency alert. → Security + Admin — urgent priority."""
         reporter = reported_by.get_full_name() if reported_by else "System"
 
         staff = _get_staff_by_roles([ROLE_SECURITY, ROLE_ADMIN])
@@ -652,10 +689,7 @@ class NotificationService:
 
     @staticmethod
     def notify_system_alert(message, priority=NotificationPriority.HIGH):
-        """
-        System-level alert (errors, failures, conflicts).
-        → Admin only.
-        """
+        """System-level alert. → Admin only."""
         admins = _get_staff_by_roles([ROLE_ADMIN])
         _bulk_notify(
             users          = admins,
@@ -669,12 +703,8 @@ class NotificationService:
     @staticmethod
     def notify_maintenance_request_created(request_obj):
         """
-        A new MaintenanceRequest has been submitted by Front Desk or Housekeeping.
-        → Admin + Manager: they need to review and act.
-
-        Uses MAINTENANCE_ASSIGNED event as the closest existing event type.
-        If a dedicated MAINTENANCE_REQUEST_CREATED event exists in NotificationEvent,
-        replace accordingly.
+        A new MaintenanceRequest submitted by Front Desk or Housekeeping.
+        → Admin + Manager: needs review.
         """
         reported_by = request_obj.reported_by
         reporter_name = (
@@ -688,13 +718,41 @@ class NotificationService:
 
         staff = _get_staff_by_roles([ROLE_ADMIN, ROLE_MANAGER])
         _bulk_notify(
-            users=staff,
-            event=NotificationEvent.MAINTENANCE_ASSIGNED,  # reuse closest event
-            title=f"New Maintenance Request{room_text}",
-            description=(
+            users          = staff,
+            event          = NotificationEvent.MAINTENANCE_ASSIGNED,
+            title          = f"New Maintenance Request{room_text}",
+            description    = (
                 f"{reporter_name} submitted a maintenance request: "
                 f"'{request_obj.title}'.{room_text} Please review and convert to a task."
             ),
-            recipient_type=NotificationRecipientType.MANAGER,
-            priority=NotificationPriority.MEDIUM,
+            recipient_type = NotificationRecipientType.MANAGER,
+            priority       = NotificationPriority.MEDIUM,
         )
+
+    # ── Support Ticket helpers (convenience wrappers) ─────────────────────────
+    # The actual notification logic lives in chatbot/services/support_service.py
+    # These wrappers exist so other parts of the system can call them through
+    # the unified NotificationService interface.
+
+    @staticmethod
+    def notify_support_ticket_created(ticket):
+        """
+        New support ticket created — notify the owning tier's staff.
+        Delegates to support_service to avoid duplicating role-mapping logic.
+        """
+        try:
+            from chatbot.services.support_service import _send_ticket_notification
+            _send_ticket_notification(ticket, is_new=True)
+        except Exception as exc:
+            logger.warning("notify_support_ticket_created failed: %s", exc)
+
+    @staticmethod
+    def notify_support_ticket_escalated(ticket, reason: str = ""):
+        """
+        Support ticket escalated — notify the NEW tier's staff.
+        """
+        try:
+            from chatbot.services.support_service import _send_ticket_notification
+            _send_ticket_notification(ticket, is_new=False, escalation_reason=reason)
+        except Exception as exc:
+            logger.warning("notify_support_ticket_escalated failed: %s", exc)

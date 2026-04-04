@@ -5,18 +5,8 @@
  * Pulls real operational data from GET /api/staff/dashboard/ (analyticsApi.dashboard)
  * and supplements with guest count + revenue from adminApi.
  *
- * Sections:
- *   1. Greeting header
- *   2. Operational KPI row  — rooms, bookings, tasks, maintenance requests
- *   3. Business KPI row     — guests, revenue today, avg rating, pending payments
- *   4. Live status strips   — room breakdown, task breakdown, staff presence
- *   5. Recent activity feed
- *   6. Quick actions grid   — meaningful shortcuts only, no sidebar duplication
- *
- * Removed:
- *   - Role info card (patronising, useless)
- *   - Hollow quick-links grid that mirrors the sidebar exactly
- *   - Front Desk section (front_desk has its own layout/dashboard)
+ * Changes:
+ *   - Removed "Staff Online" status strip (now 3 strips, not 4)
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -32,7 +22,7 @@ import { analyticsApi, guestApi,
          paymentApi, reviewApi }           from '../../../services/adminApi';
 import './AdminDashboard.css';
 
-const POLL_MS = 60_000; // refresh every 60 s
+const POLL_MS = 60_000;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -135,7 +125,7 @@ export default function AdminDashboard() {
   const isAdmin     = role === 'admin';
 
   // ── State ──────────────────────────────────────────────────────────────────
-  const [dash,       setDash]       = useState(null);   // /staff/dashboard/
+  const [dash,       setDash]       = useState(null);
   const [guestCount, setGuestCount] = useState(null);
   const [pendingPay, setPendingPay] = useState(null);
   const [avgRating,  setAvgRating]  = useState(null);
@@ -198,11 +188,6 @@ export default function AdminDashboard() {
   const maintPending   = d?.tasks?.maintenance_pending  ?? 0;
   const maintInProg    = d?.tasks?.maintenance_in_progress ?? 0;
   const pendingReqs    = d?.pending_maintenance_requests ?? 0;
-
-  const staffOnline    = d?.staff?.online  ?? 0;
-  const staffIdle      = d?.staff?.idle    ?? 0;
-  const staffOffline   = d?.staff?.offline ?? 0;
-  const staffTotal     = d?.staff?.total   ?? 0;
 
   const revenueToday   = d?.revenue_today ?? null;
   const recentActivity = d?.recent_activity ?? [];
@@ -320,8 +305,8 @@ export default function AdminDashboard() {
         />
       </div>
 
-      {/* ── Status strips ──────────────────────────────────────────────────── */}
-      <div className="ad-strips">
+      {/* ── Status strips — Staff Online strip REMOVED ──────────────────────── */}
+      <div className="ad-strips" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
         <StatusStrip
           label="Rooms"
           items={[
@@ -338,14 +323,6 @@ export default function AdminDashboard() {
             { name: 'Cleaning',        value: cleaningInProg, color: 'var(--amber)' },
             { name: 'Maint. Pending',  value: maintPending,   color: '#60A5FA'      },
             { name: 'Maint. Active',   value: maintInProg,    color: 'var(--green)' },
-          ]}
-        />
-        <StatusStrip
-          label="Staff Online"
-          items={[
-            { name: 'Online',  value: staffOnline,  color: 'var(--green)' },
-            { name: 'Idle',    value: staffIdle,    color: 'var(--amber)' },
-            { name: 'Offline', value: staffOffline, color: 'rgba(248,246,240,0.2)' },
           ]}
         />
         <StatusStrip
@@ -384,7 +361,7 @@ export default function AdminDashboard() {
           </button>
         </div>
 
-        {/* Quick actions — genuinely useful shortcuts not in sidebar */}
+        {/* Quick actions */}
         <div className="ad-card">
           <div className="ad-card-header">
             <p className="ad-card-eyebrow">Shortcuts</p>
@@ -392,7 +369,6 @@ export default function AdminDashboard() {
           </div>
           <div className="ad-quick-list">
 
-            {/* Operational alerts first */}
             {pendingReqs > 0 && (
               <QuickAction
                 icon={<AlertTriangle size={16} />}
@@ -421,7 +397,6 @@ export default function AdminDashboard() {
               />
             )}
 
-            {/* Standard shortcuts */}
             <QuickAction
               icon={<ClipboardList size={16} />}
               label="Housekeeping Dashboard"

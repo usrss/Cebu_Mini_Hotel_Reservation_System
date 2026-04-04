@@ -3,8 +3,17 @@ chatbot/services/intent_router.py
 
 Routes detected intents to the appropriate backend service.
 Responds in English, Tagalog, or Bisaya based on detected language.
+
+FIX 1: Language validation now uses WORD-BOUNDARY matching (\\b) via regex
+        instead of substring `in` checks. This prevents false positives like
+        "I may book" triggering Tagalog because "may" is a substring match.
+
+FIX 2: Marker lists tightened — removed short ambiguous tokens ("ko", "man",
+        "ba", "oo", "may", "naa") that collide with common English words.
+        Only unambiguous Filipino/Bisaya-exclusive words are kept.
 """
 
+import re
 from datetime import datetime
 
 from chatbot.services import room_service, booking_service, support_service
@@ -25,6 +34,84 @@ HOTEL_INFO = {
 }
 
 LOW_CONFIDENCE_THRESHOLD = 0.45
+
+# ─── Language marker words — UNAMBIGUOUS Filipino/Bisaya only ─────────────────
+# REMOVED common English-collision tokens: ko, man, ba, oo, may, naa, lang, etc.
+# Only keep tokens that would NEVER appear in a typical English sentence.
+
+_TAGALOG_MARKERS = [
+    "paano", "saan", "kailan", "bakit", "mayroon", "hindi", "huwag",
+    "naman", "yung", "kaya", "dito", "doon", "iyon", "nito",
+    "kami", "tayo", "sila", "kayo", "namin", "natin",
+    "magkano", "presyo", "kwarto", "salamat",
+    "kumusta", "kamusta", "musta", "magandang",
+    "piliin", "pumunta", "magtanong", "makausap",
+    "mga", "aking", "inyong", "gusto", "maaari",
+    "po naman", "po ba", "po ang", "po ng",
+]
+
+_BISAYA_MARKERS = [
+    "unsa", "kanus-a", "kinsa", "ngano", "hain",
+    "dili", "ayaw", "bitaw",
+    "nako", "nimo", "niya", "nato", "ninyo",
+    "pila", "tag pila", "kwarto",
+    "kumusta", "maayong", "unsaon",
+    "palihug", "salamat kaayo", "daghan salamat",
+    "akong", "imong", "among", "atong",
+    "adto", "dinhi", "didto",
+    "mobook", "mobayad", "mocancel",
+]
+
+
+def _word_in_text(word: str, text: str) -> bool:
+    """
+    Check if `word` appears as a whole word (or phrase) in `text`.
+    Uses regex word boundaries for single-word tokens.
+    For multi-word phrases, uses simple substring match since \\b
+    doesn't work well across spaces.
+    """
+    if " " in word:
+        return word in text
+    try:
+        return bool(re.search(r"\b" + re.escape(word) + r"\b", text))
+    except re.error:
+        return word in text
+
+
+def _validate_language(detected: str, message: str) -> str:
+    """
+    Confirm that the AI's detected language is supported by the actual
+    message content using WORD-BOUNDARY matching.
+
+    Falls back to 'english' if the message doesn't contain at least ONE
+    unambiguous word from the detected language's marker list.
+
+    This prevents replying in Tagalog/Bisaya when the user types in English
+    and Groq makes a detection error on short or ambiguous messages.
+    """
+    msg = message.lower()
+
+    if detected in ("tagalog", "filipino"):
+        if any(_word_in_text(w, msg) for w in _TAGALOG_MARKERS):
+            return "tagalog"
+        return "english"
+
+    if detected in ("bisaya", "cebuano", "bisayal"):
+        if any(_word_in_text(w, msg) for w in _BISAYA_MARKERS):
+            return "bisaya"
+        return "english"
+
+    if detected == "mixed":
+        tagalog_hits = sum(1 for w in _TAGALOG_MARKERS if _word_in_text(w, msg))
+        bisaya_hits  = sum(1 for w in _BISAYA_MARKERS  if _word_in_text(w, msg))
+        if bisaya_hits > tagalog_hits and bisaya_hits >= 2:
+            return "bisaya"
+        if tagalog_hits >= 2:
+            return "tagalog"
+        return "english"
+
+    return "english"
+
 
 # ─── Language-aware response strings ─────────────────────────────────────────
 
@@ -112,7 +199,7 @@ RESPONSES = {
 
 
 def _lang(language: str) -> str:
-    """Normalize language to english/tagalog/bisaya."""
+    """Normalize language string."""
     if language in ("tagalog", "filipino"):
         return "tagalog"
     if language in ("bisaya", "cebuano", "bisayal"):
@@ -121,8 +208,7 @@ def _lang(language: str) -> str:
 
 
 def _r(key: str, language: str, **kwargs) -> str:
-    """Get response string for key in given language, with format kwargs."""
-    lang = _lang(language)
+    lang     = _lang(language)
     template = RESPONSES[key].get(lang) or RESPONSES[key]["english"]
     return template.format(**kwargs) if kwargs else template
 
@@ -131,21 +217,24 @@ def _r(key: str, language: str, **kwargs) -> str:
 
 def route(intent_result: dict, conversation: Conversation,
           user, user_message: str = "") -> dict:
+
     intent     = intent_result.get("intent", "UNKNOWN")
     entities   = intent_result.get("entities", {}) or {}
     confidence = float(intent_result.get("confidence", 0.0))
     summary    = intent_result.get("raw_intent_summary", "")
-    language   = intent_result.get("language", "english")
+    raw_lang   = intent_result.get("language", "english")
     msg_lower  = user_message.lower().strip()
+
+    # Validate language against actual message content (word-boundary safe)
+    language = _validate_language(raw_lang, user_message)
 
     is_authenticated = bool(user and user.is_authenticated)
 
-    # Low confidence → escalate
+    # Low confidence → escalate to support
     if confidence < LOW_CONFIDENCE_THRESHOLD and intent != "GREETING":
         return _handle_support(conversation, user, summary, language)
 
     if intent == "GREETING":
-        # Check actual message for thanks in any language
         thanks_words = [
             "thank", "thanks", "ty", "thx", "noted", "got it",
             "okay thanks", "ok thanks", "great thanks",
@@ -166,24 +255,19 @@ def route(intent_result: dict, conversation: Conversation,
     elif intent == "VIEW_BOOKING":
         if not is_authenticated:
             return {
-                "message":       "To view your booking details, please log in to your account first." if _lang(language) == "english"
-                                 else "Para makita ang iyong booking, mangyaring mag-login muna." if _lang(language) == "tagalog"
-                                 else "Para makita ang imong booking, palihug mag-login una.",
+                "message":       "To view your booking details, please **log in** to your account first.\n\nOnce logged in, I can show you your reservations, check-in PIN, and booking status.",
                 "intent":        intent,
                 "data":          None,
                 "escalated":     False,
-                "quick_replies": RESPONSES["quick_replies"][_lang(language)],
+                "quick_replies": ["Check room availability", "View room prices", "Hotel information", "Talk to support"],
             }
         return _handle_view_booking(user, language)
 
     elif intent == "CANCEL_BOOKING":
         return _handle_cancel_booking(user, language)
-        hotel_keywords = ["book", "reserv", "room", "stay", "hotel", "check in",
-                          "checkout", "payment", "pay", "confirm", "cancel",
-                          "kwarto", "silid", "mag-book", "pag-book", "unsaon"]
-        if any(w in summary.lower() for w in hotel_keywords):
-            return _handle_booking_help(language)
-        return _handle_unknown(language)
+
+    elif intent == "BOOKING_HELP":
+        return _handle_booking_help(language)
 
     elif intent == "HOTEL_INFO":
         return _handle_hotel_info(language)
@@ -211,7 +295,7 @@ def _handle_thanks(language: str = "english") -> dict:
 
 
 def _handle_greeting(user=None, language: str = "english") -> dict:
-    name = ""
+    name    = ""
     is_auth = bool(user and getattr(user, "is_authenticated", False))
 
     if is_auth:
@@ -221,7 +305,6 @@ def _handle_greeting(user=None, language: str = "english") -> dict:
 
     lang = _lang(language)
 
-    # Quick replies differ based on login state
     if is_auth:
         quick_replies = {
             "english": ["Check room availability", "View room prices", "My bookings", "Talk to support"],
@@ -254,20 +337,16 @@ def _handle_availability(entities: dict, language: str = "english") -> dict:
     check_out = _parse_date(check_out_str)
     guests    = int(guests_raw) if guests_raw else None
 
-    data = room_service.get_available_rooms(
-        check_in=check_in,
-        check_out=check_out,
-        room_type=room_type,
-        guests=guests,
+    data  = room_service.get_available_rooms(
+        check_in=check_in, check_out=check_out,
+        room_type=room_type, guests=guests,
     )
-
     dates = f" for **{check_in_str}** to **{check_out_str}**" if check_in_str else ""
 
     if data["available_count"] == 0:
         message = _r("no_rooms", language, dates=dates)
     else:
-        message = _r("rooms_found", language,
-                     count=data["available_count"], dates=dates)
+        message = _r("rooms_found", language, count=data["available_count"], dates=dates)
 
     return {
         "message":       message,
@@ -280,12 +359,12 @@ def _handle_availability(entities: dict, language: str = "english") -> dict:
 
 def _handle_price(entities: dict, language: str = "english") -> dict:
     room_type = entities.get("room_type")
-    data = room_service.get_room_prices(room_type=room_type)
+    data      = room_service.get_room_prices(room_type=room_type)
 
     if not data["pricing"]:
         message = _r("no_price", language)
     else:
-        lang = _lang(language)
+        lang  = _lang(language)
         if lang == "tagalog":
             lines = ["Narito ang aming mga kasalukuyang rate ng kwarto:\n"]
             for p in data["pricing"]:
@@ -332,31 +411,31 @@ def _handle_view_booking(user, language: str = "english") -> dict:
         if lang == "tagalog":
             message = (
                 f"Ang iyong pinakabagong booking ay **Kwarto {b['room_number']} ({b['room_type']})**.\n"
-                f" Check-in: {b['check_in']} · Check-out: {b['check_out']}\n"
+                f"📅 Check-in: {b['check_in']} · Check-out: {b['check_out']}\n"
                 f"Status: **{b['status']}**"
             )
             if b["has_credentials"]:
-                message += f"\n Check-in PIN: **{b['checkin_pin']}**"
+                message += f"\n🔑 Check-in PIN: **{b['checkin_pin']}**"
             if data["booking_count"] > 1:
                 message += f"\n\nMayroon kang {data['booking_count']} booking(s) sa kabuuan."
         elif lang == "bisaya":
             message = (
                 f"Ang imong pinakabag-o nga booking mao ang **Kwarto {b['room_number']} ({b['room_type']})**.\n"
-                f" Check-in: {b['check_in']} · Check-out: {b['check_out']}\n"
+                f"📅 Check-in: {b['check_in']} · Check-out: {b['check_out']}\n"
                 f"Status: **{b['status']}**"
             )
             if b["has_credentials"]:
-                message += f"\n Check-in PIN: **{b['checkin_pin']}**"
+                message += f"\n🔑 Check-in PIN: **{b['checkin_pin']}**"
             if data["booking_count"] > 1:
                 message += f"\n\nNaa kay {data['booking_count']} booking(s) sa tanan."
         else:
             message = (
                 f"Your most recent booking is **Room {b['room_number']} ({b['room_type']})**.\n"
-                f" Check-in: {b['check_in']} · Check-out: {b['check_out']}\n"
+                f"📅 Check-in: {b['check_in']} · Check-out: {b['check_out']}\n"
                 f"Status: **{b['status']}**"
             )
             if b["has_credentials"]:
-                message += f"\n  Check-in PIN: **{b['checkin_pin']}**"
+                message += f"\n🔑 Check-in PIN: **{b['checkin_pin']}**"
             if data["booking_count"] > 1:
                 message += f"\n\nYou have {data['booking_count']} booking(s) total."
 
@@ -370,7 +449,7 @@ def _handle_view_booking(user, language: str = "english") -> dict:
 
 
 def _handle_cancel_booking(user=None, language: str = "english") -> dict:
-    lang = _lang(language)
+    lang    = _lang(language)
     is_auth = bool(user and getattr(user, "is_authenticated", False))
 
     if not is_auth:
@@ -387,8 +466,7 @@ def _handle_cancel_booking(user=None, language: str = "english") -> dict:
             "quick_replies": RESPONSES["quick_replies"][lang],
         }
 
-    # User is logged in — get their cancellable bookings
-    data = booking_service.get_user_bookings(user)
+    data        = booking_service.get_user_bookings(user)
     cancellable = [
         b for b in data.get("bookings", [])
         if b.get("status_key") in ("pending_payment", "confirmed")
@@ -408,7 +486,6 @@ def _handle_cancel_booking(user=None, language: str = "english") -> dict:
             "quick_replies": RESPONSES["quick_replies"][lang],
         }
 
-    # Has cancellable bookings — guide them
     msgs = {
         "english": (
             "To cancel a booking, go to **My Bookings** and click the **Cancel Booking** button "
@@ -442,10 +519,7 @@ def _handle_cancel_booking(user=None, language: str = "english") -> dict:
     booking_list = "\n".join(
         "• **{}** — Room {} ({} → {}) — {}".format(
             b['reference_number'] or f"#{b['id']}",
-            b['room_number'],
-            b['check_in'],
-            b['check_out'],
-            b['status'],
+            b['room_number'], b['check_in'], b['check_out'], b['status'],
         )
         for b in cancellable
     )
@@ -456,12 +530,12 @@ def _handle_cancel_booking(user=None, language: str = "english") -> dict:
         "data":          {"cancellable_bookings": cancellable},
         "escalated":     False,
         "quick_replies": [
-            "Go to My Bookings" if lang == "english"
-            else "Pumunta sa Aking mga Booking" if lang == "tagalog"
-            else "Adto sa Akong mga Booking",
-            "Talk to support" if lang == "english"
-            else "Makipag-usap sa support" if lang == "tagalog"
-            else "Makigsulti sa support",
+            "Go to My Bookings"      if lang == "english" else
+            "Pumunta sa Aking mga Booking" if lang == "tagalog" else
+            "Adto sa Akong mga Booking",
+            "Talk to support"        if lang == "english" else
+            "Makipag-usap sa support" if lang == "tagalog" else
+            "Makigsulti sa support",
         ],
     }
 
@@ -539,6 +613,11 @@ def _handle_unknown(language: str = "english") -> dict:
 
 def _handle_support(conversation: Conversation, user,
                     raw_summary: str = "", language: str = "english") -> dict:
+    """
+    Escalate conversation to human support.
+    Idempotent — support_service.escalate_to_support will return the
+    existing ticket if this conversation is already escalated.
+    """
     ticket = support_service.escalate_to_support(
         conversation=conversation,
         subject=raw_summary[:120] if raw_summary else "Support request via chat",

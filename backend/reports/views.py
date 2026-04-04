@@ -523,7 +523,7 @@ class ReportMetaView(APIView):
             "report_types":           report_types,
             "metrics_by_type":        metrics_map,
             "group_by_options":       GROUP_BY_OPTIONS,
-            "valid_group_by_per_type": VALID_GROUP_BY_PER_TYPE,
+            "valid_group_by_per_type": VALID_GROUP_BY_PER_TYPE,  # Fix #3
             "period_options":         PERIOD_OPTIONS,
             "export_formats": [
                 {"value": f.value, "label": f.label}

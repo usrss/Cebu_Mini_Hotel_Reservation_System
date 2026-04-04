@@ -6,6 +6,9 @@
  * All classes prefixed fdl- to avoid collision with fd- (FrontDesk.css).
  *
  * RBAC: front_desk, admin, manager
+ *
+ * FIX: Added "Support Tickets" nav item so Front Desk staff can see and
+ *      respond to guest support tickets routed to the FRONT_DESK tier.
  */
 
 import { useState, useEffect } from 'react';
@@ -14,13 +17,13 @@ import {
   Home, ClipboardList, BedDouble, Calendar,
   UserCheck, CreditCard, LogOut, Settings,
   ChevronLeft, ChevronRight, Menu, X,
-  Users, Shield, LayoutDashboard, Wrench, AlertOctagon, FileText, 
+  Users, Shield, LayoutDashboard, Wrench, AlertOctagon, FileText,
+  MessageSquare,
 } from 'lucide-react';
 import { logoutUser, getStoredUser } from '../../../services/api';
 import NotificationBell from '../../notifications/NotificationBell';
 import { usePresenceHeartbeat } from '../hooks/usePresenceHeartbeat';
 
- 
 import './FrontDeskLayout.css';
 
 // ── Navigation items visible in the Front Desk sidebar ───────────────────────
@@ -62,8 +65,20 @@ const NAV_ITEMS = [
     icon: <CreditCard size={18} />,
     to: '/staff/front-desk/payments',
   },
-  // ── Reporting section (NEW) ─────────────────────────────────────────────────
-  // Divider is rendered in JSX — no change needed here for the logic
+  // ── Support Tickets (ADDED) ─────────────────────────────────────────────────
+  // Front Desk staff must be able to see and respond to guest support tickets
+  // that are routed to the FRONT_DESK tier. Without this nav item they have
+  // no way to reach the support queue.
+  {
+    key: 'support-tickets',
+    label: 'Support Tickets',
+    icon: <MessageSquare size={18} />,
+    to: '/staff/front-desk/support',
+  },
+];
+
+// ── Reporting section nav items ───────────────────────────────────────────────
+const REPORTING_ITEMS = [
   {
     key: 'report-maintenance',
     label: 'Report Issue',
@@ -206,12 +221,11 @@ export default function FrontDeskLayout({ children }) {
           </div>
         )}
 
-        {/* Primary nav */}
-
+        {/* Primary nav + Support Tickets */}
         <nav className="fdl-nav">
           <div className="fdl-nav-label">{!collapsed && 'FRONT DESK'}</div>
 
-          {NAV_ITEMS.slice(0, 6).map(item => (
+          {NAV_ITEMS.map(item => (
             <NavItem key={item.key} item={item} />
           ))}
 
@@ -219,7 +233,7 @@ export default function FrontDeskLayout({ children }) {
           <div className="fdl-nav-divider" style={{ margin: '10px 0' }} />
           <div className="fdl-nav-label">{!collapsed && 'REPORTING'}</div>
 
-          {NAV_ITEMS.slice(6).map(item => (
+          {REPORTING_ITEMS.map(item => (
             <NavItem key={item.key} item={item} />
           ))}
 

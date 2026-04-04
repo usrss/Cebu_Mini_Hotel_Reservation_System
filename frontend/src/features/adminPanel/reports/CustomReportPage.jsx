@@ -664,8 +664,10 @@ function SchedulesTab() {
 // ─── History Tab ──────────────────────────────────────────────────────────────
 
 function HistoryTab({ onViewResult }) {
-  const [executions, setExecutions] = useState([]);
-  const [loading,    setLoading]    = useState(true);
+  const [executions,   setExecutions]   = useState([]);
+  const [loading,      setLoading]      = useState(true);
+  const [downloading,  setDownloading]  = useState(null); // tracks which exec is downloading
+  const [dlError,      setDlError]      = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -679,10 +681,33 @@ function HistoryTab({ onViewResult }) {
   useEffect(() => { load(); }, [load]);
 
   const handleDownload = async (exec) => {
+    setDownloading(exec.id);
+    setDlError(null);
+
+    // Use the format the execution was originally run with.
+    // If it was json (in-app), default to csv for the re-download.
+    const fmt = exec.export_format === 'json' ? 'csv' : exec.export_format;
+
     try {
-      const blob = await reportExecutionApi.download(exec.id, 'csv');
-      triggerBlobDownload(blob, `${exec.report_type}_${exec.id}.csv`);
-    } catch {}
+      const blob = await reportExecutionApi.download(exec.id, fmt);
+
+      // Validate we actually got a file and not an error response
+      if (!blob || blob.size === 0) {
+        setDlError(`Execution #${exec.id}: empty file returned.`);
+        return;
+      }
+
+      const ext = fmt === 'excel' ? 'xlsx' : fmt;
+      triggerBlobDownload(blob, `${exec.report_type}_${exec.id}.${ext}`);
+    } catch (err) {
+      const msg = err.response?.data?.detail
+        || err.response?.statusText
+        || err.message
+        || 'Download failed.';
+      setDlError(`Execution #${exec.id}: ${msg}`);
+    } finally {
+      setDownloading(null);
+    }
   };
 
   const handleView = async (exec) => {
@@ -702,6 +727,11 @@ function HistoryTab({ onViewResult }) {
 
   return (
     <div className="crp-history">
+      {dlError && (
+        <div className="crp-error" style={{ marginBottom: 12 }}>
+          <AlertTriangle size={13} /> {dlError}
+        </div>
+      )}
       <table className="sf-table crp-hist-table">
         <thead>
           <tr>
@@ -751,10 +781,14 @@ function HistoryTab({ onViewResult }) {
                       </button>
                       <button
                         className="crp-icon-btn"
-                        title="Download CSV"
+                        title={`Download ${e.export_format === 'json' ? 'CSV' : e.export_format.toUpperCase()}`}
                         onClick={() => handleDownload(e)}
+                        disabled={downloading === e.id}
                       >
-                        <Download size={13} />
+                        {downloading === e.id
+                          ? <RefreshCw size={13} className="crp-spin" />
+                          : <Download size={13} />
+                        }
                       </button>
                     </>
                   )}

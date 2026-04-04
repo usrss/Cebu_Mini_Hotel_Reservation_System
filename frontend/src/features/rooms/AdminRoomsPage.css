@@ -86,6 +86,38 @@
   margin: 0;
   letter-spacing: 0.3px;
 }
+
+/* ── Header actions group ──────────────────────────────────── */
+.ar-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Manager buttons (Amenities / Inclusions) */
+.ar-mgr-btn {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 16px;
+  background: transparent;
+  border: 1px solid var(--gold-border);
+  color: var(--white-dim);
+  font-family: 'Raleway', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.18s;
+}
+.ar-mgr-btn:hover {
+  border-color: var(--gold);
+  color: var(--gold);
+  background: var(--gold-dim);
+}
+
+/* Add Room button */
 .ar-add-btn {
   display: flex;
   align-items: center;
@@ -115,10 +147,10 @@
   padding: 36px 48px 80px;
 }
 
-/* ── Stats row ─────────────────────────────────────────────── */
+/* ── Stats row — 5 columns now (no "reserved") ─────────────── */
 .ar-stats {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 14px;
   margin-bottom: 32px;
 }
@@ -282,7 +314,7 @@
 .ar-capacity-main { color: var(--white); }
 .ar-capacity-sub { font-size: 11px; color: var(--white-dim); margin-top: 2px; }
 
-/* Status select */
+/* Status select — "reserved" removed */
 .ar-status-select {
   padding: 4px 10px;
   font-size: 11px;
@@ -297,11 +329,10 @@
   transition: all 0.15s;
 }
 .ar-status-select option { background: var(--navy-card); color: var(--white); }
-.ar-status--available  { border-color: rgba(110,231,183,0.4); color: #6EE7B7; }
-.ar-status--occupied   { border-color: rgba(248,113,113,0.4); color: #F87171; }
-.ar-status--maintenance{ border-color: rgba(251,191,36,0.4);  color: #FCD34D; }
-.ar-status--reserved   { border-color: rgba(96,165,250,0.4);  color: #93C5FD; }
-.ar-status--cleaning   { border-color: rgba(167,139,250,0.4); color: #C4B5FD; }
+.ar-status--available   { border-color: rgba(110,231,183,0.4); color: #6EE7B7; }
+.ar-status--occupied    { border-color: rgba(248,113,113,0.4); color: #F87171; }
+.ar-status--maintenance { border-color: rgba(251,191,36,0.4);  color: #FCD34D; }
+.ar-status--cleaning    { border-color: rgba(167,139,250,0.4); color: #C4B5FD; }
 
 /* Image count button */
 .ar-img-btn {
@@ -374,11 +405,13 @@
 }
 
 /* ── Responsive ────────────────────────────────────────────── */
-@media (max-width: 1024px) {
+@media (max-width: 1100px) {
   .ar-stats { grid-template-columns: repeat(3, 1fr); }
 }
 @media (max-width: 768px) {
-  .ar-header { padding: 0 20px; height: 60px; }
+  .ar-header { padding: 0 20px; height: auto; min-height: 60px; flex-wrap: wrap; padding-top: 12px; padding-bottom: 12px; }
+  .ar-header-actions { flex-wrap: wrap; }
+  .ar-mgr-btn { font-size: 10px; padding: 7px 12px; }
   .ar-body { padding: 24px 20px 60px; }
   .ar-stats { grid-template-columns: repeat(2, 1fr); }
 }

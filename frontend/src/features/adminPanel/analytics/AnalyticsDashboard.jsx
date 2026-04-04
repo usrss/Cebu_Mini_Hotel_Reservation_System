@@ -29,7 +29,7 @@ const SECTIONS = [
   { id: 'room',         label: 'Room Performance', icon: <TrendingUp size={14} />,    accent: 'var(--c-room)' },
   { id: 'cancellation', label: 'Cancellations',    icon: <XCircle size={14} />,       accent: 'var(--c-cancel)' },
   { id: 'review',       label: 'Reviews',          icon: <Star size={14} />,          accent: 'var(--c-review)' },
-  { id: 'staff',        label: 'Staff',            icon: <Shield size={14} />,        accent: 'var(--c-staff)' },
+//   { id: 'staff',        label: 'Staff',            icon: <Shield size={14} />,        accent: 'var(--c-staff)' },
 ];
 
 const PERIODS = ['Today', 'Week', 'Month', 'Year'];
@@ -198,7 +198,7 @@ export default function AnalyticsDashboard() {
         {activeSection === 'room'         && <RoomPerformance       period={period} />}
         {activeSection === 'cancellation' && <CancellationAnalytics period={period} />}
         {activeSection === 'review'       && <ReviewAnalytics       stats={reviewStats} />}
-        {activeSection === 'staff'        && <StaffAnalytics        dashboard={d} />}
+{/*         {activeSection === 'staff'        && <StaffAnalytics        dashboard={d} />} */}
       </div>
     </div>
   );

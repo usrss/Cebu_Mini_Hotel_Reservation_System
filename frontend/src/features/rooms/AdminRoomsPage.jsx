@@ -1,22 +1,35 @@
 import { useState } from 'react';
-import { Plus, Search, Edit2, Trash2, Image } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Image, Star, Package } from 'lucide-react';
 import { useAdminRooms } from '../hooks/useRooms';
 import RoomFormModal from './RoomFormModal';
 import RoomImageModal from './RoomImageModal';
+import AmenitiesInclusionsModal from './AmenitiesInclusionsModal';
 import './AdminRoomsPage.css';
 
-const STATUS_OPTIONS = ['available', 'occupied', 'maintenance', 'reserved', 'cleaning'];
+// ── "reserved" removed from STATUS_OPTIONS ────────────────────────────────────
+const STATUS_OPTIONS = ['available', 'occupied', 'maintenance', 'cleaning'];
 
 export default function AdminRoomsPage() {
   const {
     rooms, loading, error, submitting,
     createRoom, updateRoom, updateStatus, deleteRoom, uploadImages,
+    // If your hook exposes these, wire them up; otherwise provide stubs:
+    amenities       = [],
+    inclusions      = [],
+    createAmenity,
+    updateAmenity,
+    deleteAmenity,
+    createInclusion,
+    updateInclusion,
+    deleteInclusion,
   } = useAdminRooms();
 
   const [search,       setSearch]       = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [modal,        setModal]        = useState({ open: false, room: null });
   const [imageModal,   setImageModal]   = useState({ open: false, room: null });
+  const [amenitiesModal, setAmenitiesModal] = useState(false);
+  const [inclusionsModal, setInclusionsModal] = useState(false);
   const [deletingId,   setDeletingId]   = useState(null);
   const [toast,        setToast]        = useState(null);
 
@@ -67,6 +80,34 @@ export default function AdminRoomsPage() {
     return result;
   };
 
+  /* ── Amenity CRUD handlers ──────────────────────────────── */
+  const handleSaveAmenity = async (item) => {
+    const fn = item.id ? updateAmenity : createAmenity;
+    const result = await fn(item);
+    if (result?.success) showToast(item.id ? 'Amenity updated' : 'Amenity created');
+    else showToast('Failed to save amenity', 'error');
+    return result;
+  };
+  const handleDeleteAmenity = async (id) => {
+    const result = await deleteAmenity(id);
+    if (result?.success) showToast('Amenity deleted');
+    else showToast('Failed to delete amenity', 'error');
+  };
+
+  /* ── Inclusion CRUD handlers ────────────────────────────── */
+  const handleSaveInclusion = async (item) => {
+    const fn = item.id ? updateInclusion : createInclusion;
+    const result = await fn(item);
+    if (result?.success) showToast(item.id ? 'Inclusion updated' : 'Inclusion created');
+    else showToast('Failed to save inclusion', 'error');
+    return result;
+  };
+  const handleDeleteInclusion = async (id) => {
+    const result = await deleteInclusion(id);
+    if (result?.success) showToast('Inclusion deleted');
+    else showToast('Failed to delete inclusion', 'error');
+  };
+
   return (
     <div className="ar-page">
 
@@ -83,14 +124,25 @@ export default function AdminRoomsPage() {
           <h1>Room Management</h1>
           <p>{rooms.length} total rooms · {rooms.filter(r => r.status === 'available').length} available</p>
         </div>
-        <button className="ar-add-btn" onClick={() => setModal({ open: true, room: null })}>
-          <Plus size={16} /> Add Room
-        </button>
+        <div className="ar-header-actions">
+          {/* Amenities manager */}
+          <button className="ar-mgr-btn" onClick={() => setAmenitiesModal(true)}>
+            <Star size={14} /> Amenities
+          </button>
+          {/* Inclusions manager */}
+          <button className="ar-mgr-btn" onClick={() => setInclusionsModal(true)}>
+            <Package size={14} /> Inclusions
+          </button>
+          {/* Add room */}
+          <button className="ar-add-btn" onClick={() => setModal({ open: true, room: null })}>
+            <Plus size={16} /> Add Room
+          </button>
+        </div>
       </header>
 
       <div className="ar-body">
 
-        {/* Stats */}
+        {/* Stats — no "reserved" card */}
         <div className="ar-stats">
           {['all', ...STATUS_OPTIONS].map((s) => {
             const count = s === 'all' ? rooms.length : rooms.filter(r => r.status === s).length;
@@ -191,6 +243,7 @@ export default function AdminRoomsPage() {
                         )}
                       </td>
                       <td>
+                        {/* STATUS_OPTIONS no longer includes "reserved" */}
                         <select
                           value={room.status}
                           onChange={(e) => handleStatusChange(room.id, e.target.value)}
@@ -241,20 +294,46 @@ export default function AdminRoomsPage() {
         )}
       </div>
 
+      {/* ── Room form modal (with amenities/inclusions/seasonal tabs) ── */}
       {modal.open && (
         <RoomFormModal
           room={modal.room}
           onSave={handleSave}
           onClose={() => setModal({ open: false, room: null })}
           submitting={submitting}
+          availableAmenities={amenities}
+          availableInclusions={inclusions}
         />
       )}
 
+      {/* ── Image modal ──────────────────────────────────────────────── */}
       {imageModal.open && (
         <RoomImageModal
           room={imageModal.room}
           onUpload={handleImageUpload}
           onClose={() => setImageModal({ open: false, room: null })}
+        />
+      )}
+
+      {/* ── Amenities manager ────────────────────────────────────────── */}
+      {amenitiesModal && (
+        <AmenitiesInclusionsModal
+          type="amenities"
+          items={amenities}
+          onSave={handleSaveAmenity}
+          onDelete={handleDeleteAmenity}
+          onClose={() => setAmenitiesModal(false)}
+        />
+      )}
+
+      {/* ── Inclusions manager ───────────────────────────────────────── */}
+      {inclusionsModal && (
+        <AmenitiesInclusionsModal
+          type="inclusions"
+          items={inclusions}
+          onSave={handleSaveInclusion}
+          onDelete={handleDeleteInclusion}
+          onClose={() => setInclusionsModal(false)}
         />
       )}
     </div>
