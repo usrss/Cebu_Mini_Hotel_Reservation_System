@@ -1,23 +1,20 @@
 // src/features/dashboard/Dashboard.jsx
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
-  getCurrentUser, logoutUser, getStoredUser,
-  isFirstLogin, clearFirstLoginFlag, isAuthenticated,
+  getCurrentUser, getStoredUser,
+  isFirstLogin, clearFirstLoginFlag,
 } from '../../services/api';
 import {
-  BookOpen, Settings, LogOut, ArrowRight,
-  Users, Bed, Maximize2, MapPin, Phone, Clock,
-  CheckCircle2, Tag, Star, Building2,
-  Bell, BellOff, CheckCheck, Loader2,
-  CalendarCheck, CreditCard, XCircle, AlertCircle,
+  MapPin, Phone, Clock, Mail, Tag,
+  ArrowRight, Bed, Users, Maximize2,
 } from 'lucide-react';
 import { useRooms } from '../hooks/useRooms';
+import Navbar from '../../components/UIComponents/Navbar';
+import Footer from '../../components/UIComponents/Footer';
 import './Dashboard.css';
 
-// ─────────────────────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────
 function formatPrice(amount) {
   return Number(amount).toLocaleString('en-PH', {
     minimumFractionDigits: 2,
@@ -26,261 +23,79 @@ function formatPrice(amount) {
 }
 
 function authHeaders() {
-  const token = localStorage.getItem('accessToken'); // FIX: was 'access_token'
+  const token = localStorage.getItem('accessToken');
   return {
     'Content-Type': 'application/json',
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
 }
 
-function timeAgo(dateStr) {
-  try {
-    const diff = Date.now() - new Date(dateStr).getTime();
-    const mins  = Math.floor(diff / 60000);
-    const hours = Math.floor(mins  / 60);
-    const days  = Math.floor(hours / 24);
-    if (mins  < 1)   return 'Just now';
-    if (mins  < 60)  return `${mins}m ago`;
-    if (hours < 24)  return `${hours}h ago`;
-    if (days  < 7)   return `${days}d ago`;
-    return new Date(dateStr).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' });
-  } catch { return ''; }
+function to12h(val) {
+  if (!val) return null;
+  const [hStr, mStr] = val.split(':');
+  const h    = parseInt(hStr, 10);
+  const m    = mStr || '00';
+  const ampm = h < 12 ? 'AM' : 'PM';
+  const h12  = h === 0 ? 12 : h > 12 ? h - 12 : h;
+  return `${h12}:${m} ${ampm}`;
 }
 
-// ─────────────────────────────────────────────────────────────
-// Notification icon + colour per event type (gold-friendly)
-// ─────────────────────────────────────────────────────────────
-const EVENT_META = {
-  booking_created:   { icon: <CalendarCheck size={15} />, color: '#C9A84C' },
-  deposit_received:  { icon: <CreditCard    size={15} />, color: '#60A5FA' },
-  booking_confirmed: { icon: <CheckCircle2  size={15} />, color: '#6EE7B7' },
-  booking_cancelled: { icon: <XCircle       size={15} />, color: '#F87171' },
-  checkin_reminder:  { icon: <Bell          size={15} />, color: '#FCD34D' },
+// ─── useHotelSettings ─────────────────────────────────────────
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
+
+const SETTINGS_DEFAULTS = {
+  checkin_time:        '14:00',
+  checkout_time:       '12:00',
+  hotel_name:          'Cebu Mini Hotel',
+  hotel_address:       '123 Colon St., Cebu City, 6000',
+  hotel_phone:         '+63 32 123 4567',
+  hotel_email:         '',
+  hotel_description:   '',
+  cancellation_policy: 'Free cancellation up to 48 hours before check-in.',
+  terms_url:           '/terms-and-conditions',
+  privacy_url:         '/privacy-policy',
 };
-function eventMeta(event) {
-  return EVENT_META[event] ?? { icon: <AlertCircle size={15} />, color: '#C9A84C' };
-}
 
-// ─────────────────────────────────────────────────────────────
-// useNotifications — live polling hook (30 s interval)
-// ─────────────────────────────────────────────────────────────
-const API_BASE = '/api/notifications';
-const POLL_MS  = 30_000;
-
-function useNotifications() {
-  const [notifications, setNotifications] = useState([]);
-  const [unreadCount,   setUnreadCount]   = useState(0);
-  const [loading,       setLoading]       = useState(false); // FIX: false — no spinner for guests
-  const intervalRef = useRef(null);
-
-  const fetch_ = useCallback(async () => {
-    // FIX: guard — skip if not logged in
-    if (!localStorage.getItem('accessToken')) {
-      setLoading(false);
-      return;
-    }
-    try {
-      const res  = await fetch(`${API_BASE}/`, { headers: authHeaders() });
-      if (!res.ok) return;
-      const data = await res.json();
-      const list = Array.isArray(data) ? data : (data.results ?? []);
-      setNotifications(list);
-      setUnreadCount(list.filter(n => n.status === 'unread').length);
-    } catch (_) {
-      // silently ignore — never crash the dashboard
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  const markAsRead = useCallback(async (id) => {
-    try {
-      const res = await fetch(`${API_BASE}/${id}/read/`, {
-        method: 'PATCH', headers: authHeaders(),
-      });
-      if (!res.ok) return;
-      const updated = await res.json();
-      setNotifications(prev => prev.map(n => n.id === id ? updated : n));
-      setUnreadCount(c => Math.max(0, c - 1));
-    } catch (_) {}
-  }, []);
-
-  const markAllRead = useCallback(async () => {
-    try {
-      await fetch(`${API_BASE}/mark-all-read/`, {
-        method: 'PATCH', headers: authHeaders(),
-      });
-      setNotifications(prev => prev.map(n => ({ ...n, status: 'read', is_unread: false })));
-      setUnreadCount(0);
-    } catch (_) {}
-  }, []);
+function useHotelSettings() {
+  const [settings, setSettings] = useState(null);
+  const [loading,  setLoading]  = useState(true);
 
   useEffect(() => {
-    // FIX: guard — don't start polling if not logged in
-    if (!localStorage.getItem('accessToken')) {
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    fetch_();
-    intervalRef.current = setInterval(fetch_, POLL_MS);
-    return () => clearInterval(intervalRef.current);
-  }, [fetch_]);
+    let cancelled = false;
+    fetch(`${API_BASE}/rooms/hotel/settings/`, { headers: authHeaders() })
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(data => { if (!cancelled) setSettings({ ...SETTINGS_DEFAULTS, ...data }); })
+      .catch(() => { if (!cancelled) setSettings({ ...SETTINGS_DEFAULTS }); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
 
-  return { notifications, unreadCount, loading, markAsRead, markAllRead };
+  return { settings: settings || SETTINGS_DEFAULTS, loading };
 }
 
-// ─────────────────────────────────────────────────────────────
-// NotificationItem
-// ─────────────────────────────────────────────────────────────
-function NotificationItem({ notification, onRead }) {
-  const isUnread = notification.status === 'unread';
-  const { icon, color } = eventMeta(notification.event);
+// ─── useFeaturedRooms ─────────────────────────────────────────
+function useFeaturedRooms() {
+  const [featuredRooms, setFeaturedRooms] = useState([]);
+  const [loading,       setLoading]       = useState(true);
 
-  function handleClick() {
-    if (isUnread) onRead(notification.id);
-  }
-
-  return (
-    <li
-      className={`db-notif-item${isUnread ? ' db-notif-item--unread' : ''}`}
-      onClick={handleClick}
-      role="button"
-      tabIndex={0}
-      onKeyDown={e => e.key === 'Enter' && handleClick()}
-      style={{ '--nc': color }}
-    >
-      {isUnread && <span className="db-notif-bar" />}
-
-      <span className="db-notif-icon-bubble" style={{ background: `${color}1A`, color }}>
-        {icon}
-      </span>
-
-      <div className="db-notif-body">
-        <p className="db-notif-title">{notification.title}</p>
-        <p className="db-notif-desc">{notification.description}</p>
-        <span className="db-notif-time">{timeAgo(notification.created_at)}</span>
-      </div>
-
-      {isUnread && <span className="db-notif-dot" style={{ background: color }} />}
-    </li>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────
-// NotificationPanel (dropdown)
-// ─────────────────────────────────────────────────────────────
-function NotificationPanel({ notifications, loading, unreadCount, onRead, onMarkAll, onClose }) {
-  const navigate = useNavigate();
-
-  function handleItemClick(n) {
-    if (n.status === 'unread') onRead(n.id);
-    if (n.booking_id) {
-      navigate(`/bookings/my/${n.booking_id}`);
-      onClose();
-    }
-  }
-
-  return (
-    <div className="db-notif-panel" role="dialog" aria-label="Notifications">
-      {/* Header */}
-      <div className="db-notif-panel-header">
-        <div className="db-notif-panel-title-row">
-          <Bell size={14} />
-          <span>Notifications</span>
-          {unreadCount > 0 && (
-            <span className="db-notif-panel-badge">{unreadCount}</span>
-          )}
-        </div>
-        {unreadCount > 0 && (
-          <button className="db-notif-mark-all" onClick={onMarkAll}>
-            <CheckCheck size={13} /> Mark all read
-          </button>
-        )}
-      </div>
-
-      {/* Body */}
-      <div className="db-notif-panel-body">
-        {loading ? (
-          <div className="db-notif-loading">
-            <Loader2 size={20} className="db-notif-spinner" />
-            <span>Loading…</span>
-          </div>
-        ) : notifications.length === 0 ? (
-          <div className="db-notif-empty">
-            <BellOff size={28} />
-            <p>No notifications yet</p>
-          </div>
-        ) : (
-          <ul className="db-notif-list">
-            {notifications.map(n => (
-              <NotificationItem key={n.id} notification={n} onRead={() => handleItemClick(n)} />
-            ))}
-          </ul>
-        )}
-      </div>
-
-      {/* Footer link */}
-      <div className="db-notif-panel-footer">
-        <Link to="/notifications" className="db-notif-view-all" onClick={onClose}>
-          View all notifications <ArrowRight size={12} />
-        </Link>
-      </div>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────
-// NotificationBell — the nav button + panel wrapper
-// ─────────────────────────────────────────────────────────────
-function NotificationBell() {
-  const [open, setOpen] = useState(false);
-  const wrapRef = useRef(null);
-  const { notifications, unreadCount, loading, markAsRead, markAllRead } = useNotifications();
-
-  // Close on outside click
   useEffect(() => {
-    function onClickOutside(e) {
-      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
-    }
-    if (open) document.addEventListener('mousedown', onClickOutside);
-    return () => document.removeEventListener('mousedown', onClickOutside);
-  }, [open]);
+    let cancelled = false;
+    fetch(`${API_BASE}/rooms/featured/`, { headers: authHeaders() })
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(data => {
+        if (!cancelled) {
+          setFeaturedRooms(Array.isArray(data) ? data : (data.results ?? []));
+        }
+      })
+      .catch(() => { if (!cancelled) setFeaturedRooms([]); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
 
-  return (
-    <div className="db-notif-wrapper" ref={wrapRef}>
-      <button
-        className="db-nav-icon-btn db-notif-btn"
-        onClick={() => setOpen(v => !v)}
-        aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}
-        title="Notifications"
-      >
-        <Bell size={18} />
-        {unreadCount > 0 && (
-          <span className="db-notif-badge" aria-live="polite">
-            {unreadCount > 99 ? '99+' : unreadCount}
-          </span>
-        )}
-        <span className="db-nav-tooltip">Notifications</span>
-      </button>
-
-      {open && (
-        <NotificationPanel
-          notifications={notifications}
-          loading={loading}
-          unreadCount={unreadCount}
-          onRead={markAsRead}
-          onMarkAll={markAllRead}
-          onClose={() => setOpen(false)}
-        />
-      )}
-    </div>
-  );
+  return { featuredRooms, loading };
 }
 
-// ─────────────────────────────────────────────────────────────
-// DashboardRoomCard
-// ─────────────────────────────────────────────────────────────
+// ─── Room Card ─────────────────────────────────────────────────
 function DashboardRoomCard({ room }) {
   const {
     id, room_number, room_type_display, bed_type_display, capacity,
@@ -291,85 +106,106 @@ function DashboardRoomCard({ room }) {
   const hasDiscount    = Number(discount_percentage) > 0;
   const effectivePrice = hasDiscount ? discounted_price : price_per_night;
 
+  const statusStyle = {
+    available:   { bg: 'rgba(5,150,105,0.10)',  color: '#059669', border: 'rgba(5,150,105,0.25)' },
+    occupied:    { bg: 'rgba(1,0,13,0.06)',      color: '#535252', border: 'rgba(1,0,13,0.15)'   },
+    maintenance: { bg: 'rgba(1,0,13,0.04)',      color: '#909090', border: 'rgba(1,0,13,0.10)'   },
+    cleaning:    { bg: 'rgba(1,0,13,0.06)',      color: '#535252', border: 'rgba(1,0,13,0.15)'   },
+  }[status] || { bg: 'rgba(1,0,13,0.04)', color: '#909090', border: 'rgba(1,0,13,0.10)' };
+
   return (
     <Link to={`/rooms/${id}`} className="db-room-card">
-      <div className="db-room-img-wrap">
+      <div className="db-room-card-img-wrap">
         {primary_image?.image_url ? (
-          <img
-            src={primary_image.image_url}
-            alt={`${room_type_display} Room ${room_number}`}
-            className="db-room-card-img"
-          />
+          <img src={primary_image.image_url} alt={`${room_type_display} Room`} className="db-room-card-img" />
         ) : (
-          <div className="db-room-img-placeholder"><Bed size={36} /></div>
+          <div className="db-room-card-img-placeholder"><Bed size={32} /></div>
         )}
-        <div className="db-room-overlay" />
-        <div className="db-room-number-badge">Room {room_number}</div>
-        <div className={`db-room-status-badge status-${status}`}>{status_display}</div>
+        <span className="db-room-number-badge">Room {room_number}</span>
+        <span className="db-room-status-pill" style={{
+          background: statusStyle.bg,
+          color: statusStyle.color,
+          border: `1px solid ${statusStyle.border}`,
+        }}>
+          {status_display}
+        </span>
         {hasDiscount && (
-          <div className="db-discount-badge">
-            <Tag size={10} /> {Number(discount_percentage)}% OFF
-          </div>
+          <span className="db-room-discount-pill">
+            <Tag size={9} /> {Number(discount_percentage)}% Off
+          </span>
         )}
       </div>
-      <div className="db-room-body">
+      <div className="db-room-card-body">
         <h3 className="db-room-type">{room_type_display} Room</h3>
         <div className="db-room-specs">
-          <span className="db-room-spec"><Users size={12} />{capacity} {capacity === 1 ? 'Guest' : 'Guests'}</span>
-          <span className="db-room-spec"><Bed size={12} />{bed_type_display}</span>
-          {size_sqm && <span className="db-room-spec"><Maximize2 size={12} />{size_sqm} m²</span>}
+          <span><Users size={11} /> {capacity} {capacity === 1 ? 'Guest' : 'Guests'}</span>
+          <span><Bed size={11} /> {bed_type_display}</span>
+          {size_sqm && <span><Maximize2 size={11} /> {size_sqm}m²</span>}
         </div>
-        <div className="db-room-footer">
+        <div className="db-room-card-footer">
           <div className="db-room-price">
-            {hasDiscount && <div className="db-price-original">₱{formatPrice(price_per_night)}</div>}
-            <div className="db-price-amount">₱{formatPrice(effectivePrice)}</div>
-            <div className="db-price-per">/ night</div>
+            {hasDiscount && <div className="db-room-price-orig">₱{formatPrice(price_per_night)}</div>}
+            <div className="db-room-price-main">₱{formatPrice(effectivePrice)}</div>
+            <div className="db-room-price-night">/ night</div>
           </div>
-          <span className="db-room-cta">View <ArrowRight size={13} /></span>
+          <span className="db-room-cta">View <ArrowRight size={11} /></span>
         </div>
       </div>
     </Link>
   );
 }
 
-// ─────────────────────────────────────────────────────────────
-// NavIconBtn
-// ─────────────────────────────────────────────────────────────
-function NavIconBtn({ icon, label, to, onClick, danger }) {
-  const cls = `db-nav-icon-btn${danger ? ' danger' : ''}`;
-  if (to) {
-    return (
-      <Link to={to} className={cls} title={label}>
-        {icon}
-        <span className="db-nav-tooltip">{label}</span>
-      </Link>
-    );
-  }
+// ─── Infinite Carousel ─────────────────────────────────────────
+function InfiniteCarousel({ rooms }) {
+  // Duplicate so the CSS keyframe loop is seamless
+  const items = [...rooms, ...rooms];
   return (
-    <button className={cls} onClick={onClick} title={label}>
-      {icon}
-      <span className="db-nav-tooltip">{label}</span>
-    </button>
+    <div className="db-carousel-track-outer">
+      <div className="db-carousel-track">
+        {items.map((room, i) => (
+          <DashboardRoomCard key={`${room.id}-${i}`} room={room} />
+        ))}
+      </div>
+    </div>
   );
 }
 
-// ─────────────────────────────────────────────────────────────
-// Dashboard (main)
-// ─────────────────────────────────────────────────────────────
+// ─── Dashboard ─────────────────────────────────────────────────
 export default function Dashboard() {
   const navigate = useNavigate();
   const [user,        setUser]        = useState(getStoredUser());
   const [loading,     setLoading]     = useState(true);
   const [showWelcome, setShowWelcome] = useState(isFirstLogin());
 
-  const { rooms, loading: roomsLoading, error: roomsError } = useRooms({});
+  // Featured room rotation state
+  const [featuredIndex, setFeaturedIndex] = useState(0);
 
-  const recommended = rooms
+  const { rooms, loading: roomsLoading, error: roomsError } = useRooms({});
+  const { settings, loading: settingsLoading } = useHotelSettings();
+  const { featuredRooms, loading: featuredLoading } = useFeaturedRooms();
+
+  // Available rooms for the carousel (unchanged)
+  const availableRooms = rooms
     ? [...rooms]
         .filter(r => r.status === 'available')
         .sort((a, b) => Number(b.discount_percentage) - Number(a.discount_percentage))
-        .slice(0, 3)
     : [];
+
+  const carouselRooms = availableRooms.length > 0 ? availableRooms : (rooms || []);
+
+  // Featured room cycles through the /rooms/featured/ results
+  const featuredRoom = featuredRooms.length > 0
+    ? featuredRooms[featuredIndex % featuredRooms.length]
+    : null;
+
+  // Auto-rotate featured room every 6 seconds
+  useEffect(() => {
+    if (featuredRooms.length <= 1) return;
+    const interval = setInterval(() => {
+      setFeaturedIndex(prev => prev + 1);
+    }, 6000);
+    return () => clearInterval(interval);
+  }, [featuredRooms.length]);
 
   useEffect(() => {
     fetchUserData();
@@ -380,25 +216,19 @@ export default function Dashboard() {
 
   const fetchUserData = async () => {
     try {
-      const userData = await getCurrentUser();
-      setUser(userData);
-    } catch (error) {
-      if (error.response?.status === 401) navigate('/login');
+      const data = await getCurrentUser();
+      setUser(data);
+    } catch (err) {
+      if (err.response?.status === 401) navigate('/login');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleLogout = async () => {
-    if (window.confirm('Are you sure you want to logout?')) {
-      try { await logoutUser(); } catch {}
-      window.location.href = '/login';
     }
   };
 
   if (loading) {
     return (
       <div className="db-page">
+        <Navbar />
         <div className="db-loading">
           <div className="db-spinner" />
           <p>Loading your experience</p>
@@ -407,187 +237,123 @@ export default function Dashboard() {
     );
   }
 
-  const displayName = user?.first_name || user?.full_name?.split(' ')[0] || 'Guest';
+  const displayName     = user?.first_name || user?.full_name?.split(' ')[0] || 'Guest';
+  const checkinDisplay  = settings.checkin_time  ? `Check-in ${to12h(settings.checkin_time)}`   : 'Check-in 2:00 PM';
+  const checkoutDisplay = settings.checkout_time ? `Check-out ${to12h(settings.checkout_time)}` : 'Check-out 12:00 PM';
 
   return (
     <div className="db-page">
+      <Navbar />
 
-      {/* ── Welcome Banner ── */}
+      {/* Welcome banner */}
       {showWelcome && (
-        <div className="db-welcome-banner">
-          <div className="db-welcome-text">
-            <h2>Welcome to Cebu Mini Hotel, {displayName}</h2>
-            <p>Your account has been created. We look forward to hosting you.</p>
-          </div>
+        <div style={{
+          background: '#01000D', color: '#FAF9F6', padding: '14px 5%',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          fontFamily: 'Montserrat, sans-serif', fontSize: '13px',
+        }}>
+          <span>Welcome to {settings.hotel_name}, <strong>{displayName}</strong>! Your account has been created.</span>
           <button
-            className="db-welcome-close"
             onClick={() => { setShowWelcome(false); clearFirstLoginFlag(); }}
+            style={{ background: 'none', border: 'none', color: '#FAF9F6', cursor: 'pointer', fontSize: '20px', lineHeight: 1 }}
           >×</button>
         </div>
       )}
 
-      {/* ── Top Bar ── */}
-      <header className="db-topbar">
-        {/* Brand */}
-        <div className="db-topbar-brand" onClick={() => navigate('/')}>
-          <div className="db-brand-icon">⟡</div>
-          <span className="db-brand-name">CEBU MINI HOTEL</span>
+      {/* ── HERO ── */}
+      <div className="db-hero">
+        <div className="db-hero-inner">
+          <span className="db-hero-eyebrow">Guest Dashboard</span>
+          <h1 className="db-hero-name">Good to have you back, {displayName}</h1>
+          <p className="db-hero-sub">Explore our rooms and manage your reservations.</p>
         </div>
+      </div>
 
-        {/* Greeting */}
-        <span className="db-topbar-greeting">
-          Welcome back, <strong>{displayName}</strong>
-        </span>
+      {/* ── FEATURED ROOM ── */}
+      {!featuredLoading && featuredRoom && (
+        <div className="db-featured-section">
+          <div className="db-featured-card" onClick={() => navigate(`/rooms/${featuredRoom.id}`)}>
+            {featuredRoom.primary_image?.image_url ? (
+              <img
+                key={featuredRoom.id}
+                src={featuredRoom.primary_image.image_url}
+                alt={featuredRoom.room_type_display}
+                className="db-featured-card-img"
+              />
+            ) : (
+              <div style={{ width: '100%', height: '100%', background: 'linear-gradient(135deg, #0A0E1A 0%, #1a2340 100%)' }} />
+            )}
+            <div className="db-featured-card-overlay">
+              <span className="db-featured-eyebrow">Curated Recommendation</span>
+              <h2 className="db-featured-title">{featuredRoom.room_type_display} Room</h2>
+              <p className="db-featured-desc">
+                {featuredRoom.description ||
+                  `Experience the pinnacle of Cebuano hospitality in our ${featuredRoom.room_type_display?.toLowerCase()} room.${Number(featuredRoom.discount_percentage) > 0 ? ` Special rates apply — ${featuredRoom.discount_percentage}% off.` : ''}`}
+              </p>
+              <button
+                className="db-featured-cta"
+                onClick={e => { e.stopPropagation(); navigate(`/rooms/${featuredRoom.id}`); }}
+              >
+                Book Now <ArrowRight size={14} />
+              </button>
 
-        {/* Icon nav */}
-        <nav className="db-icon-nav">
-          <NavIconBtn icon={<Building2 size={18} />} label="Rooms"            to="/rooms" />
-          <NavIconBtn icon={<BookOpen  size={18} />} label="My Bookings"      to="/bookings/my" />
-          <NavIconBtn icon={<Star      size={18} />} label="Reviews"          onClick={() => alert('Coming soon!')} />
-          <NavIconBtn icon={<Settings  size={18} />} label="Account Settings" to="/settings" />
-          {user?.is_staff && (
-            <NavIconBtn icon={<Bed size={18} />} label="Manage Rooms" to="/admin/rooms" />
-          )}
-
-          {/* ── Notification Bell — only for authenticated users ── */}
-          {isAuthenticated() && <NotificationBell />}
-
-          <div className="db-nav-divider" />
-          <NavIconBtn icon={<LogOut size={18} />} label="Logout" onClick={handleLogout} danger />
-        </nav>
-      </header>
-
-      {/* ── Main ── */}
-      <main className="db-main">
-
-        <div className="db-page-header">
-          <p className="db-eyebrow">Guest Dashboard</p>
-          <h1 className="db-page-title">Good to have you back</h1>
-          <p className="db-page-subtitle">Explore our rooms and manage your reservations.</p>
-          <div className="db-divider" />
-        </div>
-
-        {/* Profile + Stats */}
-        <div className="db-top-row">
-          <div className="db-card db-profile-card">
-            <div className="db-card-label">Your Profile</div>
-            <div className="db-profile-inner">
-              <div className="db-avatar">
-                {user?.first_name?.[0] || user?.email?.[0]?.toUpperCase()}
-              </div>
-              <div className="db-profile-info">
-                <h2>{user?.full_name || user?.email}</h2>
-                <p>{user?.email}</p>
-                <div className="db-badges">
-                  <span className="db-badge db-badge-gold">
-                    <CheckCircle2 size={11} />
-                    {user?.is_verified ? 'Verified' : 'Pending'}
-                  </span>
-                  <span className="db-badge db-badge-muted">
-                    {user?.auth_provider === 'google'   ? 'Google'   :
-                     user?.auth_provider === 'facebook' ? 'Facebook' : 'Email'}
-                  </span>
-                </div>
-              </div>
-            </div>
-            <div className="db-member-since">
-              Member since {new Date(user?.date_joined).toLocaleDateString('en-US', {
-                year: 'numeric', month: 'long', day: 'numeric',
-              })}
-            </div>
-          </div>
-
-          <div className="db-card db-stats-card">
-            <div className="db-card-label">Your Stats</div>
-            <div className="db-stats-grid">
-              {[
-                { value: '0',   label: 'Total Bookings' },
-                { value: '0',   label: 'Nights Stayed'  },
-                { value: '0',   label: 'Reviews Left'   },
-                { value: 'New', label: 'Member Status'  },
-              ].map(s => (
-                <div className="db-stat" key={s.label}>
-                  <div className="db-stat-value">{s.value}</div>
-                  <div className="db-stat-label">{s.label}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Recommended Rooms */}
-        <section className="db-rooms-section">
-          <div className="db-section-head">
-            <div>
-              <p className="db-eyebrow">Hand-picked for you</p>
-              <h2 className="db-section-title">Recommended Rooms</h2>
-            </div>
-            <Link to="/rooms" className="db-btn-view-all">
-              Browse All <ArrowRight size={14} />
-            </Link>
-          </div>
-
-          {roomsLoading && (
-            <div className="db-rooms-loading">
-              <div className="db-spinner" />
-              <p>Finding the best rooms…</p>
-            </div>
-          )}
-          {roomsError && (
-            <div className="db-rooms-message">Unable to load rooms. Please try again.</div>
-          )}
-          {!roomsLoading && !roomsError && recommended.length === 0 && (
-            <div className="db-rooms-message">No rooms available right now.</div>
-          )}
-          {!roomsLoading && !roomsError && recommended.length > 0 && (
-            <div className="db-rooms-grid">
-              {recommended.map(room => (
-                <DashboardRoomCard key={room.id} room={room} />
-              ))}
-            </div>
-          )}
-        </section>
-
-        {/* Activity + Hotel Info */}
-        <div className="db-bottom-row">
-          <div className="db-card">
-            <div className="db-card-label">Recent Activity</div>
-            <div className="db-activity-list">
-              <div className="db-activity-item">
-                <div className="db-activity-dot"><CheckCircle2 size={14} /></div>
-                <div>
-                  <p className="db-activity-title">Account Created</p>
-                  <p className="db-activity-time">{new Date(user?.date_joined).toLocaleString()}</p>
-                </div>
-              </div>
-              {user?.last_login && user.last_login !== user.date_joined && (
-                <div className="db-activity-item">
-                  <div className="db-activity-dot"><LogOut size={14} /></div>
-                  <div>
-                    <p className="db-activity-title">Last Login</p>
-                    <p className="db-activity-time">{new Date(user.last_login).toLocaleString()}</p>
-                  </div>
+              {/* Dot indicators — only shown when there are multiple featured rooms */}
+              {featuredRooms.length > 1 && (
+                <div style={{ display: 'flex', gap: 6, marginTop: 20 }}>
+                  {featuredRooms.map((_, i) => (
+                    <button
+                      key={i}
+                      onClick={e => { e.stopPropagation(); setFeaturedIndex(i); }}
+                      style={{
+                        width: i === featuredIndex % featuredRooms.length ? 20 : 6,
+                        height: 6,
+                        background: i === featuredIndex % featuredRooms.length
+                          ? '#FAF9F6'
+                          : 'rgba(250,249,246,0.35)',
+                        border: 'none',
+                        padding: 0,
+                        cursor: 'pointer',
+                        transition: 'all 0.3s ease',
+                        borderRadius: 3,
+                      }}
+                    />
+                  ))}
                 </div>
               )}
             </div>
           </div>
-
-          <div className="db-card">
-            <div className="db-card-label">Hotel Information</div>
-            <div className="db-hotel-info">
-              <div className="db-hotel-info-item"><MapPin size={13} /><span>123 Colon St., Cebu City, 6000</span></div>
-              <div className="db-hotel-info-item"><Phone  size={13} /><span>+63 32 123 4567</span></div>
-              <div className="db-hotel-info-item"><Clock  size={13} /><span>Check-in 2:00 PM · Check-out 12:00 PM</span></div>
-              <div className="db-hotel-hotel-info-divider" />
-              <div className="db-hotel-policy">
-                <h4>Cancellation Policy</h4>
-                <p>Free cancellation up to 48 hours before check-in. Cancellations within 48 hours are subject to a one-night charge.</p>
-              </div>
-            </div>
-          </div>
         </div>
+      )}
 
+      {/* ── MAIN ── */}
+      <main className="db-main">
+
+        {/* Carousel */}
+        <section className="db-carousel-section">
+          <div className="db-section-head-row">
+            <div>
+              <span className="db-section-eyebrow">Available Rooms</span>
+              <h2 className="db-section-title">Browse Our Rooms</h2>
+            </div>
+            <Link to="/rooms" className="db-view-all-btn">View All</Link>
+          </div>
+
+          {roomsLoading && (
+            <div style={{ display: 'flex', gap: 14, alignItems: 'center', padding: '40px 0', color: '#909090', fontSize: 12 }}>
+              <div className="db-spinner" /> Finding the best rooms…
+            </div>
+          )}
+          {roomsError && <div className="db-rooms-message">Unable to load rooms. Please try again.</div>}
+          {!roomsLoading && !roomsError && carouselRooms.length === 0 && (
+            <div className="db-rooms-message">No rooms available right now.</div>
+          )}
+          {!roomsLoading && !roomsError && carouselRooms.length > 0 && (
+            <InfiniteCarousel rooms={carouselRooms} />
+          )}
+        </section>
       </main>
+
+      <Footer />
     </div>
   );
 }

@@ -1,0 +1,74 @@
+/* LegalPage.css — shared styles for TermsAndConditions & PrivacyPolicy pages */
+@import url("https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:wght@400;500;600&family=DM+Mono&display=swap");
+
+.lp-page {
+  min-height: 100vh;
+  background: #f5f1eb;
+  padding: 2rem 1.5rem 4rem;
+  font-family: "DM Sans", sans-serif;
+}
+
+/* Breadcrumb */
+.lp-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 1.25rem;
+  font-size: 0.82rem;
+  color: #8a7a68;
+  max-width: 860px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.lp-breadcrumb-link {
+  color: #b8872a;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.lp-breadcrumb-link:hover {
+  text-decoration: underline;
+}
+
+.lp-breadcrumb-sep {
+  color: #c9b99a;
+}
+
+/* Brand strip */
+.lp-brand-strip {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  max-width: 860px;
+  margin: 0 auto 1.25rem;
+  padding: 0.6rem 1.1rem;
+  background: linear-gradient(135deg, #1a1209 0%, #3d2c12 100%);
+  border-radius: 8px;
+  color: #f5e6c8;
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.lp-brand-icon {
+  font-size: 1rem;
+}
+
+/* Back link */
+.lp-back-link {
+  text-align: center;
+  margin-top: 1.5rem;
+  font-size: 0.85rem;
+}
+
+.lp-back-link a {
+  color: #b8872a;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.lp-back-link a:hover {
+  text-decoration: underline;
+}

@@ -17,6 +17,8 @@ import { adminPanelRoutes }   from './components/AdminPanelRoutes';
 import { staffRoutes }        from './features/staff/StaffRoutes';
 import ChatWidget             from './features/chatbot/ChatWidget';
 import StaffActivatePage      from './features/adminPanel/staff/StaffActivatePage';
+import { legalRoutes } from './components/legalRoutes';
+import './features/home/HotelHomepage.css';
 import './App.css';
 
 function getHomeRoute() {
@@ -65,6 +67,8 @@ function App() {
 
         {/* ── Staff Module ─────────────────────────────────────────────── */}
         {staffRoutes}
+
+        {legalRoutes}
 
         {/* ── Staff Activation (public — no login needed) ──────────────── */}
         <Route path="/staff/activate/:uidb64/:token" element={<StaffActivatePage />} />

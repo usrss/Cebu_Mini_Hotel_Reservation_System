@@ -1,53 +1,62 @@
 /* ============================================================
-   RoomCard.css — Cebu Mini Hotel · Luxury Dark Theme
+   RoomCard.css — Cebu Mini Hotel
+   Editorial Light Theme — matches HotelHomepage.css palette
    ============================================================ */
 
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Raleway:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800;900&display=swap');
 
 :root {
-  --navy:        #0A0E1A;
-  --navy-mid:    #0F1729;
-  --navy-card:   #111827;
-  --gold:        #C9A84C;
-  --gold-l:      #E2C97E;
-  --gold-dim:    rgba(201,168,76,0.10);
-  --gold-border: rgba(201,168,76,0.22);
-  --white:       #F8F6F0;
-  --white-dim:   rgba(248,246,240,0.55);
+  --rc-bg:           #FAF9F6;
+  --rc-bg-warm:      #F2EFE8;
+  --rc-border:       rgba(1, 0, 13, 0.08);
+  --rc-border-hover: rgba(1, 0, 13, 0.2);
+  --rc-text:         #01000D;
+  --rc-text-mid:     #535252;
+  --rc-text-muted:   #909090;
+  --rc-navy:         #0A0E1A;
+  --rc-white:        #FFFFFF;
 }
 
-/* ── Card ──────────────────────────────────────────────────── */
+/* ── Card ────────────────────────────────────────────────────── */
 .room-card {
-  background: var(--navy-card);
-  border: 1px solid var(--gold-border);
+  background: var(--rc-bg);
+  border: 1px solid var(--rc-border);
+  border-radius: 2px;
   overflow: hidden;
   position: relative;
-  transition: border-color 0.25s, transform 0.25s, box-shadow 0.25s;
   display: flex;
   flex-direction: column;
-}
-.room-card:hover {
-  border-color: var(--gold);
-  transform: translateY(-4px);
-  box-shadow: 0 16px 40px rgba(0,0,0,0.5);
+  transition: transform 0.5s cubic-bezier(0.16,1,0.3,1),
+              box-shadow 0.5s cubic-bezier(0.16,1,0.3,1),
+              border-color 0.3s ease;
 }
 
-/* ── Image ─────────────────────────────────────────────────── */
+.room-card:hover {
+  border-color: var(--rc-border-hover);
+  transform: translateY(-4px);
+  box-shadow: 0 16px 48px rgba(1,0,13,0.1);
+}
+
+/* ── Image ───────────────────────────────────────────────────── */
 .room-card-image-wrapper {
   display: block;
   position: relative;
   overflow: hidden;
-  height: 220px;
+  height: 260px;
   text-decoration: none;
+  background: var(--rc-bg-warm);
+  flex-shrink: 0;
 }
+
 .room-card-image {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
-  transition: transform 0.45s ease;
+  transition: transform 0.7s cubic-bezier(0.16,1,0.3,1);
 }
-.room-card:hover .room-card-image { transform: scale(1.06); }
+
+.room-card:hover .room-card-image { transform: scale(1.04); }
 
 .room-card-image-placeholder {
   width: 100%;
@@ -55,185 +64,431 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--navy-mid);
-  color: var(--gold-border);
+  color: rgba(1,0,13,0.15);
 }
 
-/* ── Overlay ────────────────────────────────────────────────── */
 .room-card-overlay {
   position: absolute;
   inset: 0;
-  background: linear-gradient(to bottom, transparent 55%, rgba(10,14,26,0.65));
+  background: linear-gradient(to bottom, transparent 60%, rgba(1,0,13,0.12) 100%);
   pointer-events: none;
 }
 
-/* ── Badges ────────────────────────────────────────────────── */
+/* ── Status badge — top left pill ────────────────────────────── */
 .room-card-status {
   position: absolute;
-  top: 12px;
-  right: 12px;
-  font-family: 'Raleway', sans-serif;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 1px;
+  top: 14px;
+  left: 14px;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  padding: 4px 10px;
-}
-.room-card-status.status-available {
-  background: rgba(16,185,129,0.14);
-  border: 1px solid rgba(16,185,129,0.35);
-  color: #6EE7B7;
-}
-.room-card-status.status-occupied {
-  background: var(--gold-dim);
-  border: 1px solid var(--gold-border);
-  color: var(--gold);
-}
-.room-card-status.status-maintenance {
-  background: rgba(248,246,240,0.05);
-  border: 1px solid rgba(248,246,240,0.15);
-  color: var(--white-dim);
+  padding: 5px 12px;
+  border-radius: 100px;
+  backdrop-filter: blur(10px);
 }
 
+.room-card-status.status-available {
+  background: rgba(255,255,255,0.92);
+  border: 1px solid rgba(16,185,129,0.45);
+  color: #059669;
+}
+.room-card-status.status-occupied {
+  background: rgba(255,255,255,0.92);
+  border: 1px solid rgba(1,0,13,0.16);
+  color: var(--rc-text-mid);
+}
+.room-card-status.status-maintenance {
+  background: rgba(255,255,255,0.92);
+  border: 1px solid rgba(1,0,13,0.12);
+  color: var(--rc-text-muted);
+}
+
+/* ── Discount badge — bottom right ───────────────────────────── */
 .room-card-discount-badge {
   position: absolute;
   bottom: 14px;
-  left: 12px;
-  background: var(--gold);
-  color: var(--navy);
-  font-family: 'Raleway', sans-serif;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 1px;
-  padding: 4px 9px;
+  right: 14px;
+  background: var(--rc-navy);
+  color: var(--rc-white);
+  font-family: 'Montserrat', sans-serif;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 5px 11px;
+  border-radius: 2px;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
 }
 
+/* ── 360° badge — bottom left ────────────────────────────────── */
 .room-card-360-badge {
   position: absolute;
   bottom: 14px;
-  right: 12px;
-  background: rgba(10,14,26,0.82);
-  border: 1px solid var(--gold-border);
-  color: var(--gold-l);
-  font-family: 'Raleway', sans-serif;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 1px;
-  padding: 4px 9px;
-  backdrop-filter: blur(8px);
+  left: 14px;
+  background: rgba(255,255,255,0.92);
+  border: 1px solid rgba(1,0,13,0.12);
+  color: var(--rc-text-mid);
+  font-family: 'Montserrat', sans-serif;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 5px 12px;
+  border-radius: 100px;
+  backdrop-filter: blur(10px);
 }
 
-/* ── Content ───────────────────────────────────────────────── */
+/* ── Content ─────────────────────────────────────────────────── */
 .room-card-content {
-  padding: 22px 22px 20px;
+  padding: 22px 24px 24px;
   display: flex;
   flex-direction: column;
   flex: 1;
+  background: var(--rc-bg);
 }
 
-/* ── Title + Rating Row ─────────────────────────────────────── */
+/* ── Title + rating row ──────────────────────────────────────── */
 .room-card-title-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 14px;
-}
-
-.room-card-title-row .room-card-title {
-  margin: 0;
+  gap: 12px;
+  margin-bottom: 12px;
 }
 
 .room-card-title {
-  font-family: 'Playfair Display', serif;
-  font-size: 18px;
-  color: var(--white);
-  margin: 0 0 14px;
-  text-decoration: none;
-  transition: color 0.2s;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--rc-text);
+  margin: 0;
+  line-height: 1.2;
+  transition: opacity 0.25s ease;
 }
-a:hover .room-card-title { color: var(--gold-l); }
+.room-card:hover .room-card-title { opacity: 0.6; }
 
-/* ── Rating Badge ───────────────────────────────────────────── */
 .room-card-rating {
-  font-family: 'Raleway', sans-serif;
-  font-size: 12px;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 11px;
   font-weight: 600;
-  color: var(--white-dim);
+  color: var(--rc-text-muted);
   white-space: nowrap;
   flex-shrink: 0;
+  letter-spacing: 0.03em;
+  padding-top: 1px;
 }
 
-/* ── Specs ─────────────────────────────────────────────────── */
+/* ── Specs ───────────────────────────────────────────────────── */
 .room-card-specs {
   display: flex;
   gap: 14px;
   flex-wrap: wrap;
-  margin-bottom: 18px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--rc-border);
 }
+
 .room-spec {
   display: flex;
   align-items: center;
-  gap: 5px;
-  font-family: 'Raleway', sans-serif;
-  font-size: 12px;
-  color: var(--white-dim);
-  letter-spacing: 0.3px;
+  gap: 6px;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--rc-text-muted);
 }
-.room-spec svg { color: var(--gold); flex-shrink: 0; }
 
-/* ── Footer ────────────────────────────────────────────────── */
+.room-spec svg {
+  color: var(--rc-text-muted);
+  opacity: 0.55;
+  flex-shrink: 0;
+}
+
+/* ── Footer — price left, button right ────────────────────────── */
 .room-card-footer {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
+  gap: 20px;
+  padding-top: 18px;
   margin-top: auto;
-  padding-top: 16px;
-  border-top: 1px solid var(--gold-border);
 }
-.room-card-price { line-height: 1.2; }
+
+.room-card-price { line-height: 1; flex-shrink: 0; }
+
 .price-original {
-  font-family: 'Raleway', sans-serif;
-  font-size: 12px;
-  color: var(--white-dim);
+  font-family: 'Montserrat', sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--rc-text-muted);
   text-decoration: line-through;
   margin-bottom: 2px;
 }
+
 .price-amount {
-  font-family: 'Playfair Display', serif;
+  font-family: 'Montserrat', sans-serif;
   font-size: 22px;
-  color: var(--gold);
-}
-.price-label {
-  font-family: 'Raleway', sans-serif;
-  font-size: 11px;
-  color: var(--white-dim);
-  letter-spacing: 0.5px;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  color: var(--rc-text);
+  line-height: 1;
 }
 
-/* ── CTA ───────────────────────────────────────────────────── */
+.price-label {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--rc-text-muted);
+  margin-top: 4px;
+}
+
+/* ── CTA button — auto width, not stretched ───────────────────── */
 .btn.btn-primary {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  background: none;
-  border: 1px solid var(--gold-border);
-  color: var(--gold);
-  font-family: 'Raleway', sans-serif;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 1.5px;
+  gap: 8px;
+  /* width: auto — button only as wide as its content */
+  width: auto;
+  flex-shrink: 0;
+  background: var(--rc-navy);
+  border: none;
+  color: var(--rc-white);
+  font-family: 'Montserrat', sans-serif;
+  font-size: 9.5px;
+  font-weight: 900;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
-  padding: 9px 10px !important;
+  padding: 13px 22px !important;
   text-decoration: none;
   cursor: pointer;
-  transition: all 0.2s;
+  border-radius: 1px;
+  transition: background 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease;
   white-space: nowrap;
 }
+
 .btn.btn-primary:hover {
-  background: var(--gold-dim);
-  border-color: var(--gold);
+  background: var(--rc-text);
+  transform: translateY(-1px);
+  box-shadow: 0 8px 24px rgba(1,0,13,0.18);
+}
+
+.btn.btn-primary svg { color: var(--rc-white); opacity: 0.85; }
+
+
+/* ============================================================
+   AUTH MODAL
+   ============================================================ */
+
+.rc-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(1, 0, 13, 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  animation: rc-backdrop-in 0.25s ease forwards;
+}
+
+@keyframes rc-backdrop-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.rc-modal {
+  background: var(--rc-bg, #FAF9F6);
+  border: 1px solid rgba(1,0,13,0.09);
+  border-radius: 3px;
+  width: 100%;
+  max-width: 440px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 32px 80px rgba(1,0,13,0.22);
+  animation: rc-modal-in 0.3s cubic-bezier(0.16,1,0.3,1) forwards;
+}
+
+@keyframes rc-modal-in {
+  from { opacity: 0; transform: translateY(20px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Close button */
+.rc-modal-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 2;
+  background: rgba(255,255,255,0.9);
+  border: 1px solid rgba(1,0,13,0.1);
+  border-radius: 100px;
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--rc-text-mid, #535252);
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.rc-modal-close:hover {
+  background: var(--rc-navy, #0A0E1A);
+  color: #fff;
+  border-color: transparent;
+}
+
+/* Room image preview */
+.rc-modal-img-wrap {
+  position: relative;
+  height: 180px;
+  overflow: hidden;
+}
+
+.rc-modal-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.rc-modal-img-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(1,0,13,0.72) 0%, transparent 55%);
+}
+
+.rc-modal-img-label {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 16px 22px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.rc-modal-img-name {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #fff;
+  line-height: 1;
+}
+
+.rc-modal-img-price {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  color: #fff;
+  white-space: nowrap;
+  line-height: 1;
+}
+
+.rc-modal-img-price span {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  opacity: 0.7;
+  margin-left: 2px;
+}
+
+/* Body */
+.rc-modal-body {
+  padding: 28px 28px 30px;
+}
+
+.rc-modal-eyebrow {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--rc-text-muted, #909090);
+  margin-bottom: 10px;
+}
+
+.rc-modal-title {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 20px;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+  color: var(--rc-text, #01000D);
+  line-height: 1.1;
+  margin-bottom: 10px;
+}
+
+.rc-modal-sub {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.65;
+  color: var(--rc-text-mid, #535252);
+  margin-bottom: 26px;
+}
+
+/* Buttons */
+.rc-modal-btns {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.rc-modal-btn-primary {
+  width: 100%;
+  background: var(--rc-navy, #0A0E1A);
+  color: #fff;
+  border: none;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  padding: 15px 24px;
+  cursor: pointer;
+  border-radius: 1px;
+  transition: background 0.3s ease, transform 0.25s ease;
+}
+
+.rc-modal-btn-primary:hover {
+  background: var(--rc-text, #01000D);
+  transform: translateY(-1px);
+}
+
+.rc-modal-btn-secondary {
+  width: 100%;
+  background: transparent;
+  color: var(--rc-text, #01000D);
+  border: 1.5px solid rgba(1,0,13,0.18);
+  font-family: 'Montserrat', sans-serif;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  padding: 15px 24px;
+  cursor: pointer;
+  border-radius: 1px;
+  transition: border-color 0.3s ease, background 0.3s ease;
+}
+
+.rc-modal-btn-secondary:hover {
+  border-color: var(--rc-text, #01000D);
+  background: rgba(1,0,13,0.04);
 }

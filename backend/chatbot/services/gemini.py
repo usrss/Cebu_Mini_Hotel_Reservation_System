@@ -115,106 +115,164 @@ VALID_INTENTS = {
 
 
 # ─── Keyword fallback ─────────────────────────────────────────────────────────
+#
+# Used whenever Groq is unavailable (rate limit, network error, bad JSON).
+#
+# DESIGN RULES:
+#   1. All matching uses \b word-boundary regex — never bare substring `in`.
+#      This prevents "room" matching "bedroom", "book" matching "Facebook", etc.
+#   2. Rules are ordered from most-specific to least-specific.
+#      More-specific multi-word phrases are checked before single words.
+#   3. Each intent block has a PRIMARY set (high-confidence, unambiguous phrases)
+#      and an optional BROAD set (lower-confidence, single words).
+#   4. language is always returned as "english" from the fallback — the
+#      _validate_language() in intent_router handles language gating separately.
+
+def _wb(word: str) -> re.Pattern:
+    """Compile a case-insensitive whole-word regex pattern."""
+    return re.compile(r'\b' + re.escape(word) + r'\b', re.IGNORECASE)
+
+
+# Pre-compiled pattern groups — (pattern, intent, confidence, summary)
+# Order matters: checked top-to-bottom, first match wins.
+_FALLBACK_RULES: list[tuple] = [
+
+    # ── GREETING (exact-message patterns first) ────────────────────────────────
+    (re.compile(
+        r'^(hi|hello|hey|howdy|good\s*(morning|afternoon|evening|day)|'
+        r'kumusta|kamusta|musta|maayong\s*(buntag|hapon|gabii)|'
+        r'magandang\s*(umaga|hapon|gabi))[\s!.?]*$',
+        re.IGNORECASE,
+    ), "GREETING", 0.99, "Pure greeting message"),
+
+    # ── THANKS (maps to GREETING) ──────────────────────────────────────────────
+    (re.compile(
+        r'\b(thank\s*you|thanks|salamat|maraming\s*salamat|daghan\s*salamat|'
+        r'salamat\s*kaayo|noted|got\s*it)\b',
+        re.IGNORECASE,
+    ), "GREETING", 0.99, "User expressing thanks"),
+
+    # ── SUPPORT_REQUEST — specific complaint phrases ───────────────────────────
+    (re.compile(
+        r'\b(talk\s*to\s*(someone|support|agent|human|staff|person)|'
+        r'speak\s*to\s*(someone|support|agent|human|staff)|'
+        r'human\s*agent|live\s*agent|real\s*person|'
+        r'may\s*problema|naa\s*koy\s*problema|makausap\s*ng\s*tao|'
+        r'makigsulti\s*sa\s*tawo|reklamo|complaint)\b',
+        re.IGNORECASE,
+    ), "SUPPORT_REQUEST", 0.92, "User requesting human support"),
+
+    (re.compile(
+        r'\b(problem|issue|not\s*working|broken|wrong|error|failed|'
+        r'refund\s*problem|double\s*charge|charged\s*twice)\b',
+        re.IGNORECASE,
+    ), "SUPPORT_REQUEST", 0.88, "User reporting a problem"),
+
+    # ── CANCEL_BOOKING ─────────────────────────────────────────────────────────
+    # MUST come before VIEW_BOOKING because "cancel my booking" contains
+    # "my booking" which would otherwise fire VIEW_BOOKING first.
+    (re.compile(
+        r'\b(cancel|cancellation|how\s*to\s*cancel|i\s*want\s*to\s*cancel|'
+        r'cancel\s*my\s*booking|cancel\s*reservation|'
+        r'kanselahin|i-cancel|kansela|kanselahon|'
+        r'unsaon\s*pag.?cancel|gusto\s*(ko|nako)\s*i.?cancel)\b',
+        re.IGNORECASE,
+    ), "CANCEL_BOOKING", 0.90, "User wants to cancel a booking"),
+
+    # ── VIEW_BOOKING ───────────────────────────────────────────────────────────
+    # After CANCEL so "cancel my booking" doesn't match here.
+    # Includes bare \bpin\b for "when do I get my PIN".
+    (re.compile(
+        r'\b(my\s*booking|my\s*reservation|booking\s*status|check.?in\s*pin|'
+        r'\bpin\b|reference\s*number|booking\s*reference|show\s*my\s*booking|'
+        r'aking\s*booking|akong\s*booking|status\s*ng\s*booking|'
+        r'ang\s*aking\s*reservation|akong\s*reservation)\b',
+        re.IGNORECASE,
+    ), "VIEW_BOOKING", 0.88, "User wants to view their booking"),
+
+    # ── VOUCHER_QUERY ─────────────────────────────────────────────────────────
+    # "promo codes" (plural) added.
+    (re.compile(
+        r'\b(voucher|coupon|promo\s*codes?|discount\s*code|gift\s*card|'
+        r'may\s*promo|naa\s*bay\s*promo|may\s*diskwento|naa\s*bay\s*diskwento)\b',
+        re.IGNORECASE,
+    ), "VOUCHER_QUERY", 0.90, "User asking about vouchers or promos"),
+
+    # ── BOOKING_HELP ──────────────────────────────────────────────────────────
+    # Before CHECK_AVAILABILITY so "how to book" doesn't hit the "book" broad rule.
+    (re.compile(
+        r'\b(how\s*to\s*book|how\s*do\s*i\s*(book|reserve)|booking\s*process|'
+        r'steps?\s*to\s*book|how\s*to\s*reserve|paano\s*mag.?book|'
+        r'paano\s*mag.?reserve|unsaon\s*pag.?book|unsaon\s*pag.?reserve|'
+        r'proseso\s*ng\s*booking)\b',
+        re.IGNORECASE,
+    ), "BOOKING_HELP", 0.88, "User needs booking instructions"),
+
+    # ── HOTEL_INFO ────────────────────────────────────────────────────────────
+    # Added: "hotel" alone, "what time", "check in" / "check out" without hyphen,
+    # "rates" (plural handled by GET_PRICE), "wifi", "pets".
+    (re.compile(
+        r'\b(location|address|where\s*are\s*you|'
+        r'check.?in\s*time|check.?out\s*time|'
+        r'what\s*time\s*(is|does|do)|'
+        r'amenities|contact\s*(us|number)|phone\s*number|email\s*address|'
+        r'cancellation\s*policy|hotel\s*policy|'
+        r'pool|parking|breakfast|wifi|pets?|'
+        r'\bhotel\b|'
+        r'saan\s*kayo|nasaan\s*ang\s*hotel|anong\s*oras\s*ng\s*check|'
+        r'asa\s*(mo|ang\s*hotel)|mga\s*pasilidad|unsa.?ng\s*oras)\b',
+        re.IGNORECASE,
+    ), "HOTEL_INFO", 0.88, "User wants hotel information"),
+
+    # ── GET_PRICE ─────────────────────────────────────────────────────────────
+    # Before CHECK_AVAILABILITY: "cheapest room" should be GET_PRICE not CHECK_AVAILABILITY.
+    (re.compile(
+        r'\b(how\s*much|price|rates?|cost|fee|cheapest|most\s*affordable|'
+        r'per\s*night|nightly\s*rate|'
+        r'magkano|presyo|halaga|pila(\s*ang)?|tag\s*pila|pinaka\s*barato|'
+        r'pinakamurang)\b',
+        re.IGNORECASE,
+    ), "GET_PRICE", 0.88, "User asking about prices"),
+
+    # ── CHECK_AVAILABILITY ────────────────────────────────────────────────────
+    (re.compile(
+        r'\b(available\s*room|room\s*available|any\s*room|rooms?\s*for|'
+        r'do\s*you\s*have\s*(a\s*)?room|vacant|free\s*room|'
+        r'may\s*(kwarto|silid|available|room)|libre\s*ba(\s*ang)?|'
+        r'naa\s*bay\s*(kwarto|room|available))\b',
+        re.IGNORECASE,
+    ), "CHECK_AVAILABILITY", 0.88, "User checking room availability"),
+
+    # ── Broader GREETING (single words, anchored) ─────────────────────────────
+    (re.compile(
+        r'^(hi|hello|hey|kumusta|kamusta|maayong|magandang)[\s!.?]*$',
+        re.IGNORECASE,
+    ), "GREETING", 0.92, "Short greeting"),
+
+    # ── Broader CHECK_AVAILABILITY ────────────────────────────────────────────
+    (re.compile(
+        r'\b(room|kwarto|silid|available|stay)\b',
+        re.IGNORECASE,
+    ), "CHECK_AVAILABILITY", 0.65, "Possible availability inquiry"),
+
+    # ── Broader GET_PRICE ─────────────────────────────────────────────────────
+    (re.compile(
+        r'\b(cheap|afford|expensive|discount|promo)\b',
+        re.IGNORECASE,
+    ), "GET_PRICE", 0.65, "Possible price inquiry"),
+]
+
 
 def _keyword_detect(message: str) -> dict:
-    msg = message.lower().strip()
+    """
+    Word-boundary keyword fallback used when Groq is unavailable.
+    Returns the first matching rule result, or UNKNOWN.
+    """
+    msg = message.strip()
 
-    # GREETING — English, Tagalog, Bisaya
-    greeting_patterns = [
-        r'^(hi|hello|hey|howdy|yo|sup|good\s*(morning|afternoon|evening|day))[\s!.]*$',
-        r'^(kumusta|kamusta|musta|kamustah)[\s!.?]*$',
-        r'^(maayong\s*(buntag|hapon|gabii)|magandang\s*(umaga|hapon|gabi))[\s!.]*$',
-    ]
-    for pattern in greeting_patterns:
-        if re.search(pattern, msg):
-            return _result("GREETING", 0.99, "User is greeting")
-
-    # THANKS — English, Tagalog, Bisaya
-    thanks_words = [
-        "thank", "thanks", "ty", "thx", "noted", "got it",
-        "salamat", "maraming salamat", "daghan salamat", "salamat kaayo",
-        "sige", "sige na", "ok na", "okie", "ayos na",
-    ]
-    if any(w in msg for w in thanks_words):
-        return _result("GREETING", 0.99, "User is saying thanks")
-
-    # CANCEL_BOOKING — English, Tagalog, Bisaya
-    if any(w in msg for w in [
-        "cancel", "cancellation", "how to cancel", "cancel my booking",
-        "cancel reservation", "i want to cancel",
-        "paano mag-cancel", "gusto kong i-cancel", "kanselahin",
-        "unsaon pag-cancel", "gusto nako i-cancel", "kanselahon",
-    ]):
-        return _result("CANCEL_BOOKING", 0.90, "User wants to cancel a booking")
-
-    # SUPPORT REQUEST
-    if any(w in msg for w in [
-        "problem", "issue", "complaint", "wrong", "not working", "refund problem",
-        "may problema", "naa koy problema", "reklamo", "makausap ng tao", "makigsulti sa tawo",
-    ]):
-        return _result("SUPPORT_REQUEST", 0.90, "User needs support")
-
-    # VOUCHER
-    if any(w in msg for w in [
-        "voucher", "coupon", "promo", "promotion", "discount code", "gift card",
-        "may promo", "naa bay promo", "may voucher", "naa bay voucher",
-        "may diskwento", "naa bay diskwento",
-    ]):
-        return _result("VOUCHER_QUERY", 0.90, "User asking about vouchers")
-
-    # CHECK_AVAILABILITY — English, Tagalog, Bisaya
-    if any(w in msg for w in [
-        "availab", "free room", "vacant", "any room", "have room", "rooms for",
-        "may kwarto", "may silid", "may available", "libre ba",
-        "naa bay kwarto", "naa bay room", "naa bay available", "libre ba ang",
-    ]):
-        return _result("CHECK_AVAILABILITY", 0.85, "User wants to check availability")
-
-    # GET_PRICE — English, Tagalog, Bisaya
-    if any(w in msg for w in [
-        "price", "cost", "rate", "how much", "fee", "charge",
-        "expensive", "cheap", "afford", "cheapest", "most affordable",
-        "magkano", "presyo", "halaga", "pinakamurang",
-        "pila", "tag pila", "pinaka barato",
-    ]):
-        return _result("GET_PRICE", 0.85, "User wants to know prices")
-
-    # VIEW_BOOKING — English, Tagalog, Bisaya
-    if any(w in msg for w in [
-        "my booking", "my reservation", "check-in pin", "booking status",
-        "ang aking booking", "status ng booking", "aking reservation",
-        "akong booking", "akong reservation", "status sa akong",
-    ]):
-        return _result("VIEW_BOOKING", 0.85, "User wants to view booking")
-
-    # BOOKING_HELP — English, Tagalog, Bisaya
-    if any(w in msg for w in [
-        "how to book", "how do i book", "booking process", "steps to book",
-        "paano mag-book", "paano mag-reserve", "proseso ng booking",
-        "unsaon pag-book", "unsaon pag-reserve", "paano mo book",
-    ]):
-        return _result("BOOKING_HELP", 0.85, "User needs booking help")
-
-    # HOTEL_INFO — English, Tagalog, Bisaya
-    if any(w in msg for w in [
-        "location", "address", "where are you", "check-in time", "checkout time",
-        "amenities", "contact", "phone", "email", "policy", "cancellation",
-        "saan kayo", "nasaan", "anong oras", "mga pasilidad",
-        "asa mo", "asa ang hotel", "unsa'ng oras", "mga pasilidad",
-    ]):
-        return _result("HOTEL_INFO", 0.85, "User wants hotel info")
-
-    # Broader greeting
-    if any(w in msg for w in ["hi", "hello", "hey", "kumusta", "kamusta", "maayong", "magandang"]):
-        return _result("GREETING", 0.95, "User is greeting")
-
-    # Broader availability
-    if any(w in msg for w in ["room", "kwarto", "silid", "book", "stay", "night", "available"]):
-        return _result("CHECK_AVAILABILITY", 0.70, "User may want availability")
-
-    # Broader price
-    if any(w in msg for w in ["price", "cost", "pila", "magkano", "cheap", "afford"]):
-        return _result("GET_PRICE", 0.70, "User may be asking about prices")
+    for pattern, intent, confidence, summary in _FALLBACK_RULES:
+        if pattern.search(msg):
+            return _result(intent, confidence, summary)
 
     return _result("UNKNOWN", 0.30, "Could not determine intent")
 

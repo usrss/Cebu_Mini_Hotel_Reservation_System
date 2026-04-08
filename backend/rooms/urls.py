@@ -1,6 +1,7 @@
 
 from django.urls import path
 from . import views
+from .views import HotelSettingsView
 
 app_name = "rooms"
 
@@ -30,4 +31,5 @@ urlpatterns = [
     path("by-view/", views.RoomsByViewTypeView.as_view(), name="rooms-by-view"),
 
     path("reviews/token/<uuid:token>/", views.ReviewTokenValidateView.as_view(),  name="review-token-validate"),
+    path("hotel/settings/", HotelSettingsView.as_view(), name="hotel-settings"),
 ]

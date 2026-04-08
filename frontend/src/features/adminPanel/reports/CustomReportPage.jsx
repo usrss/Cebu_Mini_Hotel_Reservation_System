@@ -700,10 +700,20 @@ function HistoryTab({ onViewResult }) {
       const ext = fmt === 'excel' ? 'xlsx' : fmt;
       triggerBlobDownload(blob, `${exec.report_type}_${exec.id}.${ext}`);
     } catch (err) {
-      const msg = err.response?.data?.detail
-        || err.response?.statusText
-        || err.message
-        || 'Download failed.';
+      // When responseType is 'blob', axios puts the error body inside a Blob.
+      // We need to read it as text to get the actual error message.
+      let msg = err.message || 'Download failed.';
+      if (err.response?.data instanceof Blob) {
+        try {
+          const text = await err.response.data.text();
+          const json = JSON.parse(text);
+          msg = json.detail || json.error || text;
+        } catch {
+          msg = `Server error ${err.response.status}`;
+        }
+      } else if (err.response?.data?.detail) {
+        msg = err.response.data.detail;
+      }
       setDlError(`Execution #${exec.id}: ${msg}`);
     } finally {
       setDownloading(null);

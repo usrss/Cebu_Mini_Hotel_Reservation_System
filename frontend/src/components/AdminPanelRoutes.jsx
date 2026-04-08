@@ -38,7 +38,8 @@ import SupportDashboard from '../features/chatbot/SupportDashboard';
 import ReportPage from '../features/staff/reports/ReportPage';
 import CustomReportPage from '../features/adminPanel/reports/CustomReportPage';
 
-
+// Hotel Settings
+import HotelSettingsPage from '../features/adminPanel/settings/HotelSettingsPage';
 
 
 // ── Role groups — mirror permissions.py & AdminLayout NAV_ITEMS exactly ───────
@@ -51,9 +52,6 @@ const ROOM_ROLES      = ['admin', 'manager', 'housekeeping', 'maintenance'];
 /**
  * AdminRoute
  * Wraps a page in ProtectedRoute (with role enforcement) + AdminLayout.
- * Default allowedRoles = ALL_STAFF_ROLES so the dashboard is reachable
- * by every staff role (AdminLayout filters the sidebar per role internally).
- * Pass a narrower allowedRoles array for restricted pages.
  */
 function AdminRoute({ element, allowedRoles = ALL_STAFF_ROLES }) {
   return (
@@ -133,15 +131,22 @@ export const adminPanelRoutes = [
     element={<AdminRoute allowedRoles={ROOM_ROLES} element={<AdminRoomsPage />} />}
   />,
 
-  // ── Support Tickets (Admin + Manager only) ─────────────────────────────────
+  // ── Support Tickets ────────────────────────────────────────────────────────
   <Route key="admin-support"
     path="/admin/support"
     element={<AdminRoute allowedRoles={ADMIN_MANAGER} element={<SupportDashboard />} />}
   />,
 
-//   Custom Reports
-  <Route key="admin-reports" path="/admin/reports"
+  // ── Custom Reports ─────────────────────────────────────────────────────────
+  <Route key="admin-reports"
+    path="/admin/reports"
     element={<AdminRoute allowedRoles={ADMIN_MANAGER} element={<CustomReportPage />} />}
-  />
+  />,
+
+  // ── Hotel Settings ─────────────────────────────────────────────────────────
+  <Route key="admin-hotel-settings"
+    path="/admin/hotel-settings"
+    element={<AdminRoute allowedRoles={ADMIN_MANAGER} element={<HotelSettingsPage />} />}
+  />,
 
 ];

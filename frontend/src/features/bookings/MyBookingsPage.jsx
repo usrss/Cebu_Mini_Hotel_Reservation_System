@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { SearchX, Calendar, Hash, ChevronRight, ArrowLeft } from 'lucide-react';
+import { SearchX, Calendar, Hash, ChevronRight } from 'lucide-react';
 import { useMyBookings } from '../hooks/useBookings';
 import ReviewForm from '../rooms/ReviewForm';
 import api from '../../services/api';
+import Navbar from '../../components/UIComponents/Navbar';
+import Footer from '../../components/UIComponents/Footer';
+
 import './MyBookingsPage.css';
 
 async function fetchPendingReviews() {
@@ -46,7 +49,6 @@ export default function MyBookingsPage() {
   const [search, setSearch]             = useState('');
   const [pendingReview, setPendingReview] = useState(null);
 
-  // Only check for pending reviews once bookings have loaded (confirms auth is working)
   useEffect(() => {
     if (loading) return;
     const token = localStorage.getItem('accessToken');
@@ -66,8 +68,9 @@ export default function MyBookingsPage() {
 
   return (
     <div className="my-bookings-page">
+      <Navbar />
 
-      {/* ── Review modal for checked-out bookings ── */}
+      {/* Review modal */}
       {pendingReview && (
         <ReviewForm
           booking={{
@@ -84,24 +87,15 @@ export default function MyBookingsPage() {
         />
       )}
 
-      {/* ── Single compact header bar ── */}
-      <div className="mbp-header">
-        <div className="mbp-header-inner">
-          <button onClick={() => navigate(-1)} className="mbp-back">
-            <ArrowLeft size={15} />
-            Back
-          </button>
-          <div className="mbp-header-center">
-            <h1 className="mbp-title">My Bookings</h1>
-            <span className="mbp-subtitle">Reservations &amp; history</span>
-          </div>
-          <div className="mbp-header-right" />
-        </div>
+      {/* Hero */}
+      <div className="mbp-hero">
+        <span className="mbp-hero-eyebrow">Your Reservations</span>
+        <h1 className="mbp-hero-title">My Bookings</h1>
+        <p className="mbp-hero-sub">Manage your stays, view history, and track payments.</p>
       </div>
 
-      {/* ── Main content ── */}
+      {/* Main */}
       <div className="my-bookings-container">
-
         {/* Toolbar */}
         <div className="bookings-toolbar">
           <div className="status-filter-pills">
@@ -138,17 +132,21 @@ export default function MyBookingsPage() {
             onClear={() => { setStatusFilter(''); setSearch(''); }}
           />
         ) : (
-          <div className="bookings-list">
+          <>
             <p className="bookings-count">
               <span className="count-number">{filtered.length}</span>
               {' '}booking{filtered.length !== 1 ? 's' : ''}
             </p>
-            {filtered.map((booking) => (
-              <BookingCard key={booking.id} booking={booking} />
-            ))}
-          </div>
+            <div className="bookings-list">
+              {filtered.map((booking) => (
+                <BookingCard key={booking.id} booking={booking} />
+              ))}
+            </div>
+          </>
         )}
       </div>
+
+      <Footer />
     </div>
   );
 }
@@ -169,9 +167,7 @@ function BookingCard({ booking }) {
         <div className="booking-card-dates">
           <Calendar size={12} />
           {booking.check_in} → {booking.check_out}
-          <span className="nights-badge">
-            {booking.nights}N
-          </span>
+          <span className="nights-badge">{booking.nights}N</span>
         </div>
       </div>
       <div className="booking-card-right">
@@ -202,7 +198,7 @@ function LoadingList() {
 function EmptyState({ hasFilters, onClear }) {
   return (
     <div className="empty-state">
-      <div className="empty-icon"><SearchX size={32} /></div>
+      <div className="empty-icon"><SearchX size={28} /></div>
       <h3 className="empty-title">
         {hasFilters ? 'No bookings match your filters' : 'No bookings yet'}
       </h3>
@@ -223,7 +219,7 @@ function EmptyState({ hasFilters, onClear }) {
 function ErrorState({ message }) {
   return (
     <div className="error-state">
-      <div className="empty-icon"><SearchX size={32} /></div>
+      <div className="empty-icon"><SearchX size={28} /></div>
       <h3 className="empty-title">Something went wrong</h3>
       <p className="empty-text">{message || 'Failed to load bookings. Please try again.'}</p>
     </div>

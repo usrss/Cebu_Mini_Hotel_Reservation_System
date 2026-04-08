@@ -240,7 +240,13 @@ class ReportExecutionDetailView(generics.RetrieveAPIView):
 class ReportExecutionDownloadView(APIView):
     """
     GET /api/reports/executions/<id>/download/?format=csv|pdf|excel
+
     Re-export a previous execution result.
+    Strategy:
+      1. If result_data is stored → render and return it directly (fast path).
+      2. If result_data is NULL (old executions before storage was added, or
+         file-stream-only runs) → re-run the report from config_snapshot and
+         return the file. The execution record is NOT updated.
     """
     permission_classes = [IsAuthenticated, CanViewReports]
 
@@ -249,12 +255,8 @@ class ReportExecutionDownloadView(APIView):
 
         try:
             if role == "admin":
-                # Admins can download any execution
                 execution = ReportExecution.objects.get(pk=pk)
             else:
-                # Managers can only download their own executions.
-                # triggered_by=None means a system/scheduled run with no
-                # linked user — deny access for non-admins.
                 execution = ReportExecution.objects.get(
                     pk=pk,
                     triggered_by=request.user,
@@ -262,9 +264,9 @@ class ReportExecutionDownloadView(APIView):
         except ReportExecution.DoesNotExist:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        if execution.status != ExecutionStatus.SUCCESS or not execution.result_data:
+        if execution.status != ExecutionStatus.SUCCESS:
             return Response(
-                {"detail": "No result data available for this execution."},
+                {"detail": "This execution did not complete successfully."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -275,11 +277,40 @@ class ReportExecutionDownloadView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        return _make_export_response(
-            execution.result_data,
-            fmt,
-            execution.report_type,
-        )
+        # ── Fast path: result_data already stored ─────────────────────────────
+        if execution.result_data:
+            return _make_export_response(
+                execution.result_data,
+                fmt,
+                execution.report_type,
+            )
+
+        # ── Slow path: re-run from config_snapshot ────────────────────────────
+        # Covers old executions created before result_data storage was added,
+        # or any execution where result_data was not persisted.
+        config = execution.config_snapshot
+        if not config:
+            return Response(
+                {"detail": "No config available to regenerate this report."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            data = EnhancedReportService.run(
+                execution.report_type,
+                config,
+                user=request.user,
+            )
+        except Exception as exc:
+            logger.exception(
+                "Re-run failed for execution %s during download: %s", pk, exc
+            )
+            return Response(
+                {"detail": f"Failed to regenerate report: {exc}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        return _make_export_response(data, fmt, execution.report_type)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

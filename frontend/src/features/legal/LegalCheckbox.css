@@ -1,0 +1,95 @@
+/* LegalCheckbox.css */
+.lc-wrapper {
+  padding: 1rem 1.25rem;
+  border-radius: 8px;
+  background: #faf8f5;
+  border: 1px solid #e8e0d5;
+  transition: border-color 0.2s;
+}
+
+.lc-wrapper.lc-has-error {
+  border-color: #c0392b;
+  background: #fff8f7;
+}
+
+.lc-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.lc-label.lc-disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.lc-checkbox-wrap {
+  position: relative;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.lc-input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.lc-custom-checkbox {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: 2px solid #c9b99a;
+  border-radius: 4px;
+  background: #fff;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+}
+
+.lc-custom-checkbox.lc-checked {
+  background: #b8872a;
+  border-color: #b8872a;
+  transform: scale(1.05);
+}
+
+.lc-custom-checkbox svg {
+  width: 11px;
+  height: 10px;
+}
+
+.lc-text {
+  font-family: "DM Sans", "Segoe UI", sans-serif;
+  font-size: 0.88rem;
+  color: #3d3020;
+  line-height: 1.6;
+}
+
+.lc-link {
+  color: #b8872a;
+  font-weight: 600;
+  text-decoration: none;
+  border-bottom: 1px dotted #b8872a;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.lc-link:hover {
+  color: #8a6020;
+  border-color: #8a6020;
+}
+
+.lc-version {
+  font-size: 0.68rem;
+  color: #8a7a68;
+  font-weight: 400;
+}
+
+.lc-error {
+  margin: 0.5rem 0 0 2rem;
+  font-size: 0.8rem;
+  color: #c0392b;
+  font-family: "DM Sans", sans-serif;
+}

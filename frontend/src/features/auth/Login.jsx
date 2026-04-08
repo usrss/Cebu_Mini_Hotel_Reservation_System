@@ -9,25 +9,22 @@ import './AuthModern.css';
 
 function getPostLoginRoute() {
   const user = getStoredUser();
-
-  // Guest users go to the guest dashboard
   if (!user?.is_staff) return '/dashboard';
-
-  // Staff — redirect based on effective role
   const role =
     user?.staff_profile?.effective_role ??
     (user?.is_staff ? 'admin' : null);
-
   switch (role) {
     case 'front_desk':   return '/staff/front-desk';
     case 'housekeeping': return '/staff/cleaning';
     case 'maintenance':  return '/staff/maintenance';
     case 'security':     return '/staff/incidents';
-    default:             return '/admin/dashboard'; // admin, manager, receptionist
+    default:             return '/admin/dashboard';
   }
 }
 
-export default function Login() {
+// onSwitchToRegister, onForgotPassword, onClose — provided when used inside AuthModal
+// Falls back to navigate() when used standalone (legacy route)
+export default function Login({ onSwitchToRegister, onForgotPassword, onClose }) {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
     email: '',
@@ -52,26 +49,17 @@ export default function Login() {
           'https://www.googleapis.com/oauth2/v3/userinfo',
           { headers: { Authorization: `Bearer ${tokenResponse.access_token}` } }
         );
-
-        // loginUser stores the user in localStorage — await it fully
         await loginUser({
           email: data.email,
           auth_provider: 'google',
-          access_token: tokenResponse.access_token
+          access_token: tokenResponse.access_token,
         });
-
-        // Wait one tick for localStorage to be fully written before reading
-        // getStoredUser(). Without this, getPostLoginRoute() may read stale
-        // data and fall back to the wrong layout (StaffLayout instead of
-        // FrontDeskLayout for front_desk role).
         await new Promise(resolve => setTimeout(resolve, 50));
-
+        onClose?.();
         navigate(getPostLoginRoute());
       } catch (err) {
         console.error('Google sign-in error:', err);
-        const errorMsg = err.response?.data?.detail ||
-                        'Google sign-in failed. Please try again.';
-        setError(errorMsg);
+        setError(err.response?.data?.detail || 'Google sign-in failed. Please try again.');
       } finally {
         setLoading(false);
       }
@@ -82,10 +70,7 @@ export default function Login() {
     },
   });
 
-  const handleGoogleSignIn = () => {
-    setError('');
-    googleLogin();
-  };
+  const handleGoogleSignIn = () => { setError(''); googleLogin(); };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -93,22 +78,19 @@ export default function Login() {
     setLoading(true);
     try {
       await loginUser(formData);
+      onClose?.();
       navigate(getPostLoginRoute());
     } catch (err) {
       console.error('Login error:', err);
       if (err.response?.data) {
-        const errorData = err.response.data;
-        if (errorData.email) {
-          setError(Array.isArray(errorData.email) ? errorData.email[0] : errorData.email);
-        } else if (errorData.password) {
-          setError(Array.isArray(errorData.password) ? errorData.password[0] : errorData.password);
-        } else if (errorData.non_field_errors) {
-          setError(errorData.non_field_errors[0]);
-        } else if (errorData.detail) {
-          setError(errorData.detail);
-        } else {
-          setError('Invalid email or password');
-        }
+        const d = err.response.data;
+        setError(
+          d.email?.[0] || d.email ||
+          d.password?.[0] || d.password ||
+          d.non_field_errors?.[0] ||
+          d.detail ||
+          'Invalid email or password'
+        );
       } else {
         setError('Network error. Please check your connection.');
       }
@@ -146,12 +128,7 @@ export default function Login() {
           )}
 
           <div className="auth-modern-social">
-            <button
-              type="button"
-              onClick={handleGoogleSignIn}
-              className="btn-social btn-google"
-              disabled={loading}
-            >
+            <button type="button" onClick={handleGoogleSignIn} className="btn-social btn-google" disabled={loading}>
               <svg width="20" height="20" viewBox="0 0 20 20">
                 <path fill="#4285F4" d="M19.6 10.23c0-.82-.1-1.42-.25-2.05H10v3.72h5.5c-.15.96-.74 2.31-2.04 3.22v2.45h3.16c1.89-1.73 2.98-4.3 2.98-7.34z"/>
                 <path fill="#34A853" d="M13.46 15.13c-.83.59-1.96 1-3.46 1-2.64 0-4.88-1.74-5.68-4.15H1.07v2.52C2.72 17.75 6.09 20 10 20c2.7 0 4.96-.89 6.62-2.42l-3.16-2.45z"/>
@@ -162,52 +139,30 @@ export default function Login() {
             </button>
           </div>
 
-          <div className="auth-modern-divider">
-            <span>or sign in with email</span>
-          </div>
+          <div className="auth-modern-divider"><span>or sign in with email</span></div>
 
           <form onSubmit={handleSubmit} className="auth-modern-form">
             <div className="form-group-modern">
-              <label htmlFor="email">
-                <Mail size={16} />
-                Email Address
-              </label>
+              <label htmlFor="login-email"><Mail size={16} /> Email Address</label>
               <input
-                type="email"
-                id="email"
-                name="email"
+                type="email" id="login-email" name="email"
                 placeholder="your@email.com"
-                value={formData.email}
-                onChange={handleChange}
-                className="form-input-modern"
-                autoComplete="username"
-                required
+                value={formData.email} onChange={handleChange}
+                className="form-input-modern" autoComplete="username" required
               />
             </div>
 
             <div className="form-group-modern">
-              <label htmlFor="password">
-                <Lock size={16} />
-                Password
-              </label>
+              <label htmlFor="login-password"><Lock size={16} /> Password</label>
               <div className="input-with-icon">
                 <input
                   type={showPassword ? 'text' : 'password'}
-                  id="password"
-                  name="password"
+                  id="login-password" name="password"
                   placeholder="Enter your password"
-                  value={formData.password}
-                  onChange={handleChange}
-                  className="form-input-modern"
-                  autoComplete="current-password"
-                  required
+                  value={formData.password} onChange={handleChange}
+                  className="form-input-modern" autoComplete="current-password" required
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="password-toggle"
-                  aria-label="Toggle password visibility"
-                >
+                <button type="button" onClick={() => setShowPassword(!showPassword)} className="password-toggle">
                   {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                 </button>
               </div>
@@ -216,26 +171,15 @@ export default function Login() {
             <div className="form-options-modern">
               <button
                 type="button"
-                onClick={() => navigate('/forgot-password')}
+                onClick={() => onForgotPassword ? onForgotPassword() : navigate('/forgot-password')}
                 className="link-modern"
               >
                 Forgot password?
               </button>
             </div>
 
-            <button
-              type="submit"
-              className="btn-modern btn-primary"
-              disabled={loading}
-            >
-              {loading ? (
-                <>
-                  <span className="spinner-modern"></span>
-                  Signing In...
-                </>
-              ) : (
-                'Sign In'
-              )}
+            <button type="submit" className="btn-modern btn-primary" disabled={loading}>
+              {loading ? <><span className="spinner-modern"></span>Signing In...</> : 'Sign In'}
             </button>
           </form>
 
@@ -243,7 +187,7 @@ export default function Login() {
             <p>
               Don't have an account?{' '}
               <button
-                onClick={() => navigate('/register')}
+                onClick={() => onSwitchToRegister ? onSwitchToRegister() : navigate('/register')}
                 className="link-modern"
               >
                 Create Account

@@ -783,3 +783,27 @@ class ReviewToken(models.Model):
         """Call this after the review is successfully submitted."""
         self.is_used = True
         self.save(update_fields=["is_used"])
+
+
+
+class HotelSettings(models.Model):
+    """Singleton model for global hotel configuration."""
+    checkin_time  = models.TimeField(default="14:00")
+    checkout_time = models.TimeField(default="12:00")
+    updated_at    = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name        = "Hotel Settings"
+        verbose_name_plural = "Hotel Settings"
+
+    def __str__(self):
+        return "Hotel Settings"
+
+    def save(self, *args, **kwargs):
+        self.pk = 1  # Always use pk=1 — singleton
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def get(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj

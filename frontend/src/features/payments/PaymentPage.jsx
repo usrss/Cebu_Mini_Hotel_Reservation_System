@@ -1,18 +1,101 @@
 import { useState, useEffect } from 'react';
 import { useParams, useLocation, useNavigate, Link } from 'react-router-dom';
 import {
-  ArrowLeft, CreditCard, Smartphone, Building2, Wallet,
-  AlertCircle, CheckCircle2, Clock, Hash, Tag,
+  ArrowLeft, AlertCircle, CheckCircle2, Clock, Hash, Tag,
 } from 'lucide-react';
 import { useBookingDetail } from '../hooks/useBookings';
 import { useInitiatePayment } from '../hooks/usePayments';
+import Navbar from '../../components/UIComponents/Navbar';
+import Footer from '../../components/UIComponents/Footer';
 import './PaymentPage.css';
 
+// ─── Real SVG payment method logos ──────────────────────────
+function VisaLogo() {
+  return (
+    <svg viewBox="0 0 50 32" fill="none" style={{ width: 48, height: 30 }}>
+      <rect width="50" height="32" rx="3" fill="#1A1F71"/>
+      <path d="M20 22L22.5 10H26L23.5 22H20Z" fill="white"/>
+      <path d="M33 10.3C32.2 10 31 9.7 29.6 9.7C26.5 9.7 24.3 11.3 24.3 13.6C24.3 15.3 25.8 16.2 27 16.8C28.2 17.4 28.6 17.8 28.6 18.4C28.6 19.2 27.6 19.6 26.7 19.6C25.5 19.6 24.8 19.4 23.8 19L23.4 18.8L23 21.4C23.9 21.8 25.5 22.1 27.1 22.1C30.4 22.1 32.5 20.5 32.5 18.1C32.5 16.7 31.6 15.7 29.8 14.9C28.7 14.3 28 13.9 28 13.3C28 12.7 28.6 12.1 29.9 12.1C30.9 12.1 31.7 12.3 32.3 12.6L32.6 12.7L33 10.3Z" fill="white"/>
+      <path d="M37.5 10H35.2C34.5 10 34 10.2 33.7 10.9L29.2 22H32.5L33.2 20H37.2L37.6 22H40.6L37.5 10ZM34.1 17.6C34.3 17 35.3 14.4 35.3 14.4C35.3 14.4 35.6 13.6 35.8 13.1L36 14.3C36 14.3 36.7 17.1 36.8 17.6H34.1Z" fill="white"/>
+      <path d="M17.5 10L14.4 18.2L14.1 16.7C13.5 14.8 11.8 12.7 9.8 11.6L12.7 22H16L21.5 10H17.5Z" fill="white"/>
+      <path d="M11.5 10H6.5L6.4 10.3C10.3 11.3 12.9 13.7 14 16.7L12.9 11C12.7 10.3 12.2 10 11.5 10Z" fill="#F9A51A"/>
+    </svg>
+  );
+}
+
+function MastercardLogo() {
+  return (
+    <svg viewBox="0 0 50 32" fill="none" style={{ width: 48, height: 30 }}>
+      <rect width="50" height="32" rx="3" fill="#252525"/>
+      <circle cx="19" cy="16" r="8" fill="#EB001B"/>
+      <circle cx="31" cy="16" r="8" fill="#F79E1B"/>
+      <path d="M25 10.3A8 8 0 0 1 28 16a8 8 0 0 1-3 5.7A8 8 0 0 1 22 16a8 8 0 0 1 3-5.7Z" fill="#FF5F00"/>
+    </svg>
+  );
+}
+
+function GCashLogo() {
+  return (
+    <svg viewBox="0 0 50 32" fill="none" style={{ width: 48, height: 30 }}>
+      <rect width="50" height="32" rx="3" fill="#007DFF"/>
+      <text x="25" y="20" textAnchor="middle" fill="white" fontSize="9" fontWeight="900" fontFamily="Arial">GCash</text>
+    </svg>
+  );
+}
+
+function BankTransferLogo() {
+  return (
+    <svg viewBox="0 0 50 32" fill="none" style={{ width: 48, height: 30 }}>
+      <rect width="50" height="32" rx="3" fill="#F0EDE6"/>
+      <path d="M10 22V15M18 22V15M26 22V15M34 22V15M42 22V15" stroke="#01000D" strokeWidth="2" strokeLinecap="round"/>
+      <path d="M8 15L25 8L42 15H8Z" fill="#01000D"/>
+      <path d="M8 22H42" stroke="#01000D" strokeWidth="2" strokeLinecap="round"/>
+      <path d="M6 24H44" stroke="#01000D" strokeWidth="2" strokeLinecap="round"/>
+    </svg>
+  );
+}
+
+function PayPalLogo() {
+  return (
+    <svg viewBox="0 0 50 32" fill="none" style={{ width: 48, height: 30 }}>
+      <rect width="50" height="32" rx="3" fill="#003087"/>
+      <path d="M20 12C20 12 21.5 10 24 10H29C31.5 10 32 12 31.5 14C31 16 29 17 27 17H25L24 22H21L23 12H20Z" fill="white"/>
+      <path d="M22 15C22 15 23.5 13 26 13H31C33.5 13 34 15 33.5 17C33 19 31 20 29 20H27L26 25H23L25 15H22Z" fill="#009CDE"/>
+    </svg>
+  );
+}
+
+// ─── Payment methods with logo components ────────────────────
 const PAYMENT_METHODS = [
-  { id: 'card',          label: 'Credit / Debit Card', icon: <CreditCard size={22} />, badge: 'Visa · Mastercard · JCB' },
-  { id: 'gcash',         label: 'GCash',               icon: <Smartphone size={22} />, badge: 'Scan QR or app redirect' },
-  { id: 'bank_transfer', label: 'Bank Transfer',        icon: <Building2  size={22} />, badge: 'InstaPay · PESONet' },
-  { id: 'paypal',        label: 'PayPal',               icon: <Wallet     size={22} />, badge: 'Pay with PayPal account' },
+  {
+    id:     'card',
+    label:  'Credit / Debit Card',
+    badge:  'Visa · Mastercard · JCB',
+    LogoComponent: () => (
+      <div style={{ display: 'flex', gap: 3 }}>
+        <VisaLogo />
+        <MastercardLogo />
+      </div>
+    ),
+  },
+  {
+    id:     'gcash',
+    label:  'GCash',
+    badge:  'Scan QR or app redirect',
+    LogoComponent: GCashLogo,
+  },
+  {
+    id:     'bank_transfer',
+    label:  'Bank Transfer',
+    badge:  'InstaPay · PESONet',
+    LogoComponent: BankTransferLogo,
+  },
+  {
+    id:     'paypal',
+    label:  'PayPal',
+    badge:  'Pay with PayPal account',
+    LogoComponent: PayPalLogo,
+  },
 ];
 
 const DEPOSIT_PCT = 0.30;
@@ -26,13 +109,12 @@ export default function PaymentPage() {
   const { state }     = useLocation();
   const navigate      = useNavigate();
 
-  const { booking, loading, error }                     = useBookingDetail(bookingId);
-  const { initiate, loading: paying, error: payError }  = useInitiatePayment();
+  const { booking, loading, error }                    = useBookingDetail(bookingId);
+  const { initiate, loading: paying, error: payError } = useInitiatePayment();
 
   const [selectedMethod, setSelectedMethod] = useState('card');
-  const [selectedType,   setSelectedType]   = useState('deposit'); // Default: deposit
+  const [selectedType,   setSelectedType]   = useState('deposit');
 
-  // If navigated with a forced type (e.g. balance_payment from MyBookings)
   const forcedType    = state?.payment_type || null;
   const isBalanceMode = forcedType === 'balance_payment';
 
@@ -44,14 +126,18 @@ export default function PaymentPage() {
 
   if (error || !booking) {
     return (
-      <div className="payment-error-container">
-        <div className="error-content">
-          <h2>Booking Not Found</h2>
-          <p>{error || 'We could not find this booking.'}</p>
-          <Link to="/bookings/my" className="btn btn-primary">
-            <ArrowLeft size={18} /> My Bookings
-          </Link>
+      <div className="payment-page">
+        <Navbar />
+        <div className="payment-error-container">
+          <div className="error-content">
+            <h2 style={{ fontFamily: 'Playfair Display, serif', marginBottom: 8 }}>Booking Not Found</h2>
+            <p style={{ color: '#909090', marginBottom: 24 }}>{error || 'We could not find this booking.'}</p>
+            <Link to="/bookings/my" className="back-link">
+              <ArrowLeft size={16} /> My Bookings
+            </Link>
+          </div>
         </div>
+        <Footer />
       </div>
     );
   }
@@ -66,17 +152,13 @@ export default function PaymentPage() {
   const paymentTypeUsed = booking.payment_type_used || 'full_payment';
   const isFullySettled  = paymentTypeUsed === 'settled';
   const isCancelled     = ['cancelled', 'expired', 'no_show'].includes(booking.status);
-  const isConfirmed     = booking.status === 'confirmed';
 
-  // Determine payment types to show
-  // If booking is already CONFIRMED with a deposit paid → only balance mode applies
   const PAYMENT_TYPES = [
     {
       id:          'deposit',
       label:       'Deposit — 30%',
       description: 'Reserve now and pay the remaining 70% on check-in.',
       amount:      depositAmount,
-      highlight:   true,
       badge:       'Recommended',
     },
     {
@@ -84,11 +166,9 @@ export default function PaymentPage() {
       label:       'Full Payment — 100%',
       description: 'Pay the entire amount now. No balance due at check-in.',
       amount:      total,
-      highlight:   false,
     },
   ];
 
-  // Preview amount for the pay button
   const previewAmount = (() => {
     if (isBalanceMode)              return amountDue;
     if (selectedType === 'deposit') return depositAmount;
@@ -111,17 +191,16 @@ export default function PaymentPage() {
 
   return (
     <div className="payment-page">
+      <Navbar />
 
-      <div className="payment-nav">
-        <div className="nav-container">
-          <Link to={`/bookings/my/${bookingId}`} className="back-link">
-            <ArrowLeft size={18} /> Back to Booking
-          </Link>
-        </div>
-      </div>
-
+      {/* Hero */}
       <div className="payment-hero">
-        <div className="payment-hero-icon"><CreditCard size={36} /></div>
+        <div className="payment-hero-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="1" y="4" width="22" height="16" rx="2"/>
+            <line x1="1" y1="10" x2="23" y2="10"/>
+          </svg>
+        </div>
         <h1 className="payment-hero-title">
           {isBalanceMode ? 'Pay Remaining Balance' : 'Complete Payment'}
         </h1>
@@ -137,8 +216,14 @@ export default function PaymentPage() {
       <div className="payment-container">
         <div className="payment-layout">
 
-          {/* ── Main column ─────────────────────────────────────────── */}
+          {/* ── Main ──────────────────────────────────────── */}
           <div className="payment-main">
+            {/* Back link */}
+            <div style={{ marginBottom: 20 }}>
+              <Link to={`/bookings/my/${bookingId}`} className="back-link">
+                <ArrowLeft size={15} /> Back to Booking
+              </Link>
+            </div>
 
             {isFullySettled && (
               <div className="payment-notice payment-notice--success">
@@ -156,7 +241,7 @@ export default function PaymentPage() {
 
             {!isFullySettled && !isCancelled && (
               <>
-                {/* ── Balance mode banner (navigated from MyBookings) ── */}
+                {/* Balance mode banner */}
                 {isBalanceMode && (
                   <div className="balance-mode-banner">
                     <div className="balance-mode-row">
@@ -178,32 +263,31 @@ export default function PaymentPage() {
                   </div>
                 )}
 
-                {/* ── Payment Plan selector (only for initial payment) ── */}
+                {/* Payment plan */}
                 {!isBalanceMode && (
                   <div className="payment-card">
                     <h3 className="payment-card-title">
-                      <Wallet size={16} /> Payment Plan
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+                      Payment Plan
                     </h3>
-
                     <div className="payment-type-grid">
                       {PAYMENT_TYPES.map((pt) => (
                         <button
                           key={pt.id}
                           onClick={() => setSelectedType(pt.id)}
-                          className={`payment-type-btn ${selectedType === pt.id ? 'active' : ''} ${pt.highlight ? 'payment-type-btn--recommended' : ''}`}
+                          className={`payment-type-btn ${selectedType === pt.id ? 'active' : ''}`}
                         >
                           <div className="type-header">
                             <span className="type-label">{pt.label}</span>
                             {pt.badge && (
                               <span className="type-badge">
-                                <Tag size={10} /> {pt.badge}
+                                <Tag size={9} /> {pt.badge}
                               </span>
                             )}
                           </div>
                           <span className="type-amount">₱{formatPrice(pt.amount)}</span>
                           <span className="type-desc">{pt.description}</span>
 
-                          {/* Deposit split preview */}
                           {pt.id === 'deposit' && selectedType === 'deposit' && (
                             <div className="deposit-split-preview">
                               <div className="split-row">
@@ -220,19 +304,18 @@ export default function PaymentPage() {
                         </button>
                       ))}
                     </div>
-
                     <p className="payment-plan-note">
                       <AlertCircle size={13} />
                       Deposit reserves your room. The 70% balance is collected at check-in by staff.
-                      Failure to pay the balance at check-in may result in a partial refund of your deposit.
                     </p>
                   </div>
                 )}
 
-                {/* ── Payment Method ── */}
+                {/* Payment method */}
                 <div className="payment-card">
                   <h3 className="payment-card-title">
-                    <CreditCard size={16} /> Payment Method
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+                    Payment Method
                   </h3>
                   <div className="payment-methods">
                     {PAYMENT_METHODS.map((m) => (
@@ -241,12 +324,14 @@ export default function PaymentPage() {
                         onClick={() => setSelectedMethod(m.id)}
                         className={`payment-method-btn ${selectedMethod === m.id ? 'active' : ''}`}
                       >
-                        <span className="method-icon">{m.icon}</span>
-                        <span className="method-info">
+                        <div className="method-icon">
+                          <m.LogoComponent />
+                        </div>
+                        <div className="method-info">
                           <span className="method-label">{m.label}</span>
                           <span className="method-badge">{m.badge}</span>
-                        </span>
-                        <span className={`method-radio ${selectedMethod === m.id ? 'checked' : ''}`} />
+                        </div>
+                        <div className={`method-radio ${selectedMethod === m.id ? 'checked' : ''}`} />
                       </button>
                     ))}
                   </div>
@@ -267,17 +352,19 @@ export default function PaymentPage() {
                 </button>
 
                 <p className="payment-security-note">
-                  🔒 Your payment is secured via {selectedMethod === 'paypal' ? 'PayPal' : 'PayMongo'}.
+                  🔒 Secured via {selectedMethod === 'paypal' ? 'PayPal' : 'PayMongo'}.
                   You will be redirected to complete checkout.
                 </p>
               </>
             )}
           </div>
 
-          {/* ── Sidebar ─────────────────────────────────────────────── */}
+          {/* ── Sidebar ──────────────────────────────────── */}
           <div className="payment-sidebar">
             <div className="payment-card summary-card">
-              <h3 className="payment-card-title"><Hash size={16} /> Booking Summary</h3>
+              <h3 className="payment-card-title">
+                <Hash size={14} /> Booking Summary
+              </h3>
               <div className="summary-rows">
                 <SummaryRow label="Room"      value={`#${booking.room_number} — ${booking.room_type}`} />
                 <SummaryRow label="Check-in"  value={booking.check_in} />
@@ -286,58 +373,52 @@ export default function PaymentPage() {
                 <SummaryRow label="Guests"    value={`${booking.guests_count} guest${booking.guests_count !== 1 ? 's' : ''}`} />
               </div>
               <div className="summary-divider" />
-              <div className="summary-price-rows">
-                <PriceRow
-                  label={`₱${formatPrice(booking.room_price_snapshot)} × ${booking.nights} night${booking.nights !== 1 ? 's' : ''}`}
-                  value={`₱${formatPrice(booking.subtotal)}`}
-                />
-                {/* Discount row */}
-                {Number(booking.discount_amount || 0) > 0 && (
-                  <PriceRow
-                    label={`Discount (${booking.discount_percentage}% off)`}
-                    value={`−₱${formatPrice(booking.discount_amount)}`}
-                    isDiscount
-                  />
-                )}
-                <PriceRow label="Tax (12%)"        value={`₱${formatPrice(booking.tax)}`} />
-                <PriceRow label="Service fee (5%)" value={`₱${formatPrice(booking.service_fee)}`} />
-                <div className="summary-total-row">
-                  <span>Total</span>
-                  <span className="summary-total-amount">₱{formatPrice(total)}</span>
-                </div>
-
-                {/* Deposit breakdown in sidebar */}
-                {!isBalanceMode && !isFullySettled && !isCancelled && (
-                  <div className="sidebar-deposit-box">
-                    <div className={`sidebar-deposit-row ${selectedType === 'deposit' ? 'highlighted' : ''}`}>
-                      <span>
-                        {selectedType === 'deposit' ? '✓ ' : ''}
-                        Pay now ({selectedType === 'deposit' ? '30%' : '100%'})
-                      </span>
-                      <strong>₱{formatPrice(previewAmount)}</strong>
-                    </div>
-                    {selectedType === 'deposit' && (
-                      <div className="sidebar-deposit-row sidebar-balance-row">
-                        <span>Due at check-in (70%)</span>
-                        <span>₱{formatPrice(balanceAmount)}</span>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {isBalanceMode && (
-                  <div className="deposit-note deposit-note--balance">
-                    <CheckCircle2 size={13} style={{ color: '#059669' }} />
-                    Deposit of ₱{formatPrice(amountPaid)} already paid.
-                    Paying remaining ₱{formatPrice(amountDue)}.
-                  </div>
-                )}
+              <div className="price-row">
+                <span>₱{formatPrice(booking.room_price_snapshot)} × {booking.nights} night{booking.nights !== 1 ? 's' : ''}</span>
+                <span>₱{formatPrice(booking.subtotal)}</span>
               </div>
+              {Number(booking.discount_amount || 0) > 0 && (
+                <div className="price-row price-row--discount">
+                  <span>Discount ({booking.discount_percentage}% off)</span>
+                  <span>−₱{formatPrice(booking.discount_amount)}</span>
+                </div>
+              )}
+              <div className="price-row"><span>Tax (12%)</span><span>₱{formatPrice(booking.tax)}</span></div>
+              <div className="price-row"><span>Service fee (5%)</span><span>₱{formatPrice(booking.service_fee)}</span></div>
+              <div className="summary-total-row">
+                <span>Total</span>
+                <span className="summary-total-amount">₱{formatPrice(total)}</span>
+              </div>
+
+              {!isBalanceMode && !isFullySettled && !isCancelled && (
+                <div className="sidebar-deposit-box">
+                  <div className={`sidebar-deposit-row ${selectedType === 'deposit' ? 'highlighted' : ''}`}>
+                    <span>Pay now ({selectedType === 'deposit' ? '30%' : '100%'})</span>
+                    <strong>₱{formatPrice(previewAmount)}</strong>
+                  </div>
+                  {selectedType === 'deposit' && (
+                    <div className="sidebar-deposit-row sidebar-balance-row">
+                      <span>Due at check-in (70%)</span>
+                      <span>₱{formatPrice(balanceAmount)}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {isBalanceMode && (
+                <div className="deposit-note deposit-note--balance">
+                  <CheckCircle2 size={13} />
+                  Deposit of ₱{formatPrice(amountPaid)} already paid.
+                  Paying remaining ₱{formatPrice(amountDue)}.
+                </div>
+              )}
             </div>
           </div>
 
         </div>
       </div>
+
+      <Footer />
     </div>
   );
 }
@@ -351,24 +432,13 @@ function SummaryRow({ label, value }) {
   );
 }
 
-function PriceRow({ label, value, isDiscount = false }) {
-  return (
-    <div className={`price-row${isDiscount ? ' price-row--discount' : ''}`}>
-      <span>{label}</span>
-      <span>{value}</span>
-    </div>
-  );
-}
-
 function LoadingSkeleton() {
   return (
     <div className="payment-page">
-      <div className="payment-nav">
-        <div className="nav-container"><div className="skeleton skeleton-back" /></div>
-      </div>
-      <div className="payment-container">
-        <div className="payment-layout">
-          <div className="payment-main">
+      <Navbar />
+      <div style={{ maxWidth: 1020, margin: '0 auto', padding: '44px 5%' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 28 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div className="skeleton skeleton-card-lg" />
             <div className="skeleton skeleton-card-md" />
           </div>

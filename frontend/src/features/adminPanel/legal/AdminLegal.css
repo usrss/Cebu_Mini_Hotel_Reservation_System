@@ -1,0 +1,204 @@
+/* AdminLegal.css */
+@import url("https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:wght@400;500;600&family=DM+Mono&display=swap");
+
+.al-page {
+  min-height: 100vh;
+  background: #f5f1eb;
+  padding: 2rem 1.5rem 4rem;
+  font-family: "DM Sans", sans-serif;
+  position: relative;
+}
+
+/* Toast notification */
+.al-toast {
+  position: fixed;
+  top: 1.5rem;
+  right: 1.5rem;
+  z-index: 1000;
+  padding: 0.85rem 1.4rem;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  animation: al-slide-in 0.3s ease;
+  max-width: 360px;
+}
+
+@keyframes al-slide-in {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.al-toast-success {
+  background: #2e7d32;
+  color: #fff;
+}
+
+.al-toast-error {
+  background: #c0392b;
+  color: #fff;
+}
+
+/* Header */
+.al-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 1100px;
+  margin: 0 auto 1.5rem;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.al-header-left {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.al-header-icon {
+  width: 48px;
+  height: 48px;
+  background: linear-gradient(135deg, #1a1209, #3d2c12);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+  flex-shrink: 0;
+}
+
+.al-title {
+  font-family: "Playfair Display", serif;
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: #1a1209;
+  margin: 0 0 0.15rem;
+  line-height: 1.2;
+}
+
+.al-subtitle {
+  font-size: 0.82rem;
+  color: #8a7a68;
+  margin: 0;
+}
+
+.al-header-right {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.al-preview-link {
+  padding: 0.45rem 0.9rem;
+  border: 1px solid #d8cfc4;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #5a4a36;
+  text-decoration: none;
+  background: #fff;
+  transition: all 0.15s;
+}
+
+.al-preview-link:hover {
+  border-color: #b8872a;
+  color: #b8872a;
+  background: #fff8ee;
+}
+
+/* Status cards */
+.al-status-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+  max-width: 1100px;
+  margin: 0 auto 1.5rem;
+}
+
+.al-status-card {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  border-radius: 10px;
+  border: 1px solid;
+}
+
+.al-card-ok {
+  background: #f0fdf4;
+  border-color: #a5d6a7;
+}
+
+.al-card-warn {
+  background: #fff8f0;
+  border-color: #ffc078;
+}
+
+.al-card-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.9rem;
+  flex-shrink: 0;
+}
+
+.al-card-ok .al-card-icon {
+  background: #2e7d32;
+  color: #fff;
+}
+
+.al-card-warn .al-card-icon {
+  background: #e65100;
+  color: #fff;
+}
+
+.al-card-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #8a7a68;
+  margin-bottom: 0.15rem;
+}
+
+.al-card-value {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #2a1f10;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Main content */
+.al-content {
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.al-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 1.25rem;
+  padding: 0.45rem 0.9rem;
+  border: 1px solid #d8cfc4;
+  border-radius: 6px;
+  background: #fff;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #5a4a36;
+  cursor: pointer;
+  font-family: "DM Sans", sans-serif;
+  transition: all 0.15s;
+}
+
+.al-back-btn:hover {
+  border-color: #b8872a;
+  color: #b8872a;
+}

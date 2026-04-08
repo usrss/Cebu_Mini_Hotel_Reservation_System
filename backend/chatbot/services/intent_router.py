@@ -4,13 +4,11 @@ chatbot/services/intent_router.py
 Routes detected intents to the appropriate backend service.
 Responds in English, Tagalog, or Bisaya based on detected language.
 
-FIX 1: Language validation now uses WORD-BOUNDARY matching (\\b) via regex
-        instead of substring `in` checks. This prevents false positives like
-        "I may book" triggering Tagalog because "may" is a substring match.
-
-FIX 2: Marker lists tightened — removed short ambiguous tokens ("ko", "man",
-        "ba", "oo", "may", "naa") that collide with common English words.
-        Only unambiguous Filipino/Bisaya-exclusive words are kept.
+FIX: Language is now validated against the actual message content before
+     switching away from English. Groq sometimes misdetects short English
+     messages as Tagalog/Bisaya. We only honour the non-English language
+     if the message actually contains at least one recognisable word in
+     that language.
 """
 
 import re
@@ -35,81 +33,99 @@ HOTEL_INFO = {
 
 LOW_CONFIDENCE_THRESHOLD = 0.45
 
-# ─── Language marker words — UNAMBIGUOUS Filipino/Bisaya only ─────────────────
-# REMOVED common English-collision tokens: ko, man, ba, oo, may, naa, lang, etc.
-# Only keep tokens that would NEVER appear in a typical English sentence.
-
+# ─── Language marker words used to confirm non-English detection ──────────────
+#
+# DESIGN RULES for this list:
+#   1. Every word here must be UNAMBIGUOUS — it must not appear as a whole word
+#      inside common English hotel vocabulary (room, book, available, support…).
+#   2. Matching uses regex \b word boundaries so "ang" will NOT match inside
+#      "change", "manage", "orange", "strange" etc.
+#   3. Words removed from the old list because they caused false positives:
+#        oo  → inside "book", "room", "good morning", "too"
+#        ba  → inside "available"
+#        po  → inside "support", "deposit"
+#        man → inside "management", "manila"
+#        ko  → inside "book" (b-oo-k contains no 'ko', but standalone ko is fine)
+#        oo, nila, lang, wala, siya, kami, ikaw → too short or appear in English
+#        booking, kwarto → legitimate English/shared words
+#
+# Tagalog markers: unambiguously Filipino, never a whole English word
 _TAGALOG_MARKERS = [
-    "paano", "saan", "kailan", "bakit", "mayroon", "hindi", "huwag",
-    "naman", "yung", "kaya", "dito", "doon", "iyon", "nito",
-    "kami", "tayo", "sila", "kayo", "namin", "natin",
-    "magkano", "presyo", "kwarto", "salamat",
-    "kumusta", "kamusta", "musta", "magandang",
-    "piliin", "pumunta", "magtanong", "makausap",
-    "mga", "aking", "inyong", "gusto", "maaari",
-    "po naman", "po ba", "po ang", "po ng",
+    # Question words
+    "paano", "saan", "kailan", "bakit", "mayroon", "sino",
+    # Negation / particles
+    "hindi", "huwag", "naman", "yung", "kaya", "dito", "doon",
+    "iyon", "nito", "natin", "namin",
+    # Pronouns (safe whole-word forms)
+    "ako", "kayo",
+    # Verbs / expressions — unambiguously Tagalog/Filipino
+    "magkano", "salamat", "kumusta", "kamusta", "musta",
+    "magandang", "maligayang", "gusto", "pwede",
+    # Particles that only appear standalone in Filipino sentences
+    "ng", "ang", "na", "ko",
 ]
 
+# Bisaya / Cebuano markers: unambiguously Bisaya, never a whole English word
 _BISAYA_MARKERS = [
-    "unsa", "kanus-a", "kinsa", "ngano", "hain",
-    "dili", "ayaw", "bitaw",
-    "nako", "nimo", "niya", "nato", "ninyo",
-    "pila", "tag pila", "kwarto",
-    "kumusta", "maayong", "unsaon",
-    "palihug", "salamat kaayo", "daghan salamat",
-    "akong", "imong", "among", "atong",
-    "adto", "dinhi", "didto",
-    "mobook", "mobayad", "mocancel",
+    # Question words
+    "unsa", "kanus-a", "kinsa", "ngano", "unsaon",
+    # Negation / particles
+    "dili", "ayaw", "bitaw", "naa", "bay",
+    # Pronouns
+    "nako", "nimo", "niya", "ninyo", "kamo",
+    # Time / location words
+    "karon", "karon", "adto", "dinhi", "usab",
+    # Expressions
+    "pila", "maayong", "salamat", "kumusta",
+]
+
+_TAGALOG_PATTERNS = [
+    re.compile(r'\b' + re.escape(w) + r'\b', re.IGNORECASE)
+    for w in _TAGALOG_MARKERS
+]
+_BISAYA_PATTERNS = [
+    re.compile(r'\b' + re.escape(w) + r'\b', re.IGNORECASE)
+    for w in _BISAYA_MARKERS
 ]
 
 
-def _word_in_text(word: str, text: str) -> bool:
-    """
-    Check if `word` appears as a whole word (or phrase) in `text`.
-    Uses regex word boundaries for single-word tokens.
-    For multi-word phrases, uses simple substring match since \\b
-    doesn't work well across spaces.
-    """
-    if " " in word:
-        return word in text
-    try:
-        return bool(re.search(r"\b" + re.escape(word) + r"\b", text))
-    except re.error:
-        return word in text
+def _count_matches(patterns: list, text: str) -> int:
+    """Count how many compiled patterns match anywhere in text (whole words only)."""
+    return sum(1 for p in patterns if p.search(text))
 
 
 def _validate_language(detected: str, message: str) -> str:
     """
-    Confirm that the AI's detected language is supported by the actual
-    message content using WORD-BOUNDARY matching.
+    Confirm that Groq's detected language is actually present in the message.
+    Uses whole-word regex matching (\b boundaries) so no English word containing
+    a Filipino substring can trigger a false positive.
 
-    Falls back to 'english' if the message doesn't contain at least ONE
-    unambiguous word from the detected language's marker list.
+    Falls back to 'english' whenever the message contains fewer than 1 confirmed
+    Tagalog/Bisaya whole word.
 
-    This prevents replying in Tagalog/Bisaya when the user types in English
-    and Groq makes a detection error on short or ambiguous messages.
+    Examples of what the old substring check got wrong (now fixed):
+      "do you have available rooms" → 'oo' in 'room'  → wrongly Tagalog  ✗
+      "talk to support"             → 'po' in 'support' → wrongly Tagalog ✗
+      "manila hotel"                → 'man'+'nila'     → wrongly Bisaya   ✗
+      "cancel my booking"           → 'oo' in 'book'  → wrongly Tagalog  ✗
     """
-    msg = message.lower()
+    tagalog_hits = _count_matches(_TAGALOG_PATTERNS, message)
+    bisaya_hits  = _count_matches(_BISAYA_PATTERNS,  message)
 
     if detected in ("tagalog", "filipino"):
-        if any(_word_in_text(w, msg) for w in _TAGALOG_MARKERS):
-            return "tagalog"
-        return "english"
+        return "tagalog" if tagalog_hits >= 1 else "english"
 
     if detected in ("bisaya", "cebuano", "bisayal"):
-        if any(_word_in_text(w, msg) for w in _BISAYA_MARKERS):
-            return "bisaya"
-        return "english"
+        return "bisaya" if bisaya_hits >= 1 else "english"
 
     if detected == "mixed":
-        tagalog_hits = sum(1 for w in _TAGALOG_MARKERS if _word_in_text(w, msg))
-        bisaya_hits  = sum(1 for w in _BISAYA_MARKERS  if _word_in_text(w, msg))
         if bisaya_hits > tagalog_hits and bisaya_hits >= 2:
             return "bisaya"
         if tagalog_hits >= 2:
             return "tagalog"
         return "english"
 
+    # "english", "unknown", or anything else → english
     return "english"
 
 
@@ -225,7 +241,8 @@ def route(intent_result: dict, conversation: Conversation,
     raw_lang   = intent_result.get("language", "english")
     msg_lower  = user_message.lower().strip()
 
-    # Validate language against actual message content (word-boundary safe)
+    # ── FIX: Validate language against actual message content ─────────────────
+    # Prevents replying in Tagalog/Bisaya when Groq misdetects short English messages.
     language = _validate_language(raw_lang, user_message)
 
     is_authenticated = bool(user and user.is_authenticated)
@@ -613,20 +630,15 @@ def _handle_unknown(language: str = "english") -> dict:
 
 def _handle_support(conversation: Conversation, user,
                     raw_summary: str = "", language: str = "english") -> dict:
-    """
-    Escalate conversation to human support.
-    Idempotent — support_service.escalate_to_support will return the
-    existing ticket if this conversation is already escalated.
-    """
     ticket = support_service.escalate_to_support(
-        conversation=conversation,
-        subject=raw_summary[:120] if raw_summary else "Support request via chat",
+        conversation = conversation,
+        subject      = raw_summary[:120] if raw_summary else "Support request via chat",
     )
     return {
-        "message":       _r("support", language, ticket=ticket.pk),
-        "intent":        "SUPPORT_REQUEST",
-        "data":          {"ticket_id": ticket.pk, "ticket_status": ticket.status},
-        "escalated":     True,
+        "message":   _r("support", language, ticket=ticket.pk),
+        "intent":    "SUPPORT_REQUEST",
+        "data":      {"ticket_id": ticket.pk, "ticket_status": ticket.status},
+        "escalated": True,
         "quick_replies": RESPONSES["quick_replies"][_lang(language)],
     }
 

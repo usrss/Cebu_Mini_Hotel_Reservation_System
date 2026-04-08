@@ -65,6 +65,7 @@ INSTALLED_APPS = [
     'admin_panel',
     'chatbot',
     'reports',
+    'legal',
     'bookings.apps.BookingsConfig',
     'rest_framework',
     'rest_framework_simplejwt',

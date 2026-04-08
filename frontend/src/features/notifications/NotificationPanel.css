@@ -1,5 +1,5 @@
 /* ============================================================
-   NotificationPanel.css
+   NotificationPanel.css — Dashboard palette (navy/cream/gold)
    ============================================================ */
 
 .notif-panel {
@@ -9,16 +9,16 @@
   z-index: 1000;
   width: 380px;
   max-height: 520px;
-  background: #fff;
-  border-radius: 14px;
+  background: #FAF9F6;
+  border-radius: 4px;
   box-shadow:
-    0 4px 6px -1px rgba(0,0,0,0.08),
-    0 12px 40px -8px rgba(0,0,0,0.16);
-  border: 1px solid rgba(99,102,241,0.12);
+    0 4px 6px -1px rgba(1, 0, 13, 0.08),
+    0 16px 48px -8px rgba(1, 0, 13, 0.18);
+  border: 1px solid rgba(1, 0, 13, 0.1);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  animation: notif-panel-in 0.18s ease;
+  animation: notif-panel-in 0.18s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @keyframes notif-panel-in {
@@ -26,44 +26,55 @@
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* ── Header ── */
+/* ── Header — navy bar matching Dashboard ── */
 .notif-panel-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 18px 12px;
-  border-bottom: 1px solid #f1f5f9;
-  background: linear-gradient(135deg, #4338ca 0%, #6366f1 100%);
+  padding: 14px 18px 12px;
+  background: #0A0E1A;
+  border-bottom: 1px solid rgba(250, 249, 246, 0.08);
   flex-shrink: 0;
 }
 
 .notif-panel-title {
-  font-size: 15px;
-  font-weight: 700;
-  color: #fff;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #FAF9F6;
   margin: 0;
 }
 
 .notif-mark-all-btn {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 10px;
-  border: 1px solid rgba(255,255,255,0.4);
-  border-radius: 20px;
-  background: rgba(255,255,255,0.12);
-  color: #fff;
-  font-size: 12px;
-  font-weight: 500;
+  gap: 5px;
+  padding: 5px 12px;
+  border: 1px solid rgba(250, 249, 246, 0.25);
+  border-radius: 100px;
+  background: rgba(250, 249, 246, 0.08);
+  color: rgba(250, 249, 246, 0.8);
+  font-family: 'Montserrat', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   cursor: pointer;
   transition: background 0.15s;
 }
-.notif-mark-all-btn:hover { background: rgba(255,255,255,0.22); }
+
+.notif-mark-all-btn:hover {
+  background: rgba(250, 249, 246, 0.16);
+  color: #FAF9F6;
+}
 
 /* ── Body / list ── */
 .notif-panel-body {
   overflow-y: auto;
   flex: 1;
+  background: #FAF9F6;
 }
 
 .notif-list {
@@ -79,15 +90,18 @@
   justify-content: center;
   gap: 10px;
   padding: 40px 20px;
-  color: #9ca3af;
-  font-size: 14px;
+  color: #909090;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
 }
 
 .notif-spinner {
-  animation: spin 0.9s linear infinite;
+  animation: notif-spin 0.9s linear infinite;
 }
 
-@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes notif-spin { to { transform: rotate(360deg); } }
 
 /* ── Empty state ── */
 .notif-empty {
@@ -96,18 +110,19 @@
   align-items: center;
   gap: 10px;
   padding: 48px 20px;
-  color: #9ca3af;
-  font-size: 14px;
+  color: #909090;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 12px;
   text-align: center;
 }
 
-.notif-empty-icon { color: #d1d5db; }
+.notif-empty-icon { color: #C4BFB4; }
 
 /* ── Footer ── */
 .notif-panel-footer {
   flex-shrink: 0;
-  border-top: 1px solid #f1f5f9;
-  background: #fafbff;
+  border-top: 1px solid rgba(1, 0, 13, 0.08);
+  background: #F0EDE6;
 }
 
 .notif-view-all-link {
@@ -116,14 +131,19 @@
   justify-content: center;
   gap: 6px;
   padding: 11px 18px;
-  font-size: 12px;
-  font-weight: 600;
-  color: #4f46e5;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #01000D;
   text-decoration: none;
-  letter-spacing: 0.3px;
   transition: background 0.15s;
 }
-.notif-view-all-link:hover { background: #eef2ff; }
+
+.notif-view-all-link:hover {
+  background: rgba(1, 0, 13, 0.06);
+}
 
 /* ── Responsive ── */
 @media (max-width: 480px) {

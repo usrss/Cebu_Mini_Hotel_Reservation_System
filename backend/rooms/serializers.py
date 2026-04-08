@@ -425,3 +425,15 @@ class PriceCalculationResponseSerializer(serializers.Serializer):
     nights     = serializers.IntegerField()
     base_total = serializers.DecimalField(max_digits=10, decimal_places=2)
     breakdown  = serializers.ListField(child=serializers.DictField())
+
+
+
+class HotelSettingsSerializer(serializers.ModelSerializer):
+    checkin_time  = serializers.TimeField(format="%H:%M", input_formats=["%H:%M"])
+    checkout_time = serializers.TimeField(format="%H:%M", input_formats=["%H:%M"])
+
+    class Meta:
+        from .models import HotelSettings
+        model  = HotelSettings
+        fields = ["checkin_time", "checkout_time", "updated_at"]
+        read_only_fields = ["updated_at"]

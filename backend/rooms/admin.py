@@ -4,7 +4,7 @@ from django.utils.safestring import mark_safe
 from .models import (
     Room, RoomAmenity, RoomAmenityAssignment, RoomImage,
     RoomPriceHistory, RoomTemporaryLock, RoomReview, ReviewHelpfulness,
-    Inclusion, RoomInclusion, SeasonalPrice
+    Inclusion, RoomInclusion, SeasonalPrice, HotelSettings
 )
 
 
@@ -464,3 +464,15 @@ class ReviewHelpfulnessAdmin(admin.ModelAdmin):
         return "👍 Helpful" if obj.is_helpful else "👎 Not Helpful"
 
     vote_display.short_description = "Vote"
+
+
+@admin.register(HotelSettings)
+class HotelSettingsAdmin(admin.ModelAdmin):
+    fields = ("checkin_time", "checkout_time", "updated_at")
+    readonly_fields = ("updated_at",)
+
+    def has_add_permission(self, request):
+        return not HotelSettings.objects.exists()
+
+    def has_delete_permission(self, request, obj=None):
+        return False

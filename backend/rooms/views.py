@@ -908,3 +908,33 @@ class ReviewTokenView(APIView):
 
     def post(self, request, token):
         return ReviewTokenSubmitView().post(request, token)
+
+
+class HotelSettingsView(APIView):
+    """
+    GET   /api/rooms/hotel/settings/  — return global check-in/out times
+    PATCH /api/rooms/hotel/settings/  — update (admin/manager only)
+    """
+    permission_classes = [IsAuthenticated]
+
+    def _is_admin(self, request):
+        profile = getattr(request.user, 'staff_profile', None)
+        if profile:
+            return profile.effective_role in ('admin', 'manager')
+        return request.user.is_staff or request.user.is_superuser
+
+    def get(self, request):
+        from .models import HotelSettings
+        from .serializers import HotelSettingsSerializer
+        return Response(HotelSettingsSerializer(HotelSettings.get()).data)
+
+    def patch(self, request):
+        from .models import HotelSettings
+        from .serializers import HotelSettingsSerializer
+        if not self._is_admin(request):
+            return Response({"detail": "Admin or manager only."}, status=status.HTTP_403_FORBIDDEN)
+        s = HotelSettingsSerializer(HotelSettings.get(), data=request.data, partial=True)
+        if s.is_valid():
+            s.save()
+            return Response(s.data)
+        return Response(s.errors, status=status.HTTP_400_BAD_REQUEST)

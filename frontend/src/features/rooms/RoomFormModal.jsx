@@ -7,7 +7,7 @@ import {
 import './RoomFormModal.css';
 
 /* ─── Constants ─────────────────────────────────────────── */
-const ROOM_TYPES   = ['standard','deluxe','suite','family','penthouse'];
+const ROOM_TYPES   = ['standard','deluxe','suite','family'];
 const BED_TYPES    = ['single','double','queen','king','twin'];
 const VIEW_TYPES   = ['none','garden','pool','city','sea','mountain'];
 const CANCEL_POLICIES = [

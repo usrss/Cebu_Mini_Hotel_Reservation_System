@@ -1,0 +1,293 @@
+/* ============================================================
+   Navbar.css — Cebu Mini Hotel · Editorial Light Theme
+   Shared across all guest-facing pages
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&family=Playfair+Display:wght@400;700&display=swap');
+
+.cmh-navbar {
+  position: sticky;
+  top: 0;
+  z-index: 500;
+  background: rgba(250, 249, 246, 0.97);
+  border-bottom: 1px solid rgba(1, 0, 13, 0.08);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  font-family: 'Montserrat', sans-serif;
+}
+
+.cmh-navbar-inner {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0 40px;
+  height: 68px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+/* ── Brand ──────────────────────────────────────────── */
+.cmh-navbar-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-decoration: none;
+  gap: 1px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.cmh-navbar-brand-name {
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #01000D;
+  line-height: 1;
+}
+
+.cmh-navbar-brand-sub {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: #C9A84C;
+}
+
+/* ── Nav tabs ────────────────────────────────────────── */
+.cmh-navbar-tabs {
+  display: flex;
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid rgba(1, 0, 13, 0.08);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+  border-radius: 100px;
+  padding: 4px;
+  gap: 2px;
+}
+
+.cmh-nav-tab {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 18px;
+  border-radius: 100px;
+  border: none;
+  background: transparent;
+  color: #535252;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.cmh-nav-tab svg {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+.cmh-nav-tab:hover {
+  background: rgba(1, 0, 13, 0.06);
+  color: #01000D;
+}
+
+.cmh-nav-tab:hover svg { opacity: 1; }
+
+.cmh-nav-tab--active {
+  background: #01000D;
+  color: #FAF9F6;
+}
+
+.cmh-nav-tab--active svg {
+  opacity: 1;
+}
+
+.cmh-nav-tab--active:hover {
+  background: #222;
+  color: #FAF9F6;
+}
+
+/* ── Right actions ───────────────────────────────────── */
+.cmh-navbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.cmh-navbar-icon-btn {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid rgba(1, 0, 13, 0.1);
+  background: transparent;
+  color: #535252;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  text-decoration: none;
+}
+
+.cmh-navbar-icon-btn:hover {
+  background: rgba(1, 0, 13, 0.05);
+  color: #01000D;
+  border-color: rgba(1, 0, 13, 0.2);
+}
+
+.cmh-navbar-icon-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.cmh-navbar-notif-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #C9A84C;
+  color: #FAF9F6;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 16px;
+  text-align: center;
+  pointer-events: none;
+}
+
+.cmh-navbar-divider {
+  width: 1px;
+  height: 22px;
+  background: rgba(1, 0, 13, 0.1);
+  margin: 0 2px;
+}
+
+.cmh-navbar-btn {
+  padding: 9px 20px;
+  border-radius: 100px;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+}
+
+.cmh-navbar-btn--outline {
+  background: transparent;
+  border: 1.5px solid rgba(1, 0, 13, 0.2);
+  color: #01000D;
+}
+
+.cmh-navbar-btn--outline:hover {
+  border-color: #01000D;
+  background: rgba(1, 0, 13, 0.04);
+}
+
+.cmh-navbar-btn--filled {
+  background: #01000D;
+  color: #FAF9F6;
+  border: 1.5px solid #01000D;
+}
+
+.cmh-navbar-btn--filled:hover {
+  background: #222;
+}
+
+/* ── Mobile menu ─────────────────────────────────────── */
+.cmh-navbar-mobile-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  border: 1px solid rgba(1, 0, 13, 0.1);
+  background: transparent;
+  color: #01000D;
+  cursor: pointer;
+}
+
+.cmh-navbar-mobile-toggle svg {
+  width: 20px;
+  height: 20px;
+}
+
+.cmh-navbar-mobile-menu {
+  display: none;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 16px;
+  border-top: 1px solid rgba(1, 0, 13, 0.07);
+  background: rgba(250, 249, 246, 0.98);
+}
+
+.cmh-navbar-mobile-menu.open {
+  display: flex;
+}
+
+.cmh-navbar-mobile-tab {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 10px;
+  border: none;
+  background: transparent;
+  color: #535252;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.15s;
+  width: 100%;
+  text-align: left;
+}
+
+.cmh-navbar-mobile-tab svg {
+  width: 18px;
+  height: 18px;
+  opacity: 0.6;
+}
+
+.cmh-navbar-mobile-tab:hover,
+.cmh-navbar-mobile-tab--active {
+  background: rgba(1, 0, 13, 0.06);
+  color: #01000D;
+}
+
+.cmh-navbar-mobile-tab--active svg { opacity: 1; }
+
+/* ── Responsive ──────────────────────────────────────── */
+@media (max-width: 1024px) {
+  .cmh-navbar-inner { padding: 0 24px; }
+  .cmh-nav-tab { padding: 8px 14px; font-size: 10px; }
+}
+
+@media (max-width: 768px) {
+  .cmh-navbar-inner { padding: 0 16px; height: 60px; }
+  .cmh-navbar-tabs { display: none; }
+  .cmh-navbar-mobile-toggle { display: flex; }
+  .cmh-navbar-btn { display: none; }
+}

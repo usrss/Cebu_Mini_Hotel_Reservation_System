@@ -5,11 +5,12 @@ import {
   LogOut, Settings, ChevronLeft, ChevronRight,
   Menu, X, Building2, Shield, Wrench, BedDouble,
   LineChart, UserCog, ClipboardList, ChevronDown,
-  MessageSquare,
+  MessageSquare, SlidersHorizontal,FileText,
 } from 'lucide-react';
 import { logoutUser, getStoredUser } from '../../../services/api';
 import NotificationBell from '../../notifications/NotificationBell';
 import { usePresenceHeartbeat } from '../../staff/hooks/usePresenceHeartbeat';
+
 import './AdminLayout.css';
 
 // ── Nav structure ─────────────────────────────────────────────────────────────
@@ -109,6 +110,24 @@ const NAV_STRUCTURE = [
     to: '/admin/support',
     roles: ['admin', 'manager'],
   },
+  // ── Hotel Settings ───────────────────────────────────────────────────────
+  {
+    type: 'link',
+    key: 'hotel-settings',
+    label: 'Hotel Settings',
+    icon: <SlidersHorizontal size={18} />,
+    to: '/admin/hotel-settings',
+    roles: ['admin', 'manager'],
+  },
+
+    {
+  type: 'link',
+  key: 'legal',
+  label: 'Legal Documents',
+  icon: <FileText size={18} />,
+  to: '/admin/legal',
+  roles: ['admin', 'manager'],
+},
 ];
 
 const ROLE_LABELS = {
