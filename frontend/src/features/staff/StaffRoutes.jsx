@@ -9,6 +9,7 @@
  *     Now properly wrapped and restricted to FRONT_DESK_ROLES.
  *  2. /front-desk/support (legacy bare path) — redirects to canonical path.
  *  3. Route ordering: specific paths before wildcard paths.
+ *  4. Added /staff/front-desk/checkout/:bookingId — GuestCheckoutPage.
  */
 
 import { Route, Navigate } from 'react-router-dom';
@@ -17,11 +18,12 @@ import ProtectedRoute from '../../components/ProtectedRoute';
 // ── Layouts ────────────────────────────────────────────────────────────────────
 import FrontDeskLayout     from './frontdesk/FrontDeskLayout';
 import AdminLayout         from '../adminPanel/layout/AdminLayout';
+import KitchenDashboard from './kitchen/KitchenDashboard';
 import StaffMonitoringPage from './monitoring/StaffMonitoringPage';
 import StaffLayout         from './StaffLayout';
-
-// ── Role-aware layout helper ───────────────────────────────────────────────────
+import FoodOrdersFrontDeskPage from '../food/FoodOrdersFrontDeskPage';
 import { getStoredUser } from '../../services/api';
+
 function LayoutForRole({ children }) {
   const user = getStoredUser();
   const role = user?.staff_profile?.effective_role ?? (user?.is_staff ? 'admin' : null);
@@ -32,7 +34,7 @@ function LayoutForRole({ children }) {
   if (['front_desk', 'receptionist'].includes(role)) {
     return <FrontDeskLayout>{children}</FrontDeskLayout>;
   }
-  // housekeeping, maintenance, security
+  // housekeeping, maintenance, security, kitchen_staff
   return <StaffLayout>{children}</StaffLayout>;
 }
 
@@ -42,6 +44,7 @@ import RoomStatusBoard      from './frontdesk/RoomStatusBoard';
 import TodayArrivalsPage    from './frontdesk/TodayArrivalsPage';
 import WalkInBookingPage    from './frontdesk/WalkInBookingPage';
 import BookingExtensionPage from './frontdesk/BookingExtensionPage';
+import GuestCheckoutPage    from './frontdesk/GuestCheckoutPage';   // ← NEW
 import CheckInPage          from './checkin/CheckInPage';
 import GuestReviewPage      from '../review/GuestReviewPage';
 
@@ -49,8 +52,6 @@ import GuestReviewPage      from '../review/GuestReviewPage';
 import PaymentListPage from '../adminPanel/PaymentListPage';
 
 // ── Support Ticket page for Front Desk ────────────────────────────────────────
-// FrontDeskSupportPage uses the same component as the admin SupportDashboard
-// but is scoped to FRONT_DESK tier tickets by the backend automatically.
 import FrontDeskSupportPage from '../chatbot/FrontDeskSupportPage';
 
 // ── Staff management ───────────────────────────────────────────────────────────
@@ -80,9 +81,10 @@ const FRONT_DESK_ROLES  = ['admin', 'manager', 'front_desk', 'receptionist'];
 const CLEANING_ROLES    = ['admin', 'manager', 'housekeeping'];
 const MAINTENANCE_ROLES = ['admin', 'manager', 'maintenance'];
 const INCIDENT_VIEW     = ['admin', 'manager', 'security'];
+const KITCHEN_ROLES     = ['admin', 'manager', 'kitchen_staff'];
 const INCIDENT_CREATE   = ['admin', 'security'];
 const ALL_STAFF         = ['admin', 'manager', 'receptionist', 'front_desk',
-                           'housekeeping', 'maintenance', 'security'];
+                           'housekeeping', 'maintenance', 'security', 'kitchen_staff'];
 
 // ── Reporting role groups ─────────────────────────────────────────────────────
 const MAINTENANCE_REPORT_ROLES = ['admin', 'manager', 'front_desk', 'housekeeping'];
@@ -112,6 +114,21 @@ export const staffRoutes = [
       <ProtectedRoute allowedRoles={FRONT_DESK_ROLES}>
         <FrontDeskLayout>
           <FrontDeskDashboard />
+        </FrontDeskLayout>
+      </ProtectedRoute>
+    }
+  />,
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // FRONT DESK — FOOD ORDERS
+  // ════════════════════════════════════════════════════════════════════════════
+  <Route
+    key="front-desk-food-orders"
+    path="/staff/front-desk/food-orders"
+    element={
+      <ProtectedRoute allowedRoles={FRONT_DESK_ROLES}>
+        <FrontDeskLayout>
+          <FoodOrdersFrontDeskPage />
         </FrontDeskLayout>
       </ProtectedRoute>
     }
@@ -165,9 +182,23 @@ export const staffRoutes = [
     }
   />,
 
+  // ── Guest Checkout (NEW) ──────────────────────────────────────────────────
+  // Reached from TodayArrivalsPage departures tab → "Check Out →" button.
+  // Collects accommodation balance + pay_checkout food charges before
+  // calling POST /bookings/admin/<pk>/checkout/.
+  <Route
+    key="front-desk-checkout"
+    path="/staff/front-desk/checkout/:bookingId"
+    element={
+      <ProtectedRoute allowedRoles={FRONT_DESK_ROLES}>
+        <FrontDeskLayout>
+          <GuestCheckoutPage />
+        </FrontDeskLayout>
+      </ProtectedRoute>
+    }
+  />,
+
   // ── Support Tickets for Front Desk (FIXED) ────────────────────────────────
-  // Previously mounted at /front-desk/support without ProtectedRoute or layout.
-  // Now properly at /staff/front-desk/support with FrontDeskLayout and RBAC.
   <Route
     key="front-desk-support"
     path="/staff/front-desk/support"
@@ -180,7 +211,7 @@ export const staffRoutes = [
     }
   />,
 
-  // Legacy path redirect — if anything links to the old bare path
+  // Legacy path redirect
   <Route
     key="front-desk-support-legacy"
     path="/front-desk/support"
@@ -317,9 +348,6 @@ export const staffRoutes = [
 
   // ════════════════════════════════════════════════════════════════════════════
   // INCIDENT LOGS
-  // admin / manager  → view all (AdminLayout via LayoutForRole)
-  // security         → view all + create + edit own (StaffLayout)
-  // front_desk / hk  → own incidents via /staff/my-incidents only
   // ════════════════════════════════════════════════════════════════════════════
 
   <Route
@@ -431,7 +459,7 @@ export const staffRoutes = [
   />,
 
   // ════════════════════════════════════════════════════════════════════════════
-  // MY MAINTENANCE REQUESTS (FD + HK: own; Admin/Manager: all)
+  // MY MAINTENANCE REQUESTS
   // ════════════════════════════════════════════════════════════════════════════
 
   <Route
@@ -447,7 +475,7 @@ export const staffRoutes = [
   />,
 
   // ════════════════════════════════════════════════════════════════════════════
-  // REPORT INCIDENT (FD + HK + Security + Admin)
+  // REPORT INCIDENT
   // ════════════════════════════════════════════════════════════════════════════
 
   <Route
@@ -463,7 +491,7 @@ export const staffRoutes = [
   />,
 
   // ════════════════════════════════════════════════════════════════════════════
-  // MY INCIDENTS (FD + HK: own; Security/Admin/Manager: all)
+  // MY INCIDENTS
   // ════════════════════════════════════════════════════════════════════════════
 
   <Route
@@ -473,6 +501,22 @@ export const staffRoutes = [
       <ProtectedRoute allowedRoles={INCIDENT_VIEW_ROLES}>
         <LayoutForRole>
           <MyIncidentsPage />
+        </LayoutForRole>
+      </ProtectedRoute>
+    }
+  />,
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // KITCHEN
+  // ════════════════════════════════════════════════════════════════════════════
+
+  <Route
+    key="kitchen-dashboard"
+    path="/staff/kitchen"
+    element={
+      <ProtectedRoute allowedRoles={KITCHEN_ROLES}>
+        <LayoutForRole>
+          <KitchenDashboard />
         </LayoutForRole>
       </ProtectedRoute>
     }

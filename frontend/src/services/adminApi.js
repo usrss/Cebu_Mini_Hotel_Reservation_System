@@ -77,3 +77,13 @@ export const analyticsApi = {
   report: (type, period, params = {}) =>
     api.get('/staff/reports/', { params: { type, period, ...params } }).then((r) => r.data),
 };
+
+
+export const foodApi = {
+  /**
+   * GET /api/food/analytics/?period=daily|weekly|monthly|yearly
+   * Returns summary, top_items, categories, trend, status_breakdown, payment_split.
+   */
+  analytics: (period = 'monthly') =>
+    api.get('/food/analytics/', { params: { period } }).then((r) => r.data),
+};

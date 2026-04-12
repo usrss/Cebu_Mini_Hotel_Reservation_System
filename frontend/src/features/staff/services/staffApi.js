@@ -281,3 +281,21 @@ export const PRIORITY_LABELS = {
   2: 'Medium',
   3: 'Low',
 };
+
+
+export const staffApi = {
+  list:        (params)   => staffMembersApi.list(params),
+  detail:      (id)       => staffMembersApi.detail(id),
+  create:      (body)     => staffMembersApi.create(body),
+  update:      (id, body) => staffMembersApi.update(id, body),
+  delete:      (id)       => staffMembersApi.remove(id),
+  promote:     (id, body) => staffMembersApi.promote(id, body),
+  assignTemp:  (id, body) => staffMembersApi.assignTempRole(id, body),
+  removeTemp:  (id)       => staffMembersApi.removeTempRole(id),
+  deactivate:  (id, body) => staffMembersApi.deactivate(id, body),
+  reactivate:  (id)       => staffMembersApi.reactivate(id),
+  shifts:      (params)   => shiftsApi.list(params),
+  createShift: (body)     => shiftsApi.create(body),
+  updateShift: (id, body) => shiftsApi.update(id, body),
+  deleteShift: (id)       => shiftsApi.remove(id),
+};

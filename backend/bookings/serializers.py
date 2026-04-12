@@ -10,6 +10,7 @@ from rooms.models import Room, RoomStatus  # noqa
 from .models import (
     Booking, BookingStatus, BookingStatusHistory,
     PaymentStatus, RefundStatus, BLOCKING_STATUSES,
+    BookingPaymentType,
 )
 
 TAX_RATE        = Decimal("0.12")
@@ -76,13 +77,12 @@ class BookingDetailSerializer(serializers.ModelSerializer):
     has_credentials        = serializers.BooleanField(read_only=True)
     payment_deadline       = serializers.DateTimeField(read_only=True)
 
-    # Payment breakdown — consumed by PaymentPage.jsx and MybookingDetailPage.jsx
+    # Payment breakdown — consumed by PaymentPage.jsx and MyBookingsPage.jsx modal
     amount_paid       = serializers.SerializerMethodField()
     amount_due        = serializers.SerializerMethodField()
     payment_type_used = serializers.SerializerMethodField()
 
-    # ✅ FIX (Problem 6): expose discount info so confirmation and detail pages
-    #    can render a "You saved ₱X" row in the price summary.
+    # Discount info — confirmation page "You saved ₱X" row
     original_price_per_night = serializers.SerializerMethodField()
     discount_percentage      = serializers.SerializerMethodField()
     discount_amount          = serializers.SerializerMethodField()
@@ -115,18 +115,12 @@ class BookingDetailSerializer(serializers.ModelSerializer):
         return 'full_payment'
 
     def get_original_price_per_night(self, obj):
-        """The undiscounted base rate stored on the room."""
         return str(obj.room.price_per_night)
 
     def get_discount_percentage(self, obj):
-        """The discount percentage that was active on the room."""
         return str(obj.room.discount_percentage or Decimal("0"))
 
     def get_discount_amount(self, obj):
-        """
-        Total savings = (original rate − snapshot rate) × nights.
-        Returns '0.00' when no discount was applied.
-        """
         original = obj.room.price_per_night
         snapshot = obj.room_price_snapshot
         nights   = obj.nights or 0
@@ -140,6 +134,11 @@ class BookingDetailSerializer(serializers.ModelSerializer):
             "user",
             "room", "room_number", "room_type", "room_floor", "room_bed_type",
             "full_name", "email", "phone",
+            # ── NEW fields ──
+            "special_requests",
+            "payment_type",
+            "payment_expires_at",
+            # ───────────────
             "check_in", "check_out", "nights", "guests_count",
             "room_price_snapshot", "subtotal", "tax", "service_fee", "total_price",
             "status", "status_display",
@@ -150,7 +149,6 @@ class BookingDetailSerializer(serializers.ModelSerializer):
             "refund_status", "refund_status_display",
             "is_expired", "has_credentials", "payment_deadline",
             "amount_paid", "amount_due", "payment_type_used",
-            # ✅ new discount fields
             "original_price_per_night", "discount_percentage", "discount_amount",
             "created_at", "updated_at",
             "status_history",
@@ -158,13 +156,20 @@ class BookingDetailSerializer(serializers.ModelSerializer):
 
 
 class BookingCreateSerializer(serializers.Serializer):
-    room_id      = serializers.IntegerField()
-    check_in     = serializers.DateField()
-    check_out    = serializers.DateField()
-    guests_count = serializers.IntegerField(min_value=1)
-    full_name    = serializers.CharField(max_length=255, required=False)
-    email        = serializers.EmailField(required=False)
-    phone        = serializers.CharField(max_length=30, required=False)
+    room_id          = serializers.IntegerField()
+    check_in         = serializers.DateField()
+    check_out        = serializers.DateField()
+    guests_count     = serializers.IntegerField(min_value=1)
+    full_name        = serializers.CharField(max_length=255, required=False)
+    email            = serializers.EmailField(required=False)
+    phone            = serializers.CharField(max_length=30, required=False)
+    # ── NEW: optional guest fields ───────────────────────────────────────
+    special_requests = serializers.CharField(required=False, allow_blank=True, allow_null=True, default=None)
+    payment_type     = serializers.ChoiceField(
+        choices=BookingPaymentType.choices,
+        default=BookingPaymentType.FULL,
+        required=False,
+    )
 
     def validate(self, data):
         today = timezone.now().date()
@@ -227,10 +232,6 @@ class BookingCreateSerializer(serializers.Serializer):
 
         nights = (check_out - check_in).days
 
-        # ✅ FIX (Problem 1): use calculate_total_price() which applies
-        #    discount_percentage and seasonal pricing night-by-night,
-        #    then derive the effective per-night snapshot from the total.
-        #    This replaces the old `room.price_per_night` which ignored discounts entirely.
         total_room_cost     = room.calculate_total_price(check_in, check_out)
         room_price_snapshot = (
             (total_room_cost / nights).quantize(Decimal("0.01"))
@@ -243,12 +244,19 @@ class BookingCreateSerializer(serializers.Serializer):
         service_fee = (subtotal * SERVICE_FEE_PCT).quantize(Decimal("0.01"))
         total_price = subtotal + tax + service_fee
 
+        # ── Compute payment_expires_at at creation time ───────────────────
+        from django.utils import timezone as tz
+        from datetime import timedelta
+        payment_expires_at = tz.now() + timedelta(minutes=Booking.PAYMENT_WINDOW_MINUTES)
+
         booking = Booking.objects.create(
             user                = user,
             room                = room,
             full_name           = validated_data["full_name"],
             email               = validated_data["email"],
             phone               = validated_data["phone"],
+            special_requests    = validated_data.get("special_requests") or None,
+            payment_type        = validated_data.get("payment_type", BookingPaymentType.FULL),
             check_in            = check_in,
             check_out           = check_out,
             nights              = nights,
@@ -260,6 +268,7 @@ class BookingCreateSerializer(serializers.Serializer):
             total_price         = total_price,
             status              = BookingStatus.PENDING_PAYMENT,
             payment_status      = PaymentStatus.UNPAID,
+            payment_expires_at  = payment_expires_at,
         )
 
         BookingStatusHistory.objects.create(
@@ -370,19 +379,22 @@ class BookingCancelSerializer(serializers.Serializer):
 
     @transaction.atomic
     def save(self, **kwargs):
-        booking    = self.context["booking"]
-        request    = self.context.get("request")
-        user       = request.user if request else None
+        booking = self.context["booking"]
+        request = self.context.get("request")
+        user = request.user if request else None
         old_status = booking.status
+        reason = self.validated_data.get("reason", "")
 
+        # ── Compute refund eligibility ────────────────────────────────────────
         pct, amount = booking.compute_refund()
 
-        booking.status              = BookingStatus.CANCELLED
-        booking.cancelled_at        = timezone.now()
-        booking.cancellation_reason = self.validated_data.get("reason", "")
-        booking.refund_percentage   = pct
-        booking.refund_amount       = amount
-        booking.refund_status       = RefundStatus.PENDING if amount > 0 else RefundStatus.NONE
+        # ── Transition booking to CANCELLED ───────────────────────────────────
+        booking.status = BookingStatus.CANCELLED
+        booking.cancelled_at = timezone.now()
+        booking.cancellation_reason = reason
+        booking.refund_percentage = pct
+        booking.refund_amount = amount
+        booking.refund_status = RefundStatus.PENDING if amount > 0 else RefundStatus.NONE
 
         if amount > 0:
             booking.payment_status = PaymentStatus.PARTIALLY_REFUNDED
@@ -394,39 +406,381 @@ class BookingCancelSerializer(serializers.Serializer):
         ])
 
         BookingStatusHistory.objects.create(
-            booking    = booking,
-            old_status = old_status,
-            new_status = BookingStatus.CANCELLED,
-            changed_by = user,
-            note       = self.validated_data.get("reason", "Cancelled."),
+            booking=booking,
+            old_status=old_status,
+            new_status=BookingStatus.CANCELLED,
+            changed_by=user,
+            note=reason or "Cancelled.",
         )
 
+        # ── Refund flow — only when money was actually received ───────────────
         if amount > 0:
             try:
-                from payments.models import Payment, PaymentStatus as PStatus, Refund  # noqa
+                from payments.models import (
+                    Payment, PaymentStatus as PStatus,
+                    Refund, PaymentProvider,
+                )
+                from payments.services import PayMongoService, PayPalService
+
                 paid_payment = (
                     booking.payments
                     .filter(status=PStatus.PAID)
                     .order_by("-paid_at")
                     .first()
                 )
+
                 if paid_payment:
-                    Refund.objects.create(
-                        payment      = paid_payment,
-                        amount       = amount,
-                        reason       = self.validated_data.get("reason", "Booking cancelled."),
-                        initiated_by = user,
-                        status       = Refund.RefundStatus.PENDING,
+                    refund = Refund.objects.create(
+                        payment=paid_payment,
+                        amount=amount,
+                        reason=reason or "Booking cancelled.",
+                        initiated_by=user,
+                        status=Refund.RefundStatus.PENDING,
                     )
-                    paid_payment.status = PStatus.REFUNDED
-                    paid_payment.save(update_fields=["status", "updated_at"])
+
+                    provider_succeeded = False
+                    try:
+                        if paid_payment.provider == PaymentProvider.PAYMONGO:
+                            result = PayMongoService.create_refund(
+                                paid_payment, amount,
+                                reason=reason or "Booking cancelled.",
+                            )
+                            refund.provider_refund_id = result.get("refund_id")
+                            refund.status = Refund.RefundStatus.COMPLETED
+                            refund.save(update_fields=[
+                                "provider_refund_id", "status", "updated_at"
+                            ])
+                            provider_succeeded = True
+
+                        elif paid_payment.provider == PaymentProvider.PAYPAL:
+                            result = PayPalService.create_refund(
+                                paid_payment, amount,
+                                reason=reason or "Booking cancelled.",
+                            )
+                            refund.provider_refund_id = result.get("refund_id")
+                            refund.status = Refund.RefundStatus.COMPLETED
+                            refund.save(update_fields=[
+                                "provider_refund_id", "status", "updated_at"
+                            ])
+                            provider_succeeded = True
+
+                        elif paid_payment.provider == PaymentProvider.MANUAL:
+                            # Cash — staff handles physical handover; mark completed
+                            refund.status = Refund.RefundStatus.COMPLETED
+                            refund.save(update_fields=["status", "updated_at"])
+                            provider_succeeded = True
+
+                    except Exception as exc:
+                        import logging
+                        logging.getLogger(__name__).warning(
+                            "Provider refund failed for booking %s (payment %s): %s — "
+                            "Refund #%s stays PENDING for manual staff action.",
+                            booking.reference_number or booking.pk,
+                            paid_payment.pk, exc, refund.pk,
+                        )
+
+                    if provider_succeeded:
+                        paid_payment.status = PStatus.REFUNDED
+                        paid_payment.save(update_fields=["status", "updated_at"])
+                        booking.refund_status = RefundStatus.COMPLETED
+                        booking.save(update_fields=["refund_status", "updated_at"])
+
             except Exception as exc:
                 import logging
                 logging.getLogger(__name__).warning(
-                    "Could not sync payment refund for booking %s: %s",
+                    "Refund flow error for booking %s: %s",
                     booking.reference_number or booking.pk, exc,
                 )
+
+        # ── Send cancellation email to guest (non-blocking) ───────────────────
+        # Runs outside the @transaction.atomic scope intentionally — email
+        # failure should never roll back the cancellation itself.
+        try:
+            _send_cancellation_email(booking)
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).warning(
+                "Cancellation email failed for booking %s: %s",
+                booking.reference_number or booking.pk, exc,
+            )
 
         return booking
 
 
+# ─── Cancellation email ───────────────────────────────────────────────────────
+
+def _send_cancellation_email(booking):
+    """
+    Sends a booking cancellation confirmation email to the guest.
+
+    Three cases handled:
+      - No payment made (unpaid) → free cancellation notice
+      - Refund issued            → amount + 3-7 day timeline
+      - No refund                → policy reason shown
+
+    Visual style mirrors _send_modification_email in modification_signals.py.
+    """
+    from django.core.mail import EmailMultiAlternatives
+    from django.conf import settings as django_settings
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    site_name = getattr(django_settings, "SITE_NAME", "CMH Hotel")
+    support_email = getattr(django_settings, "SUPPORT_EMAIL", "support@cmhhotel.com")
+    hotel_phone = getattr(django_settings, "HOTEL_PHONE", "+63 32 123 4567")
+    frontend_url = getattr(django_settings, "FRONTEND_URL", "http://localhost:5173")
+    from_email = getattr(django_settings, "DEFAULT_FROM_EMAIL", f"{site_name} <no-reply@cmhhotel.com>")
+
+    ref = booking.reference_number or f"#{booking.pk}"
+    bookings_url = f"{frontend_url}/bookings/my"
+    refund_amt = booking.refund_amount or 0
+    has_refund = refund_amt > 0
+    no_payment = booking.payment_status == "unpaid"
+
+    subject = f"[{site_name}] Booking Cancelled — {ref}"
+
+    # ── Refund / no-charge notice (HTML) ─────────────────────────────────────
+    if has_refund:
+        notice_html = f"""
+    <tr>
+      <td style="padding:0 32px 24px;">
+        <table width="100%" cellpadding="0" cellspacing="0"
+               style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;">
+          <tr>
+            <td style="padding:16px 20px;">
+              <p style="margin:0 0 4px;font-size:13px;font-weight:700;color:#1e40af;">
+                ↩ Refund Initiated
+              </p>
+              <p style="margin:0;font-size:13px;color:#1d4ed8;line-height:1.6;">
+                A refund of <strong>{_fmt_php(refund_amt)}</strong>
+                ({int(booking.refund_percentage)}%) has been initiated and will
+                appear within 3–7 business days depending on your bank or payment provider.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>"""
+        refund_text = (
+            f"Refund: {_fmt_php(refund_amt)} "
+            f"({int(booking.refund_percentage)}%) — allow 3-7 business days."
+        )
+
+    elif no_payment:
+        notice_html = f"""
+    <tr>
+      <td style="padding:0 32px 24px;">
+        <table width="100%" cellpadding="0" cellspacing="0"
+               style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;">
+          <tr>
+            <td style="padding:16px 20px;">
+              <p style="margin:0 0 4px;font-size:13px;font-weight:700;color:#166534;">
+                ✓ No Charge
+              </p>
+              <p style="margin:0;font-size:13px;color:#15803d;line-height:1.6;">
+                No payment was made for this booking — this cancellation is free of charge.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>"""
+        refund_text = "No charge — free cancellation."
+
+    else:
+        notice_html = f"""
+    <tr>
+      <td style="padding:0 32px 24px;">
+        <table width="100%" cellpadding="0" cellspacing="0"
+               style="background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;">
+          <tr>
+            <td style="padding:16px 20px;">
+              <p style="margin:0 0 4px;font-size:13px;font-weight:700;color:#92400e;">
+                No Refund Applicable
+              </p>
+              <p style="margin:0;font-size:13px;color:#b45309;line-height:1.6;">
+                Based on our cancellation policy, this booking is not eligible
+                for a refund. If you believe this is an error, please contact us.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>"""
+        refund_text = "No refund applicable per cancellation policy."
+
+    # ── Optional reason row ───────────────────────────────────────────────────
+    reason_row = (
+        _tr("Reason", booking.cancellation_reason)
+        if booking.cancellation_reason else ""
+    )
+
+    # ── Plain text ────────────────────────────────────────────────────────────
+    text_body = f"""
+{site_name} — Booking Cancelled
+{'─' * 48}
+
+Hi {booking.full_name},
+
+Your booking has been cancelled. Here are the details:
+
+BOOKING DETAILS
+  Reference : {ref}
+  Room      : #{booking.room.room_number} — {booking.room.get_room_type_display()}
+  Check-in  : {booking.check_in}
+  Check-out : {booking.check_out}
+  Nights    : {booking.nights}
+  Guests    : {booking.guests_count}
+  Total     : {_fmt_php(booking.total_price)}
+  {'Reason    : ' + booking.cancellation_reason if booking.cancellation_reason else ''}
+
+REFUND
+  {refund_text}
+
+Questions?
+  Email : {support_email}
+  Phone : {hotel_phone}
+
+View your bookings: {bookings_url}
+
+— The {site_name} Team
+    """.strip()
+
+    # ── HTML ──────────────────────────────────────────────────────────────────
+    html_body = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Booking Cancelled — {site_name}</title>
+</head>
+<body style="margin:0;padding:0;background:#f3f4f6;
+             font-family:'Segoe UI',Helvetica,Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0"
+       style="background:#f3f4f6;padding:40px 16px;">
+  <tr><td align="center">
+  <table width="600" cellpadding="0" cellspacing="0"
+         style="background:#ffffff;border-radius:16px;overflow:hidden;
+                box-shadow:0 4px 24px rgba(0,0,0,0.08);max-width:600px;">
+
+    <!-- Header -->
+    <tr>
+      <td style="background:linear-gradient(135deg,#1f2937 0%,#374151 100%);
+                 padding:36px 40px;text-align:center;">
+        <h1 style="margin:0;color:#fff;font-size:24px;font-weight:800;
+                   letter-spacing:-0.5px;">{site_name}</h1>
+        <p style="margin:6px 0 0;color:rgba(255,255,255,0.65);font-size:14px;">
+          Booking Cancellation
+        </p>
+      </td>
+    </tr>
+
+    <!-- Hero -->
+    <tr>
+      <td style="text-align:center;padding:36px 40px 24px;">
+        <div style="display:inline-block;width:60px;height:60px;background:#fef2f2;
+                    border-radius:50%;line-height:60px;font-size:26px;
+                    margin-bottom:16px;">✕</div>
+        <h2 style="margin:0;color:#111827;font-size:22px;font-weight:700;">
+          Booking Cancelled
+        </h2>
+        <p style="margin:8px 0 0;color:#6b7280;font-size:15px;">
+          Hi <strong>{booking.full_name}</strong>, your booking has been
+          successfully cancelled.
+        </p>
+      </td>
+    </tr>
+
+    <!-- Booking summary -->
+    <tr>
+      <td style="padding:0 32px 24px;">
+        <p style="margin:0 0 14px;font-size:12px;font-weight:700;color:#374151;
+                   text-transform:uppercase;letter-spacing:0.07em;">
+          Cancelled Booking
+        </p>
+        <table width="100%" cellpadding="0" cellspacing="0"
+               style="border-collapse:collapse;border:1px solid #f3f4f6;
+                      border-radius:10px;overflow:hidden;">
+          {_tr("Reference", ref)}
+          {_tr("Room", f"#{booking.room.room_number} — {booking.room.get_room_type_display()}", shade=True)}
+          {_tr("Check-in", str(booking.check_in))}
+          {_tr("Check-out", str(booking.check_out), shade=True)}
+          {_tr("Duration", f"{booking.nights} night{'s' if booking.nights != 1 else ''}")}
+          {_tr("Guests", str(booking.guests_count), shade=True)}
+          {_tr("Total", _fmt_php(booking.total_price))}
+          {reason_row}
+        </table>
+      </td>
+    </tr>
+
+    <!-- Refund / no-charge notice -->
+    {notice_html}
+
+    <!-- CTA -->
+    <tr>
+      <td style="text-align:center;padding:0 32px 36px;">
+        <a href="{bookings_url}"
+           style="display:inline-block;background:#1f2937;color:#ffffff;
+                  text-decoration:none;font-size:15px;font-weight:700;
+                  padding:14px 40px;border-radius:10px;">
+          View My Bookings
+        </a>
+      </td>
+    </tr>
+
+    <!-- Footer -->
+    <tr>
+      <td style="background:#f9fafb;border-top:1px solid #f3f4f6;
+                 padding:22px 32px;text-align:center;">
+        <p style="margin:0;font-size:13px;color:#9ca3af;">
+          Questions? Email
+          <a href="mailto:{support_email}"
+             style="color:#4f46e5;text-decoration:none;">{support_email}</a>
+          or call {hotel_phone}
+        </p>
+        <p style="margin:6px 0 0;font-size:12px;color:#d1d5db;">
+          &copy; {site_name}. All rights reserved.
+        </p>
+      </td>
+    </tr>
+
+  </table>
+  </td></tr>
+</table>
+</body>
+</html>"""
+
+    msg = EmailMultiAlternatives(
+        subject=subject,
+        body=text_body,
+        from_email=from_email,
+        to=[booking.email],
+    )
+    msg.attach_alternative(html_body, "text/html")
+    msg.send(fail_silently=False)
+
+    logger.info(
+        "Cancellation email sent → %s | ref=%s",
+        booking.email, ref,
+    )
+
+
+# ─── Shared email helpers ─────────────────────────────────────────────────────
+
+def _fmt_php(amount) -> str:
+    try:
+        return f"PHP {float(amount):,.2f}"
+    except Exception:
+        return f"PHP {amount}"
+
+
+def _tr(label: str, value: str, shade: bool = False, bold: bool = False) -> str:
+    bg = "background:#f9fafb;" if shade else ""
+    wgt = "font-weight:700;color:#111827;" if bold else "color:#374151;"
+    return (
+        f'<tr style="{bg}border-bottom:1px solid #f3f4f6;">'
+        f'<td style="color:#9ca3af;font-size:13px;padding:9px 12px;">{label}</td>'
+        f'<td style="{wgt}font-size:14px;padding:9px 12px;text-align:right;">{value}</td>'
+        f'</tr>'
+    )

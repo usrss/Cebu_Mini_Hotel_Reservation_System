@@ -3,7 +3,7 @@
  */
 import { useState } from 'react';
 import { X, AlertTriangle } from 'lucide-react';
-import { staffApi } from '../../../services/staffApi';
+import { staffApi } from '../../staff/services/staffApi';
 
 export default function DeactivateModal({ staff, onClose, onSaved }) {
   const [reason,     setReason]     = useState('');

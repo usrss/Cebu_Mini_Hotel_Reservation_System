@@ -121,6 +121,7 @@ class EnhancedReportService:
             "occupancy": cls._occupancy,
             "guests":    cls._guests,
             "staff":     cls._staff,
+            "food": cls._food,
         }
 
         fn = generators.get(report_type)
@@ -514,6 +515,86 @@ class EnhancedReportService:
         }
 
 
+    @staticmethod
+    def _food(
+            start, end,
+            metrics: list, group_by: str, filters: dict, user=None
+    ) -> dict:
+        from food.models import FoodOrder
+        from django.db.models import Sum, Count, Avg
+        from django.db.models.functions import TruncDate, TruncWeek, TruncMonth
+
+        qs = FoodOrder.objects.filter(
+            created_at__date__gte=start,
+            created_at__date__lte=end,
+        ).select_related('food_item')
+
+        if filters.get('category'):
+            qs = qs.filter(food_item__category=filters['category'])
+        if filters.get('order_status'):
+            qs = qs.filter(order_status=filters['order_status'])
+        if filters.get('payment_type'):
+            qs = qs.filter(payment_type=filters['payment_type'])
+
+        totals = qs.aggregate(
+            total_orders=Count('id'),
+            total_revenue=Sum('total_price'),
+            avg_order_value=Avg('total_price'),
+        )
+        paid_revenue = (
+                qs.filter(payment_status='paid')
+                .aggregate(t=Sum('total_price'))['t'] or 0
+        )
+
+        summary_full = {
+            'total_orders': totals['total_orders'] or 0,
+            'total_revenue': float(totals['total_revenue'] or 0),
+            'paid_revenue': float(paid_revenue),
+            'avg_order_value': float(totals['avg_order_value'] or 0),
+            'pending_orders': qs.filter(order_status='pending').count(),
+            'completed_orders': qs.filter(order_status='completed').count(),
+        }
+
+        # Grouping
+        if group_by in ('day', 'week', 'month'):
+            trunc = {'day': TruncDate, 'week': TruncWeek, 'month': TruncMonth}[group_by]
+            rows_qs = (
+                qs.annotate(period=trunc('created_at'))
+                .values('period')
+                .annotate(orders=Count('id'), revenue=Sum('total_price'))
+                .order_by('period')
+            )
+            rows = [
+                {
+                    'period': str(r['period']),
+                    'orders': r['orders'],
+                    'revenue': float(r['revenue'] or 0),
+                }
+                for r in rows_qs
+            ]
+        elif group_by == 'category':
+            cats_qs = (
+                qs.values('food_item__category')
+                .annotate(orders=Count('id'), revenue=Sum('total_price'))
+                .order_by('-revenue')
+            )
+            rows = [
+                {
+                    'category': r['food_item__category'],
+                    'orders': r['orders'],
+                    'revenue': float(r['revenue'] or 0),
+                }
+                for r in cats_qs
+            ]
+        else:
+            rows = []
+
+        return {
+            'summary': _filter_summary(summary_full, metrics),
+            'rows': rows,
+        }
+
+
 # ─── Export helpers ───────────────────────────────────────────────────────────
 
 def export_csv(data: dict, report_type: str) -> bytes:
@@ -831,3 +912,5 @@ def run_report_and_log(
             )
 
         return None, execution
+
+

@@ -168,6 +168,86 @@ class PayMongoService:
         }
 
     @staticmethod
+    def create_food_checkout(
+            amount_cents: int,
+            description: str,
+            payment_method: str,
+            metadata: dict,
+            success_url: str,
+            cancel_url: str,
+    ) -> dict:
+        """
+        Creates a PayMongo Checkout Session for a food order.
+        Food orders are NOT linked to a Payment record — they track
+        payment solely via FoodOrder.paymongo_payment_id.
+
+        Returns { "id": str, "checkout_url": str }
+        """
+        if amount_cents < 10000:
+            raise ValueError(
+                f"Amount too small: {amount_cents} cents. "
+                f"PayMongo minimum is PHP 100.00."
+            )
+
+        payment_method_types = PAYMONGO_METHOD_MAP.get(
+            payment_method, PAYMONGO_ALL_METHODS
+        )
+
+        payload = {
+            "data": {
+                "attributes": {
+                    "amount": amount_cents,
+                    "currency": "PHP",
+                    "description": description,
+                    "payment_method_types": payment_method_types,
+                    "success_url": success_url,
+                    "cancel_url": cancel_url,
+                    "send_email_receipt": False,
+                    "show_description": True,
+                    "show_line_items": True,
+                    "line_items": [
+                        {
+                            "currency": "PHP",
+                            "amount": amount_cents,
+                            "name": description,
+                            "quantity": 1,
+                        }
+                    ],
+                    "metadata": metadata,
+                }
+            }
+        }
+
+        logger.info(
+            "PayMongo food checkout_sessions request — amount_cents=%s methods=%s metadata=%s",
+            amount_cents, payment_method_types, metadata,
+        )
+
+        resp = requests.post(
+            f"{PAYMONGO_BASE}/checkout_sessions",
+            json=payload,
+            headers=_paymongo_headers(),
+            timeout=20,
+        )
+
+        if not resp.ok:
+            logger.error(
+                "PayMongo food checkout_sessions FAILED %s — response: %s",
+                resp.status_code, resp.text,
+            )
+            resp.raise_for_status()
+
+        data = resp.json()["data"]
+        logger.info(
+            "PayMongo food checkout_sessions SUCCESS — session_id=%s url=%s",
+            data["id"], data["attributes"]["checkout_url"],
+        )
+        return {
+            "id": data["id"],
+            "checkout_url": data["attributes"]["checkout_url"],
+        }
+
+    @staticmethod
     def get_session_status(session_id: str) -> str:
         """
         Returns the PayMongo checkout session status string:

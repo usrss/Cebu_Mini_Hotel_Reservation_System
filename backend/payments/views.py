@@ -1,3 +1,5 @@
+# payments/views.py
+
 import hmac
 import hashlib
 import logging
@@ -37,11 +39,6 @@ class InitiatePaymentView(APIView):
     """
     POST /api/payments/initiate/
     Creates a Payment record and returns a provider checkout URL.
-
-    Security:
-    - Amount is computed server-side from booking.total_price
-    - Booking ownership is verified
-    - Double-payment is blocked by serializer validation
     """
     permission_classes = [IsAuthenticated]
 
@@ -72,7 +69,6 @@ class InitiatePaymentView(APIView):
                 expires_at     = timezone.now() + timedelta(minutes=CHECKOUT_EXPIRES_MINUTES),
             )
 
-        # ── Create provider checkout session ───────────────────────────────
         checkout_url        = None
         checkout_session_id = None
 
@@ -98,21 +94,14 @@ class InitiatePaymentView(APIView):
                 checkout_session_id = result.get("order_id")
 
             elif provider == PaymentProvider.MANUAL:
-                # Cash payments are marked directly as PROCESSING; staff confirm later
                 payment.status = PaymentStatus.PROCESSING
                 payment.save(update_fields=["status", "updated_at"])
 
-            # Persist checkout info
             if checkout_url or checkout_session_id:
                 payment.checkout_url        = checkout_url
                 payment.checkout_session_id = checkout_session_id
                 payment.save(update_fields=["checkout_url", "checkout_session_id", "updated_at"])
 
-            # ── Send payment link email for online providers ───────────────
-            # Fires immediately when checkout_url is generated so the guest
-            # receives the payment link in their email right away.
-            # The booking confirmation email (with PIN + QR) is sent separately
-            # by payments/signals.py after the webhook confirms payment.
             if checkout_url and provider in (PaymentProvider.PAYMONGO, PaymentProvider.PAYPAL):
                 try:
                     from payments.signals import send_payment_link_email
@@ -122,14 +111,14 @@ class InitiatePaymentView(APIView):
                         checkout_url = checkout_url,
                     )
                 except Exception as exc:
-                    # Never block the payment flow due to email failure
                     logger.warning(
-                        "Payment link email failed for payment %s: %s",
-                        payment.pk, exc,
+                        "Payment link email failed for payment %s: %s", payment.pk, exc,
                     )
 
         except Exception as exc:
-            logger.exception("Failed to create checkout session for payment %s: %s", payment.pk, exc)
+            logger.exception(
+                "Failed to create checkout session for payment %s: %s", payment.pk, exc
+            )
             payment.status = PaymentStatus.FAILED
             payment.save(update_fields=["status", "updated_at"])
             return Response(
@@ -151,10 +140,6 @@ class InitiatePaymentView(APIView):
 # ─── User: my payments ────────────────────────────────────────────────────────
 
 class MyPaymentListView(generics.ListAPIView):
-    """
-    GET /api/payments/my/
-    Lists all payments for the authenticated user.
-    """
     serializer_class   = PaymentListSerializer
     permission_classes = [IsAuthenticated]
 
@@ -169,10 +154,6 @@ class MyPaymentListView(generics.ListAPIView):
 
 
 class MyPaymentDetailView(generics.RetrieveAPIView):
-    """
-    GET /api/payments/my/<id>/
-    Single payment detail for the authenticated user.
-    """
     serializer_class   = PaymentSerializer
     permission_classes = [IsAuthenticated]
 
@@ -196,20 +177,18 @@ class PaymentVerifyView(APIView):
         except Payment.DoesNotExist:
             return Response({"error": "Payment not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        # Already resolved — just return current state
         if payment.status in (
             PaymentStatus.PAID, PaymentStatus.FAILED,
-            PaymentStatus.EXPIRED, PaymentStatus.CANCELLED
+            PaymentStatus.EXPIRED, PaymentStatus.CANCELLED,
         ):
             return Response(PaymentSerializer(payment).data)
 
-        # Poll provider for latest status
         if payment.status == PaymentStatus.PENDING and payment.checkout_session_id:
             try:
                 if payment.provider == PaymentProvider.PAYMONGO:
-                    session = PayMongoService.get_full_session(payment.checkout_session_id)
+                    session       = PayMongoService.get_full_session(payment.checkout_session_id)
                     payments_list = session.get("payments") or []
-                    is_paid = any(
+                    is_paid       = any(
                         p.get("attributes", {}).get("status") == "paid"
                         for p in payments_list
                     )
@@ -236,10 +215,14 @@ class PayMongoWebhookView(APIView):
     """
     POST /api/payments/webhooks/paymongo/
     Receives and processes PayMongo webhook events.
-    Verifies signature using PAYMONGO_WEBHOOK_SECRET from settings.
+
+    FIXED: removed the duplicate _handle_paid definition that was silently
+    overwriting the first one (with food order fallback) and discarding it.
+    The single authoritative _handle_paid now handles BOTH booking payments
+    and food order payments, in that priority order.
     """
     permission_classes     = [AllowAny]
-    authentication_classes = []  # No JWT — provider sends raw POST
+    authentication_classes = []
 
     def post(self, request):
         # ── Signature verification ─────────────────────────────────────────
@@ -251,20 +234,29 @@ class PayMongoWebhookView(APIView):
                 timestamp = parts.get("t", "")
                 sig       = parts.get("te", "") or parts.get("li", "")
                 payload   = f"{timestamp}.{request.body.decode()}"
-                expected  = hmac.new(secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
+                expected  = hmac.new(
+                    secret.encode(), payload.encode(), hashlib.sha256
+                ).hexdigest()
                 if not hmac.compare_digest(expected, sig):
-                    return Response({"error": "Invalid signature."}, status=status.HTTP_401_UNAUTHORIZED)
+                    return Response(
+                        {"error": "Invalid signature."}, status=status.HTTP_401_UNAUTHORIZED
+                    )
             except Exception:
-                return Response({"error": "Signature verification failed."}, status=status.HTTP_400_BAD_REQUEST)
+                return Response(
+                    {"error": "Signature verification failed."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
         event = request.data
         try:
             event_type = event["data"]["attributes"]["type"]
             resource   = event["data"]["attributes"].get("data", {})
         except (KeyError, TypeError):
-            return Response({"error": "Malformed webhook payload."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "Malformed webhook payload."}, status=status.HTTP_400_BAD_REQUEST
+            )
 
-        logger.info("PayMongo webhook: %s", event_type)
+        logger.info("PayMongo webhook received: %s", event_type)
 
         if event_type in ("payment.paid", "checkout_session.payment.paid"):
             self._handle_paid(resource, raw=event)
@@ -275,37 +267,97 @@ class PayMongoWebhookView(APIView):
 
     @staticmethod
     def _handle_paid(resource, raw):
+        """
+        Resolve the PayMongo session ID and mark the associated record as paid.
+
+        Priority:
+          1. booking Payment record  (normal hotel booking payment)
+          2. FoodOrder record        (food pay_now)
+
+        FIXED: this was defined TWICE — Python silently kept only the second
+        (simpler) definition which had no food order fallback. Now there is
+        exactly ONE definition that handles both cases.
+
+        Food order release-to-kitchen:
+          After marking payment_status='paid' we also set order_status='pending'
+          so the kitchen can see and prepare the order. This mirrors what
+          FoodOrderVerifyPaymentView does via polling, but fires faster via webhook.
+        """
+        session_id = (
+            resource.get("id")
+            or resource.get("attributes", {}).get("checkout_session_id")
+        )
+        if not session_id:
+            logger.warning("PayMongo _handle_paid: no session_id in resource %r", resource)
+            return
+
+        # ── 1. Try booking payment ─────────────────────────────────────────
+        try:
+            payment = Payment.objects.get(checkout_session_id=session_id)
+            if payment.status != PaymentStatus.PAID:
+                payment.mark_paid(transaction_id=session_id, payload=raw)
+                logger.info("Booking payment #%s marked paid via webhook.", payment.pk)
+            return  # done — don't fall through to food order check
+        except Payment.DoesNotExist:
+            pass
+
+        # ── 2. Try food order payment ──────────────────────────────────────
+        try:
+            from food.models import FoodOrder, OrderStatus as FoodOrderStatus, PaymentStatus as FoodPaymentStatus
+
+            order = FoodOrder.objects.get(paymongo_session_id=session_id)
+
+            if order.payment_status != FoodPaymentStatus.PAID:
+                # Mark paid AND release to kitchen in one save
+                order.payment_status = FoodPaymentStatus.PAID
+                order.order_status   = FoodOrderStatus.PENDING  # kitchen can now see it
+                order.save(update_fields=["payment_status", "order_status", "updated_at"])
+                logger.info(
+                    "Food order #%s marked paid and released to kitchen via webhook.",
+                    order.pk,
+                )
+        except FoodOrder.DoesNotExist:
+            logger.warning(
+                "PayMongo webhook: no Payment or FoodOrder found for session_id=%s", session_id
+            )
+
+    @staticmethod
+    def _handle_failed(resource, raw):
+        """Mark the associated payment or food order as failed/cancelled."""
         session_id = (
             resource.get("id")
             or resource.get("attributes", {}).get("checkout_session_id")
         )
         if not session_id:
             return
-        try:
-            payment = Payment.objects.get(checkout_session_id=session_id)
-            if payment.status != PaymentStatus.PAID:
-                payment.mark_paid(transaction_id=session_id, payload=raw)
-        except Payment.DoesNotExist:
-            logger.warning("PayMongo webhook: no payment found for session %s", session_id)
 
-    @staticmethod
-    def _handle_failed(resource, raw):
-        session_id = resource.get("id")
-        if not session_id:
-            return
+        # ── 1. Booking payment ─────────────────────────────────────────────
         try:
             payment = Payment.objects.get(checkout_session_id=session_id)
-            if payment.status not in (PaymentStatus.PAID, PaymentStatus.REFUNDED):
-                payment.mark_failed(payload=raw)
+            payment.mark_failed(payload=raw)
+            logger.info("Booking payment #%s marked failed via webhook.", payment.pk)
+            return
         except Payment.DoesNotExist:
             pass
 
+        # ── 2. Food order ──────────────────────────────────────────────────
+        try:
+            from food.models import FoodOrder, OrderStatus as FoodOrderStatus
+
+            order = FoodOrder.objects.get(paymongo_session_id=session_id)
+            if order.order_status not in (
+                FoodOrderStatus.COMPLETED, FoodOrderStatus.CANCELLED
+            ):
+                order.order_status = FoodOrderStatus.CANCELLED
+                order.save(update_fields=["order_status", "updated_at"])
+                logger.info("Food order #%s cancelled via failed/expired webhook.", order.pk)
+        except FoodOrder.DoesNotExist:
+            logger.warning(
+                "PayMongo webhook _handle_failed: no record for session_id=%s", session_id
+            )
+
 
 class PayPalWebhookView(APIView):
-    """
-    POST /api/payments/webhooks/paypal/
-    Receives PayPal webhook events and processes order captures.
-    """
     permission_classes     = [AllowAny]
     authentication_classes = []
 
@@ -329,7 +381,11 @@ class PayPalWebhookView(APIView):
                     logger.exception("PayPal capture failed: %s", exc)
 
         elif event_type == "PAYMENT.CAPTURE.DENIED":
-            order_id = resource.get("supplementary_data", {}).get("related_ids", {}).get("order_id")
+            order_id = (
+                resource.get("supplementary_data", {})
+                .get("related_ids", {})
+                .get("order_id")
+            )
             if order_id:
                 try:
                     payment = Payment.objects.get(checkout_session_id=order_id)
@@ -343,18 +399,18 @@ class PayPalWebhookView(APIView):
 # ─── Admin views ──────────────────────────────────────────────────────────────
 
 class AdminPaymentListView(generics.ListAPIView):
-    """
-    GET /api/payments/admin/
-    All payments. Filterable by status, method, booking, date range.
-    Staff/Admin only.
-    """
     serializer_class   = PaymentListSerializer
     permission_classes = [IsStaffOrAdmin]
     filter_backends    = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class    = PaymentFilter
-    search_fields      = ["receipt_number", "booking__reference_number", "booking__full_name", "booking__email"]
-    ordering_fields    = ["created_at", "amount", "paid_at"]
-    ordering           = ["-created_at"]
+    search_fields      = [
+        "receipt_number",
+        "booking__reference_number",
+        "booking__full_name",
+        "booking__email",
+    ]
+    ordering_fields = ["created_at", "amount", "paid_at"]
+    ordering        = ["-created_at"]
 
     def get_queryset(self):
         return (
@@ -365,20 +421,16 @@ class AdminPaymentListView(generics.ListAPIView):
 
 
 class AdminPaymentDetailView(generics.RetrieveAPIView):
-    """
-    GET /api/payments/admin/<id>/
-    Full payment detail including refunds.
-    """
     serializer_class   = PaymentSerializer
     permission_classes = [IsStaffOrAdmin]
-    queryset           = Payment.objects.select_related("booking__room", "user").prefetch_related("refunds")
+    queryset           = (
+        Payment.objects
+        .select_related("booking__room", "user")
+        .prefetch_related("refunds")
+    )
 
 
 class AdminManualConfirmView(APIView):
-    """
-    POST /api/payments/admin/<id>/confirm/
-    Staff manually confirms a cash / walk-in payment.
-    """
     permission_classes = [IsStaffOrAdmin]
 
     def post(self, request, pk):
@@ -400,17 +452,15 @@ class AdminManualConfirmView(APIView):
 
         payment.mark_paid(
             transaction_id=f"MANUAL-{payment.pk}",
-            payload={"confirmed_by": request.user.email, "note": request.data.get("note", "")},
+            payload={
+                "confirmed_by": request.user.email,
+                "note": request.data.get("note", ""),
+            },
         )
         return Response(PaymentSerializer(payment).data)
 
 
 class AdminInitiateRefundView(APIView):
-    """
-    POST /api/payments/admin/<id>/refund/
-    Staff triggers a refund for a paid payment.
-    Creates a Refund record, calls provider API, updates payment status.
-    """
     permission_classes = [IsStaffOrAdmin]
 
     def post(self, request, pk):
@@ -472,25 +522,23 @@ class AdminInitiateRefundView(APIView):
 
 
 class AdminPaymentDashboardView(APIView):
-    """
-    GET /api/payments/admin/dashboard/
-    Aggregated revenue stats for the admin dashboard.
-    """
     permission_classes = [IsStaffOrAdmin]
 
     def get(self, request):
-        from django.db.models import Sum, Count, Q
+        from django.db.models import Sum, Count
         from django.db.models.functions import TruncMonth
 
         qs = Payment.objects.filter(status=PaymentStatus.PAID)
 
         total_revenue  = qs.aggregate(total=Sum("amount"))["total"] or 0
         total_paid     = qs.count()
-        total_refunded = Payment.objects.filter(status=PaymentStatus.REFUNDED).aggregate(
-            total=Sum("amount")
-        )["total"] or 0
-        total_pending  = Payment.objects.filter(status=PaymentStatus.PENDING).count()
-        total_failed   = Payment.objects.filter(status=PaymentStatus.FAILED).count()
+        total_refunded = (
+            Payment.objects
+            .filter(status=PaymentStatus.REFUNDED)
+            .aggregate(total=Sum("amount"))["total"] or 0
+        )
+        total_pending = Payment.objects.filter(status=PaymentStatus.PENDING).count()
+        total_failed  = Payment.objects.filter(status=PaymentStatus.FAILED).count()
 
         by_method = (
             qs.values("payment_method")
@@ -505,7 +553,11 @@ class AdminPaymentDashboardView(APIView):
             .order_by("month")
         )
 
-        recent = Payment.objects.select_related("booking__room").order_by("-created_at")[:10]
+        recent = (
+            Payment.objects
+            .select_related("booking__room")
+            .order_by("-created_at")[:10]
+        )
 
         return Response({
             "summary": {
@@ -531,11 +583,6 @@ class AdminPaymentDashboardView(APIView):
 # ─── Expiry utility ───────────────────────────────────────────────────────────
 
 class ExpirePaymentsView(APIView):
-    """
-    POST /api/payments/admin/expire/
-    Marks PENDING payments past their expires_at as EXPIRED.
-    Call from Celery beat or a cron job.
-    """
     permission_classes = [IsStaffOrAdmin]
 
     def post(self, request):

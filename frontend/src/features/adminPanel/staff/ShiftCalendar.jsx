@@ -6,7 +6,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { ChevronLeft, ChevronRight, Plus, AlertTriangle } from 'lucide-react';
-import { staffApi } from '../../../services/staffApi';
+import { staffApi } from '../../staff/services/staffApi';
 import ShiftFormModal from './ShiftFormModal';
 
 const ROLE_COLORS = {

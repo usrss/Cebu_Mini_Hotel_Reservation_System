@@ -30,6 +30,7 @@ class StaffRole(models.TextChoices):
     HOUSEKEEPING = "housekeeping", "Housekeeping"
     MAINTENANCE  = "maintenance",  "Maintenance"
     SECURITY     = "security",     "Security"
+    KITCHEN_STAFF = "kitchen_staff", "Kitchen Staff"
 
 
 # ─── Status Choices ───────────────────────────────────────────────────────────

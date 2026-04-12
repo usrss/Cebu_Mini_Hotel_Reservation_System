@@ -1,16 +1,13 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useLocation, useParams, Link } from 'react-router-dom';
 import {
   ArrowLeft, CheckCircle2, Calendar, Users, Hash,
-  Key, Clock, CreditCard, QrCode, AlertCircle,
+  Key, Clock, CreditCard, QrCode, AlertCircle, Copy, Check,
+  CalendarPlus, Mail,
 } from 'lucide-react';
 import { useBookingDetail } from '../hooks/useBookings';
+import Navbar from '../../components/UIComponents/Navbar';
 import './BookingConfirmationPage.css';
-
-
-// Confirmation page is ONLY reached after successful payment.
-// At this point the booking is CONFIRMED and reference_number + checkin_pin
-// are guaranteed to be present. If they are not, we show an error.
 
 const STATUS_CONFIG = {
   pending_payment: { label: 'Pending Payment', className: 'status-awaiting',   icon: <Clock size={14} /> },
@@ -26,62 +23,97 @@ function formatPrice(amount) {
   return Number(amount).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-// ── Inline QR component ───────────────────────────────────────────────────────
+/* ── Copy-to-clipboard hook ─────────────────────────────────────────── */
+function useCopy() {
+  const [copied, setCopied] = useState(false);
+  const copy = useCallback(text => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }, []);
+  return { copied, copy };
+}
 
+/* ── Add-to-Calendar helper ─────────────────────────────────────────── */
+function buildCalendarUrl(booking) {
+  const fmt = d => d.replace(/-/g, '');
+  const start = fmt(booking.check_in);
+  const end   = fmt(booking.check_out);
+  const title = encodeURIComponent(`Hotel Stay — ${booking.room_type} Room #${booking.room_number}`);
+  const details = encodeURIComponent(`Reference: ${booking.reference_number}\nPIN: ${booking.checkin_pin || 'N/A'}`);
+  return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${start}/${end}&details=${details}`;
+}
+
+function buildICSContent(booking) {
+  const fmt = d => d.replace(/-/g, '');
+  return [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'BEGIN:VEVENT',
+    `DTSTART:${fmt(booking.check_in)}`,
+    `DTEND:${fmt(booking.check_out)}`,
+    `SUMMARY:Hotel Stay — ${booking.room_type} Room #${booking.room_number}`,
+    `DESCRIPTION:Reference: ${booking.reference_number}\\nPIN: ${booking.checkin_pin || 'N/A'}`,
+    'END:VEVENT',
+    'END:VCALENDAR',
+  ].join('\r\n');
+}
+
+/* ── QR component ───────────────────────────────────────────────────── */
 function BookingQR({ reference }) {
   const canvasRef = useRef(null);
-  const [dataUrl, setDataUrl] = useState(null);
+  const [dataUrl, setDataUrl]   = useState(null);
+  const [qrFailed, setQrFailed] = useState(false);
   const SIZE = 160;
 
   useEffect(() => {
     if (!reference) return;
+    let timeout;
 
     const draw = () => {
       try {
         const qr      = window.qrcode(0, 'M');
         qr.addData(reference);
         qr.make();
-
         const canvas  = canvasRef.current;
         if (!canvas) return;
         const ctx     = canvas.getContext('2d');
         const modules = qr.getModuleCount();
         const cell    = Math.floor((SIZE - 16) / modules);
         const offset  = Math.floor((SIZE - cell * modules) / 2);
-
         canvas.width  = SIZE;
         canvas.height = SIZE;
-
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, SIZE, SIZE);
-
         ctx.fillStyle = '#0f172a';
         for (let row = 0; row < modules; row++) {
           for (let col = 0; col < modules; col++) {
-            if (qr.isDark(row, col)) {
-              ctx.fillRect(offset + col * cell, offset + row * cell, cell, cell);
-            }
+            if (qr.isDark(row, col)) ctx.fillRect(offset + col * cell, offset + row * cell, cell, cell);
           }
         }
-
         setDataUrl(canvas.toDataURL('image/png'));
       } catch (e) {
-        console.warn('QR generation failed:', e);
+        setQrFailed(true);
       }
     };
 
-    if (window.qrcode) { draw(); return; }
+    // FIX: set a timeout — if QR hasn't generated after 5s, show fallback
+    timeout = setTimeout(() => { if (!dataUrl) setQrFailed(true); }, 5000);
 
+    if (window.qrcode) { draw(); return () => clearTimeout(timeout); }
     const existing = document.getElementById('qrcode-gen-script');
     if (existing) {
       existing.addEventListener('load', draw);
-      return () => existing.removeEventListener('load', draw);
+      return () => { existing.removeEventListener('load', draw); clearTimeout(timeout); };
     }
     const script  = document.createElement('script');
     script.id     = 'qrcode-gen-script';
     script.src    = 'https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js';
-    script.onload = draw;
+    script.onerror = () => setQrFailed(true);
+    script.onload  = draw;
     document.head.appendChild(script);
+    return () => clearTimeout(timeout);
   }, [reference]);
 
   return (
@@ -89,86 +121,98 @@ function BookingQR({ reference }) {
       <canvas ref={canvasRef} style={{ display: 'none' }} />
       <div className="booking-qr-frame">
         {dataUrl ? (
-          <img
-            src={dataUrl}
-            alt={`QR for ${reference}`}
-            className="booking-qr-img"
-            width={SIZE}
-            height={SIZE}
-          />
+          <img src={dataUrl} alt={`QR for ${reference}`} className="booking-qr-img" width={SIZE} height={SIZE} />
+        ) : qrFailed ? (
+          /* FIX: explicit fallback instead of silent empty state */
+          <div className="booking-qr-fallback" style={{ width: SIZE, height: SIZE }}>
+            <QrCode size={28} />
+            <span>QR unavailable</span>
+            <span className="qr-fallback-hint">Use reference number at reception</span>
+          </div>
         ) : (
           <div className="booking-qr-placeholder" style={{ width: SIZE, height: SIZE }}>
             <QrCode size={32} color="#d1d5db" />
           </div>
         )}
-        <span className="qr-corner qr-tl" />
-        <span className="qr-corner qr-tr" />
-        <span className="qr-corner qr-bl" />
-        <span className="qr-corner qr-br" />
+        {dataUrl && (
+          <>
+            <span className="qr-corner qr-tl" />
+            <span className="qr-corner qr-tr" />
+            <span className="qr-corner qr-bl" />
+            <span className="qr-corner qr-br" />
+          </>
+        )}
       </div>
       <p className="booking-qr-hint">
-        Show this to the receptionist<br />or share your reference number
+        {qrFailed
+          ? 'Show your reference number to the receptionist'
+          : 'Show this to the receptionist or share your reference number'}
       </p>
     </div>
   );
 }
 
-// ── Page ──────────────────────────────────────────────────────────────────────
-
+/* ── Page ───────────────────────────────────────────────────────────── */
 export default function BookingConfirmationPage() {
   const { id }    = useParams();
   const { state } = useLocation();
 
-  // State booking passed from payment page after successful payment
   const hasStateBooking = Boolean(state?.booking);
-  const { booking: fetched, loading, error } = useBookingDetail(
-    hasStateBooking ? null : id
-  );
+  const { booking: fetched, loading, error } = useBookingDetail(hasStateBooking ? null : id);
   const booking = state?.booking || fetched;
+
+  const { copied: refCopied, copy: copyRef } = useCopy();
+  const { copied: pinCopied, copy: copyPin } = useCopy();
 
   if (!hasStateBooking && loading) return <LoadingSkeleton />;
 
   if (error || !booking) {
     return (
-      <div className="confirmation-error-container">
-        <div className="error-content">
-          <h2 className="error-heading">Booking Not Found</h2>
-          <p className="error-message">{error || 'We could not find this booking.'}</p>
-          <Link to="/rooms" className="btn btn-primary">
-            <ArrowLeft size={18} /> Back to Rooms
-          </Link>
+      <div className="confirmation-page">
+        <Navbar />
+        <div className="confirmation-error-container">
+          <div className="error-content">
+            <h2 className="error-heading">Booking Not Found</h2>
+            <p className="error-message">{error || 'We could not find this booking.'}</p>
+            <Link to="/rooms" className="btn btn-primary"><ArrowLeft size={18} /> Back to Rooms</Link>
+          </div>
         </div>
       </div>
     );
   }
 
-  // Guard: this page must only be displayed for CONFIRMED bookings with credentials.
-  // If a guest somehow navigates here for a PENDING_PAYMENT booking, redirect them
-  // to the payment page instead of showing empty credential fields.
   if (booking.status === 'pending_payment' || !booking.has_credentials) {
     return (
-      <div className="confirmation-error-container">
-        <div className="error-content">
-          <AlertCircle size={48} color="#f59e0b" style={{ marginBottom: 16 }} />
-          <h2 className="error-heading">Payment Required</h2>
-          <p className="error-message">
-            Your booking is awaiting payment. Complete payment to receive your
-            reference number, QR code, and check-in PIN.
-          </p>
-          <Link to={`/payments/${booking.id}`} className="btn btn-primary">
-            <CreditCard size={18} /> Complete Payment
-          </Link>
+      <div className="confirmation-page">
+        <Navbar />
+        <div className="confirmation-error-container">
+          <div className="error-content">
+            <AlertCircle size={48} color="#f59e0b" style={{ marginBottom: 16 }} />
+            <h2 className="error-heading">Payment Required</h2>
+            <p className="error-message">
+              Your booking is awaiting payment. Complete payment to receive your
+              reference number, QR code, and check-in PIN.
+            </p>
+            <Link to={`/payments/${booking.id}`} className="btn btn-primary">
+              <CreditCard size={18} /> Complete Payment
+            </Link>
+          </div>
         </div>
       </div>
     );
   }
 
   const statusCfg = STATUS_CONFIG[booking.status] || STATUS_CONFIG.confirmed;
+  const calUrl    = buildCalendarUrl(booking);
+  const icsBlob   = new Blob([buildICSContent(booking)], { type: 'text/calendar' });
+  const icsUrl    = URL.createObjectURL(icsBlob);
 
   return (
     <div className="confirmation-page">
+      {/* FIX: Navbar added — was missing entirely */}
+      <Navbar />
 
-      {/* Nav */}
+      {/* Nav breadcrumb */}
       <div className="confirmation-nav">
         <div className="nav-container">
           <Link to="/bookings/my" className="back-link">
@@ -179,49 +223,67 @@ export default function BookingConfirmationPage() {
 
       {/* Hero */}
       <div className="confirmation-hero">
-        <div className="confirmation-hero-icon">
-          <CheckCircle2 size={40} />
-        </div>
+        <div className="confirmation-hero-icon"><CheckCircle2 size={40} /></div>
         <h1 className="confirmation-hero-title">Booking Confirmed!</h1>
         <p className="confirmation-hero-subtitle">
           Payment received. Your reference number and check-in credentials are below.
         </p>
+        {/* FIX: Email confirmation notice */}
+        <div className="confirmation-email-notice">
+          <Mail size={14} />
+          A confirmation email has been sent to <strong>{booking.email}</strong>
+        </div>
       </div>
 
       <div className="confirmation-container">
         <div className="confirmation-layout">
 
-          {/* Left column */}
+          {/* ── Left column ── */}
           <div className="confirmation-main">
 
-            {/* Reference card with QR — only shown because booking is CONFIRMED */}
+            {/* Reference + QR */}
             <div className="confirmation-card reference-card">
               <div className="reference-qr-row">
                 <div className="reference-text-block">
-                  <p className="reference-eyebrow">
-                    <Hash size={13} /> Reference Number
-                  </p>
-                  <p className="reference-number">{booking.reference_number}</p>
+                  <p className="reference-eyebrow"><Hash size={13} /> Reference Number</p>
+                  <div className="reference-number-row">
+                    <p className="reference-number">{booking.reference_number}</p>
+                    {/* FIX: copy button */}
+                    <button
+                      className="copy-btn"
+                      onClick={() => copyRef(booking.reference_number)}
+                      title="Copy reference number"
+                    >
+                      {refCopied ? <Check size={14} /> : <Copy size={14} />}
+                    </button>
+                  </div>
                   <div className={`booking-status-badge ${statusCfg.className}`}>
-                    {statusCfg.icon}
-                    {statusCfg.label}
+                    {statusCfg.icon}{statusCfg.label}
                   </div>
                 </div>
-                {/* QR code encodes the confirmed reference number */}
                 <BookingQR reference={booking.reference_number} />
               </div>
             </div>
 
-            {/* PIN card — only rendered when checkin_pin is present (CONFIRMED+) */}
+            {/* PIN */}
             {booking.checkin_pin && (
               <div className="confirmation-card pin-card">
-                <h3 className="card-section-title">
-                  <Key size={16} /> Check-in PIN
-                </h3>
-                <div className="pin-display">
-                  {booking.checkin_pin.split('').map((digit, i) => (
-                    <span key={i} className="pin-digit">{digit}</span>
-                  ))}
+                <h3 className="card-section-title"><Key size={16} /> Check-in PIN</h3>
+                <div className="pin-row">
+                  <div className="pin-display">
+                    {booking.checkin_pin.split('').map((digit, i) => (
+                      <span key={i} className="pin-digit">{digit}</span>
+                    ))}
+                  </div>
+                  {/* FIX: copy PIN button */}
+                  <button
+                    className="copy-btn copy-btn--light"
+                    onClick={() => copyPin(booking.checkin_pin)}
+                    title="Copy PIN"
+                  >
+                    {pinCopied ? <Check size={14} /> : <Copy size={14} />}
+                    <span>{pinCopied ? 'Copied!' : 'Copy PIN'}</span>
+                  </button>
                 </div>
                 <p className="pin-note">
                   Present this PIN at the reception desk along with a valid ID.
@@ -231,23 +293,22 @@ export default function BookingConfirmationPage() {
 
             {/* Stay details */}
             <div className="confirmation-card">
-              <h3 className="card-section-title">
-                <Calendar size={16} /> Stay Details
-              </h3>
+              <h3 className="card-section-title"><Calendar size={16} /> Stay Details</h3>
               <div className="detail-rows">
                 <DetailRow label="Room"      value={`#${booking.room_number} — ${booking.room_type}`} />
                 <DetailRow label="Check-in"  value={booking.check_in} />
                 <DetailRow label="Check-out" value={booking.check_out} />
                 <DetailRow label="Nights"    value={`${booking.nights} night${booking.nights !== 1 ? 's' : ''}`} />
                 <DetailRow label="Guests"    value={`${booking.guests_count} guest${booking.guests_count !== 1 ? 's' : ''}`} />
+                {booking.special_requests && (
+                  <DetailRow label="Requests" value={booking.special_requests} />
+                )}
               </div>
             </div>
 
             {/* Guest info */}
             <div className="confirmation-card">
-              <h3 className="card-section-title">
-                <Users size={16} /> Guest Information
-              </h3>
+              <h3 className="card-section-title"><Users size={16} /> Guest Information</h3>
               <div className="detail-rows">
                 <DetailRow label="Name"  value={booking.full_name} />
                 <DetailRow label="Email" value={booking.email} />
@@ -257,18 +318,15 @@ export default function BookingConfirmationPage() {
 
           </div>
 
-          {/* Right sidebar */}
+          {/* ── Right sidebar ── */}
           <div className="confirmation-sidebar">
             <div className="confirmation-card price-card">
-              <h3 className="card-section-title">
-                <CreditCard size={16} /> Price Summary
-              </h3>
+              <h3 className="card-section-title"><CreditCard size={16} /> Price Summary</h3>
               <div className="price-rows">
                 <PriceRow
-                  label={`₱${formatPrice(booking.room_price_snapshot)} × ${booking.nights} night${booking.nights !== 1 ? 's' : ''}`}
+                  label={`₱${formatPrice(booking.room_price_snapshot)} × ${booking.nights} night${booking.nights !== 1 ? 's' : ''} (at booking)`}
                   value={`₱${formatPrice(booking.subtotal)}`}
                 />
-                {/* Discount savings row — shown when backend reports a discount_amount */}
                 {Number(booking.discount_amount) > 0 && (
                   <PriceRow
                     label={`Discount (${booking.discount_percentage}% off)`}
@@ -291,13 +349,32 @@ export default function BookingConfirmationPage() {
               </div>
             </div>
 
+            {/* FIX: Add-to-calendar section */}
+            <div className="confirmation-card calendar-card">
+              <h3 className="card-section-title"><CalendarPlus size={16} /> Add to Calendar</h3>
+              <p className="calendar-desc">Save your check-in and check-out dates so you don't forget.</p>
+              <div className="calendar-actions">
+                <a
+                  href={calUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="calendar-btn"
+                >
+                  Google Calendar
+                </a>
+                <a
+                  href={icsUrl}
+                  download={`booking-${booking.reference_number}.ics`}
+                  className="calendar-btn calendar-btn--outline"
+                >
+                  Download .ics
+                </a>
+              </div>
+            </div>
+
             <div className="confirmation-actions">
-              <Link to="/bookings/my" className="btn btn-primary btn-full">
-                View My Bookings
-              </Link>
-              <Link to="/rooms" className="btn btn-outline btn-full">
-                Browse More Rooms
-              </Link>
+              <Link to="/bookings/my" className="btn btn-primary btn-full">View My Bookings</Link>
+              <Link to="/rooms"       className="btn btn-outline btn-full">Browse More Rooms</Link>
             </div>
           </div>
 
@@ -328,6 +405,7 @@ function PriceRow({ label, value, isDiscount = false }) {
 function LoadingSkeleton() {
   return (
     <div className="confirmation-page">
+      <Navbar />
       <div className="confirmation-nav">
         <div className="nav-container"><div className="skeleton skeleton-back" /></div>
       </div>

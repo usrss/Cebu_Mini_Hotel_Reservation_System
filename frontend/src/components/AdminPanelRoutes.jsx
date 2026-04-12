@@ -22,6 +22,9 @@ import ReviewListPage   from '../features/adminPanel/ReviewListPage';
 import ReviewDetailPage from '../features/adminPanel/ReviewDetailPage';
 import ReviewStatsPage  from '../features/adminPanel/ReviewStatsPage';
 
+import FoodMenuAdminPage    from '../features/adminPanel/food/FoodMenuAdminPage';
+import FoodOrdersAdminPage  from '../features/adminPanel/food/FoodOrdersAdminPage';
+
 // Rooms
 import AdminRoomsPage from '../features/rooms/AdminRoomsPage';
 
@@ -69,6 +72,18 @@ export const adminPanelRoutes = [
   <Route key="admin-dashboard"
     path="/admin/dashboard"
     element={<AdminRoute element={<AdminDashboard />} />}
+  />,
+
+  // ── Food Menu (Admin only) ────────────────────────────────────────────────
+  <Route key="admin-food-menu"
+    path="/admin/food-menu"
+    element={<AdminRoute allowedRoles={['admin']} element={<FoodMenuAdminPage />} />}
+  />,
+
+  // ── Food Orders (Admin + Manager) ─────────────────────────────────────────
+  <Route key="admin-food-orders"
+    path="/admin/food-orders"
+    element={<AdminRoute allowedRoles={ADMIN_MANAGER} element={<FoodOrdersAdminPage />} />}
   />,
 
   // ── Analytics ──────────────────────────────────────────────────────────────

@@ -44,6 +44,16 @@ function BookingsIcon() {
   );
 }
 
+function FoodIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/>
+      <path d="M7 2v20"/>
+      <path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3z"/>
+    </svg>
+  );
+}
+
 function BellIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -82,6 +92,7 @@ function MenuIcon() {
   );
 }
 
+
 function CloseIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -105,6 +116,8 @@ const GUEST_TABS = [
   { label: 'Home',     path: '/dashboard',  icon: HomeIcon },
   { label: 'Rooms',    path: '/rooms',       icon: RoomsIcon },
   { label: 'Bookings', path: '/bookings/my', icon: BookingsIcon },
+  { label: 'Food & Drinks', path: '/food',       icon: FoodIcon  },
+
 ];
 
 /* ── Inner navbar that always calls useNotifications ────────
@@ -117,7 +130,7 @@ function NavbarInner() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const user = getStoredUser();
 
-  // ✅ Hook always called here — no try/catch, no condition
+  // Hook always called here — no try/catch, no condition
   const { unreadCount } = useNotifications();
 
   const isActive = (path) => location.pathname.startsWith(path);

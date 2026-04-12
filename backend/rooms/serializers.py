@@ -435,5 +435,17 @@ class HotelSettingsSerializer(serializers.ModelSerializer):
     class Meta:
         from .models import HotelSettings
         model  = HotelSettings
-        fields = ["checkin_time", "checkout_time", "updated_at"]
+        fields = [
+            "checkin_time",
+            "checkout_time",
+            "hotel_name",
+            "hotel_address",
+            "hotel_phone",
+            "hotel_email",
+            "hotel_description",
+            "cancellation_tiers",
+            "terms_url",
+            "privacy_url",
+            "updated_at",
+        ]
         read_only_fields = ["updated_at"]

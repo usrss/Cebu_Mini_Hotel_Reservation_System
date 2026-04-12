@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   ArrowLeft, Calendar, AlertCircle, CheckCircle2,
-  Clock, CreditCard, RefreshCw, Tag, Info,
+  Clock, CreditCard, RefreshCw, Info,
 } from 'lucide-react';
 import { useBookingDetail } from '../hooks/useBookings';
 import {
@@ -13,6 +13,8 @@ import {
   useModificationPayment,
   useCancelModification,
 } from '../hooks/useBookingModification';
+import Navbar from '../../components/UIComponents/Navbar';
+import Footer from '../../components/UIComponents/Footer';
 import './BookingReschedulePage.css';
 
 /* ─── helpers ──────────────────────────────────────────────────────────────── */
@@ -29,7 +31,6 @@ const PAYMENT_METHODS = [
 ];
 
 /* ─── sub-components ───────────────────────────────────────────────────────── */
-
 function SectionHeader({ step, label, active }) {
   return (
     <div className={`rsc-step-header ${active ? 'active' : ''}`}>
@@ -39,9 +40,9 @@ function SectionHeader({ step, label, active }) {
   );
 }
 
-function BookingSnapshot({ booking, label }) {
+function BookingSnapshot({ booking, label, isNew }) {
   return (
-    <div className="rsc-snapshot">
+    <div className={`rsc-snapshot ${isNew ? 'rsc-snapshot--new' : ''}`}>
       <p className="rsc-snapshot-label">{label}</p>
       <div className="rsc-snapshot-row">
         <Calendar size={13} />
@@ -83,22 +84,21 @@ function PriceDiffBadge({ mod }) {
 ═══════════════════════════════════════════════════════════════════════════ */
 
 export default function BookingReschedulePage() {
-  const { id }      = useParams();
-  const navigate    = useNavigate();
+  const { id }   = useParams();
+  const navigate = useNavigate();
 
   const { booking, loading: bLoading, error: bError } = useBookingDetail(id);
   const { requestReschedule, loading: reqLoading, error: reqError } = useRescheduleBooking();
-  const { confirm,        loading: confirmLoading,  error: confirmError  } = useConfirmModification();
-  const { confirmRefund,  loading: refundLoading,   error: refundError   } = useConfirmRefund();
-  const { initiatePayment, loading: payLoading,    error: payError      } = useModificationPayment();
+  const { confirm,         loading: confirmLoading, error: confirmError } = useConfirmModification();
+  const { confirmRefund,   loading: refundLoading,  error: refundError  } = useConfirmRefund();
+  const { initiatePayment, loading: payLoading,     error: payError     } = useModificationPayment();
   const { cancel } = useCancelModification();
 
-  /* ui state */
-  const [checkIn,        setCheckIn]        = useState('');
-  const [checkOut,       setCheckOut]       = useState('');
-  const [mod,            setMod]            = useState(null);   // BookingModification record
-  const [payMethod,      setPayMethod]      = useState('card');
-  const [step,           setStep]           = useState('dates'); // dates | preview | payment | done
+  const [checkIn,   setCheckIn]   = useState('');
+  const [checkOut,  setCheckOut]  = useState('');
+  const [mod,       setMod]       = useState(null);
+  const [payMethod, setPayMethod] = useState('card');
+  const [step,      setStep]      = useState('dates');
 
   /* ── step 1: request reschedule ─────────────────────────────────────────── */
   const handlePreview = async () => {
@@ -107,31 +107,19 @@ export default function BookingReschedulePage() {
       new_check_in:  checkIn,
       new_check_out: checkOut,
     });
-    if (result) {
-      setMod(result);
-      setStep('preview');
-    }
+    if (result) { setMod(result); setStep('preview'); }
   };
 
-  /* ── step 2a: no price diff → confirm directly ──────────────────────────── */
   const handleConfirmFree = async () => {
     const result = await confirm(mod.id);
-    if (result) {
-      setMod(result);
-      setStep('done');
-    }
+    if (result) { setMod(result); setStep('done'); }
   };
 
-  /* ── step 2b: refund path → confirm refund ──────────────────────────────── */
   const handleConfirmRefund = async () => {
     const result = await confirmRefund(mod.id);
-    if (result) {
-      setMod(result);
-      setStep('done');
-    }
+    if (result) { setMod(result); setStep('done'); }
   };
 
-  /* ── step 2c: additional payment → go to payment ─────────────────────────── */
   const handlePayNow = async () => {
     const result = await initiatePayment(mod.id, { payment_method: payMethod });
     if (result?.checkout_url) {
@@ -143,99 +131,132 @@ export default function BookingReschedulePage() {
 
   const handleCancel = async () => {
     if (mod) await cancel(mod.id);
-    navigate(`/bookings/my/${id}`);
+    navigate('/bookings/my');
   };
 
   /* ── guard states ────────────────────────────────────────────────────────── */
-  if (bLoading) return <PageShell><LoadingCard /></PageShell>;
-  if (bError || !booking) return (
-    <PageShell>
-      <ErrorCard message={bError || 'Booking not found.'} backId={id} />
-    </PageShell>
-  );
-
-  if (booking.status !== 'confirmed') return (
-    <PageShell>
-      <div className="rsc-notice rsc-notice--warn">
-        <AlertCircle size={20} />
-        <div>
-          <strong>Cannot Reschedule</strong>
-          <p>Rescheduling is only available for <em>Confirmed</em> bookings.</p>
+  if (bLoading) {
+    return (
+      <div className="rsc-page">
+        <Navbar />
+        <div className="rsc-loading">
+          <span className="rsc-spinner rsc-spinner--lg" />
+          Loading booking…
         </div>
+        <Footer />
       </div>
-      <Link to={`/bookings/my/${id}`} className="rsc-back-link">
-        <ArrowLeft size={15} /> Back to Booking
-      </Link>
-    </PageShell>
-  );
+    );
+  }
+
+  if (bError || !booking) {
+    return (
+      <div className="rsc-page">
+        <Navbar />
+        <div className="rsc-container" style={{ paddingTop: '2rem' }}>
+          <div className="rsc-notice rsc-notice--error">
+            <AlertCircle size={20} />
+            <div>
+              <strong>Error</strong>
+              <p>{bError || 'Booking not found.'}</p>
+            </div>
+          </div>
+        </div>
+        <Footer />
+      </div>
+    );
+  }
+
+  if (booking.status !== 'confirmed') {
+    return (
+      <div className="rsc-page">
+        <Navbar />
+        <div className="rsc-container" style={{ paddingTop: '2rem' }}>
+          <div className="rsc-notice rsc-notice--warn">
+            <AlertCircle size={20} />
+            <div>
+              <strong>Cannot Reschedule</strong>
+              <p>Rescheduling is only available for <em>Confirmed</em> bookings.</p>
+            </div>
+          </div>
+          <Link to={`/bookings/my/${id}`} className="rsc-back-link">
+            <ArrowLeft size={15} /> Back to Booking
+          </Link>
+        </div>
+        <Footer />
+      </div>
+    );
+  }
 
   const today = getTodayStr();
-  if (booking.check_in <= today) return (
-    <PageShell>
-      <div className="rsc-notice rsc-notice--warn">
-        <AlertCircle size={20} />
-        <div>
-          <strong>Too Late to Reschedule</strong>
-          <p>Rescheduling must be done before your check-in date.</p>
-        </div>
-      </div>
-      <Link to={`/bookings/my/${id}`} className="rsc-back-link">
-        <ArrowLeft size={15} /> Back to Booking
-      </Link>
-    </PageShell>
-  );
-
-  /* ─────────────────────────────────────────────────────────────────────────
-     DONE
-  ───────────────────────────────────────────────────────────────────────── */
-  if (step === 'done') return (
-    <PageShell>
-      <div className="rsc-done-card">
-        <div className="rsc-done-icon"><CheckCircle2 size={44} /></div>
-        <h2 className="rsc-done-title">Reschedule Confirmed</h2>
-        <p className="rsc-done-sub">
-          Your booking has been updated to{' '}
-          <strong>{mod.new_check_in}</strong> → <strong>{mod.new_check_out}</strong>.
-        </p>
-        {mod.net_refund_amount > 0 && (
-          <div className="rsc-refund-note">
-            <RefreshCw size={14} />
-            A refund of <strong>₱{fmt(mod.net_refund_amount)}</strong> has been initiated
-            and will appear within 3–7 business days.
+  if (booking.check_in <= today) {
+    return (
+      <div className="rsc-page">
+        <Navbar />
+        <div className="rsc-container" style={{ paddingTop: '2rem' }}>
+          <div className="rsc-notice rsc-notice--warn">
+            <AlertCircle size={20} />
+            <div>
+              <strong>Too Late to Reschedule</strong>
+              <p>Rescheduling must be done before your check-in date.</p>
+            </div>
           </div>
-        )}
-        <Link to={`/bookings/my/${id}`} className="rsc-btn rsc-btn--primary">
-          View Updated Booking
-        </Link>
+          <Link to={`/bookings/my/${id}`} className="rsc-back-link">
+            <ArrowLeft size={15} /> Back to Booking
+          </Link>
+        </div>
+        <Footer />
       </div>
-    </PageShell>
-  );
+    );
+  }
 
-  /* ─────────────────────────────────────────────────────────────────────────
-     MAIN LAYOUT
-  ───────────────────────────────────────────────────────────────────────── */
+  /* ── Done state ─────────────────────────────────────────────────────────── */
+  if (step === 'done') {
+    return (
+      <div className="rsc-page">
+        <Navbar />
+        <div className="rsc-container">
+          <div className="rsc-done-card">
+            <div className="rsc-done-icon"><CheckCircle2 size={40} /></div>
+            <h2 className="rsc-done-title">Reschedule Confirmed</h2>
+            <p className="rsc-done-sub">
+              Your booking has been updated to{' '}
+              <strong>{mod.new_check_in}</strong> → <strong>{mod.new_check_out}</strong>.
+            </p>
+            {mod.net_refund_amount > 0 && (
+              <div className="rsc-refund-note">
+                <RefreshCw size={14} />
+                A refund of <strong>₱{fmt(mod.net_refund_amount)}</strong> has been initiated
+                and will appear within 3–7 business days.
+              </div>
+            )}
+            <Link to={`/bookings/my/${id}`} className="rsc-btn rsc-btn--primary">
+              View Updated Booking
+            </Link>
+          </div>
+        </div>
+        <Footer />
+      </div>
+    );
+  }
+
+  /* ── Main layout ────────────────────────────────────────────────────────── */
   return (
     <div className="rsc-page">
-
-      {/* Nav */}
-      <div className="rsc-nav">
-        <div className="rsc-nav-inner">
-          <Link to={`/bookings/my/${id}`} className="rsc-back">
-            <ArrowLeft size={17} /> Back to Booking
-          </Link>
-          <h1 className="rsc-nav-title">Reschedule Booking</h1>
-          <div />
-        </div>
-      </div>
+      <Navbar />
 
       {/* Hero */}
       <div className="rsc-hero">
-        <RefreshCw size={26} className="rsc-hero-icon" />
-        <h2 className="rsc-hero-title">Change Your Dates</h2>
-        <p className="rsc-hero-sub">
-          Room <strong>#{booking.room_number}</strong> &nbsp;·&nbsp;
-          Ref <strong>{booking.reference_number}</strong>
-        </p>
+        <div className="rsc-hero-inner">
+          <div className="rsc-hero-left">
+            <span className="rsc-hero-eyebrow">Booking Modification</span>
+            <h1 className="rsc-hero-title">Reschedule Booking</h1>
+            <div className="rsc-hero-meta">
+              <span className="rsc-hero-chip">Room <strong>#{booking.room_number}</strong></span>
+              <span className="rsc-hero-chip">{booking.room_type} Room</span>
+              <span className="rsc-hero-chip">Ref <strong>{booking.reference_number}</strong></span>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="rsc-container">
@@ -297,7 +318,9 @@ export default function BookingReschedulePage() {
                     onClick={handlePreview}
                     disabled={!checkIn || !checkOut || reqLoading}
                   >
-                    {reqLoading ? <><span className="rsc-spinner" /> Checking…</> : 'Preview Changes →'}
+                    {reqLoading
+                      ? <><span className="rsc-spinner" /> Checking…</>
+                      : 'Preview Changes →'}
                   </button>
                 </>
               )}
@@ -322,10 +345,7 @@ export default function BookingReschedulePage() {
                 <SectionHeader step="2" label="Review Changes" active />
 
                 <div className="rsc-compare">
-                  <BookingSnapshot
-                    booking={{ ...booking }}
-                    label="Current Booking"
-                  />
+                  <BookingSnapshot booking={booking} label="Current Booking" />
                   <div className="rsc-compare-arrow">→</div>
                   <div className="rsc-snapshot rsc-snapshot--new">
                     <p className="rsc-snapshot-label">New Booking</p>
@@ -392,7 +412,7 @@ export default function BookingReschedulePage() {
                   </div>
                 )}
 
-                {/* CTA */}
+                {/* CTAs */}
                 <div className="rsc-cta-group">
                   {mod.no_price_change && (
                     <button
@@ -405,7 +425,6 @@ export default function BookingReschedulePage() {
                         : <><CheckCircle2 size={16} /> Confirm Reschedule</>}
                     </button>
                   )}
-
                   {mod.requires_refund && (
                     <button
                       className="rsc-btn rsc-btn--primary"
@@ -417,7 +436,6 @@ export default function BookingReschedulePage() {
                         : <><RefreshCw size={16} /> Confirm & Initiate Refund</>}
                     </button>
                   )}
-
                   {mod.requires_additional_payment && (
                     <button
                       className="rsc-btn rsc-btn--primary"
@@ -429,7 +447,6 @@ export default function BookingReschedulePage() {
                         : <><CreditCard size={16} /> Pay ₱{fmt(mod.price_difference)} & Confirm</>}
                     </button>
                   )}
-
                   <button className="rsc-btn rsc-btn--ghost" onClick={handleCancel}>
                     Cancel
                   </button>
@@ -448,7 +465,7 @@ export default function BookingReschedulePage() {
           {/* ── RIGHT SIDEBAR ─────────────────────────────────────────────── */}
           <aside className="rsc-sidebar">
             <div className="rsc-sidebar-card">
-              <h3 className="rsc-sidebar-title">Booking Details</h3>
+              <span className="rsc-sidebar-title">Booking Details</span>
               <div className="rsc-sidebar-rows">
                 <SideRow label="Reference"  value={booking.reference_number} />
                 <SideRow label="Room"       value={`#${booking.room_number} — ${booking.room_type}`} />
@@ -460,7 +477,7 @@ export default function BookingReschedulePage() {
             </div>
 
             <div className="rsc-sidebar-card rsc-policy-card">
-              <h3 className="rsc-sidebar-title">Reschedule Policy</h3>
+              <span className="rsc-sidebar-title">Reschedule Policy</span>
               <ul className="rsc-policy-list">
                 <li>Allowed only before check-in date.</li>
                 <li>Subject to room availability for new dates.</li>
@@ -473,6 +490,8 @@ export default function BookingReschedulePage() {
 
         </div>
       </div>
+
+      <Footer />
     </div>
   );
 }
@@ -483,35 +502,6 @@ function SideRow({ label, value, bold }) {
     <div className="rsc-side-row">
       <span className="rsc-side-label">{label}</span>
       <span className={`rsc-side-value ${bold ? 'bold' : ''}`}>{value}</span>
-    </div>
-  );
-}
-function PageShell({ children }) {
-  return (
-    <div className="rsc-page">
-      <div className="rsc-container" style={{ paddingTop: '2rem' }}>{children}</div>
-    </div>
-  );
-}
-function LoadingCard() {
-  return (
-    <div className="rsc-loading">
-      <span className="rsc-spinner rsc-spinner--lg" />
-      <p>Loading booking…</p>
-    </div>
-  );
-}
-function ErrorCard({ message, backId }) {
-  return (
-    <div className="rsc-notice rsc-notice--error">
-      <AlertCircle size={20} />
-      <div>
-        <strong>Error</strong>
-        <p>{message}</p>
-        <Link to={backId ? `/bookings/my/${backId}` : '/bookings/my'} className="rsc-back-link">
-          <ArrowLeft size={14} /> Go Back
-        </Link>
-      </div>
     </div>
   );
 }

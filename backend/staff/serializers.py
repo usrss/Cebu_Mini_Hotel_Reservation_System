@@ -101,6 +101,7 @@ STAFF_ROLE_CHOICES = [
     (StaffRole.HOUSEKEEPING, "Housekeeping"),
     (StaffRole.MAINTENANCE,  "Maintenance"),
     (StaffRole.SECURITY,     "Security"),
+    (StaffRole.KITCHEN_STAFF, "Kitchen Staff"),
 ]
 
 ROLE_DISPLAY = dict(STAFF_ROLE_CHOICES)

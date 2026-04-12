@@ -11,6 +11,8 @@ import {
   useModificationPayment,
   useCancelModification,
 } from '../hooks/useBookingModification';
+import Navbar from '../../components/UIComponents/Navbar';
+import Footer from '../../components/UIComponents/Footer';
 import './BookingExtendPage.css';
 
 /* ─── helpers ──────────────────────────────────────────────────────────────── */
@@ -47,16 +49,13 @@ export default function BookingExtendPage() {
   const [newCheckOut,  setNewCheckOut]  = useState('');
   const [mod,          setMod]          = useState(null);
   const [payMethod,    setPayMethod]    = useState('card');
-  const [step,         setStep]         = useState('dates'); // dates | confirm | done
+  const [step,         setStep]         = useState('dates');
 
   /* ── step 1: request extend ─────────────────────────────────────────────── */
   const handlePreview = async () => {
     if (!newCheckOut) return;
     const result = await requestExtend(id, { new_check_out: newCheckOut });
-    if (result) {
-      setMod(result);
-      setStep('confirm');
-    }
+    if (result) { setMod(result); setStep('confirm'); }
   };
 
   /* ── step 2: pay ────────────────────────────────────────────────────────── */
@@ -71,113 +70,140 @@ export default function BookingExtendPage() {
 
   const handleCancel = async () => {
     if (mod) await cancel(mod.id);
-    navigate(`/bookings/my/${id}`);
+    navigate('/bookings/my');
   };
 
   /* ── guard states ────────────────────────────────────────────────────────── */
-  if (bLoading) return <PageShell><LoadingCard /></PageShell>;
-  if (bError || !booking) return (
-    <PageShell>
-      <div className="ext-notice ext-notice--error">
-        <AlertCircle size={20} />
-        <div>
-          <strong>Error</strong>
-          <p>{bError || 'Booking not found.'}</p>
+  if (bLoading) {
+    return (
+      <div className="ext-page">
+        <Navbar />
+        <div className="ext-loading">
+          <span className="ext-spinner ext-spinner--lg" />
+          Loading booking…
         </div>
+        <Footer />
       </div>
-    </PageShell>
-  );
+    );
+  }
+
+  if (bError || !booking) {
+    return (
+      <div className="ext-page">
+        <Navbar />
+        <div className="ext-container" style={{ paddingTop: '2rem' }}>
+          <div className="ext-notice ext-notice--error">
+            <AlertCircle size={20} />
+            <div>
+              <strong>Error</strong>
+              <p>{bError || 'Booking not found.'}</p>
+            </div>
+          </div>
+        </div>
+        <Footer />
+      </div>
+    );
+  }
 
   const today = new Date().toISOString().split('T')[0];
 
-  if (!['confirmed', 'checked_in'].includes(booking.status)) return (
-    <PageShell>
-      <div className="ext-notice ext-notice--warn">
-        <AlertCircle size={20} />
-        <div>
-          <strong>Cannot Extend Stay</strong>
-          <p>
-            Extend Stay is available for <em>Confirmed</em> or <em>Checked-In</em> bookings only.
-          </p>
+  if (!['confirmed', 'checked_in'].includes(booking.status)) {
+    return (
+      <div className="ext-page">
+        <Navbar />
+        <div className="ext-container" style={{ paddingTop: '2rem' }}>
+          <div className="ext-notice ext-notice--warn">
+            <AlertCircle size={20} />
+            <div>
+              <strong>Cannot Extend Stay</strong>
+              <p>Extend Stay is available for <em>Confirmed</em> or <em>Checked-In</em> bookings only.</p>
+            </div>
+          </div>
+          <Link to={`/bookings/my/${id}`} className="ext-back-link">
+            <ArrowLeft size={14} /> Back to Booking
+          </Link>
         </div>
+        <Footer />
       </div>
-      <Link to={`/bookings/my/${id}`} className="ext-back-link">
-        <ArrowLeft size={14} /> Back to Booking
-      </Link>
-    </PageShell>
-  );
+    );
+  }
 
-  if (booking.check_out <= today) return (
-    <PageShell>
-      <div className="ext-notice ext-notice--warn">
-        <AlertCircle size={20} />
-        <div>
-          <strong>Stay Has Ended</strong>
-          <p>You cannot extend a booking that has already checked out.</p>
+  if (booking.check_out <= today) {
+    return (
+      <div className="ext-page">
+        <Navbar />
+        <div className="ext-container" style={{ paddingTop: '2rem' }}>
+          <div className="ext-notice ext-notice--warn">
+            <AlertCircle size={20} />
+            <div>
+              <strong>Stay Has Ended</strong>
+              <p>You cannot extend a booking that has already checked out.</p>
+            </div>
+          </div>
+          <Link to={`/bookings/my/${id}`} className="ext-back-link">
+            <ArrowLeft size={14} /> Back to Booking
+          </Link>
         </div>
+        <Footer />
       </div>
-      <Link to={`/bookings/my/${id}`} className="ext-back-link">
-        <ArrowLeft size={14} /> Back to Booking
-      </Link>
-    </PageShell>
-  );
+    );
+  }
 
   const extraNights = newCheckOut ? addedNights(booking.check_out, newCheckOut) : 0;
-  const previewCost = mod ? Number(mod.price_difference) : 0;
 
-  /* ─────────────────────────────────────────────────────────────────────────
-     DONE (webhook fires → redirect here after payment success)
-     We show this only when navigated with state.extended=true.
-  ───────────────────────────────────────────────────────────────────────── */
-  if (step === 'done' && mod) return (
-    <PageShell>
-      <div className="ext-done-card">
-        <div className="ext-done-icon"><CheckCircle2 size={44} /></div>
-        <h2 className="ext-done-title">Stay Extended!</h2>
-        <p className="ext-done-sub">
-          Your new check-out is <strong>{mod.new_check_out}</strong>.
-          {' '}Enjoy your extended stay!
-        </p>
-        <Link to={`/bookings/my/${id}`} className="ext-btn ext-btn--primary">
-          View Updated Booking
-        </Link>
+  /* ── Done state ─────────────────────────────────────────────────────────── */
+  if (step === 'done' && mod) {
+    return (
+      <div className="ext-page">
+        <Navbar />
+        <div className="ext-container">
+          <div className="ext-done-card">
+            <div className="ext-done-icon"><CheckCircle2 size={40} /></div>
+            <h2 className="ext-done-title">Stay Extended!</h2>
+            <p className="ext-done-sub">
+              Your new check-out is <strong>{mod.new_check_out}</strong>. Enjoy your extended stay!
+            </p>
+            <Link to={`/bookings/my/${id}`} className="ext-btn ext-btn--primary">
+              View Updated Booking
+            </Link>
+          </div>
+        </div>
+        <Footer />
       </div>
-    </PageShell>
-  );
+    );
+  }
 
-  /* ─────────────────────────────────────────────────────────────────────────
-     MAIN LAYOUT
-  ───────────────────────────────────────────────────────────────────────── */
+  /* ── Main layout ────────────────────────────────────────────────────────── */
   return (
     <div className="ext-page">
+      <Navbar />
 
-      {/* Nav */}
-      <div className="ext-nav">
-        <div className="ext-nav-inner">
-          <Link to={`/bookings/my/${id}`} className="ext-back">
-            <ArrowLeft size={17} /> Back to Booking
-          </Link>
-          <h1 className="ext-nav-title">Extend Your Stay</h1>
-          <div />
-        </div>
-      </div>
-
-      {/* Hero strip */}
+      {/* Hero */}
       <div className="ext-hero">
-        <div className="ext-hero-row">
-          <div className="ext-hero-block">
-            <span className="ext-hero-eyebrow">Room</span>
-            <span className="ext-hero-value">#{booking.room_number}</span>
+        <div className="ext-hero-inner">
+          <div className="ext-hero-left">
+            <span className="ext-hero-eyebrow">Booking Modification</span>
+            <h1 className="ext-hero-title">Extend Your Stay</h1>
+            <div className="ext-hero-meta">
+              <span className="ext-hero-chip">Room <strong>#{booking.room_number}</strong></span>
+              <span className="ext-hero-chip">{booking.room_type} Room</span>
+              <span className="ext-hero-chip">Ref <strong>{booking.reference_number}</strong></span>
+            </div>
           </div>
-          <ArrowRight size={20} className="ext-hero-arrow" />
-          <div className="ext-hero-block">
-            <span className="ext-hero-eyebrow">Current Check-out</span>
-            <span className="ext-hero-value">{booking.check_out}</span>
-          </div>
-          <ArrowRight size={20} className="ext-hero-arrow" />
-          <div className="ext-hero-block ext-hero-block--accent">
-            <span className="ext-hero-eyebrow">New Check-out</span>
-            <span className="ext-hero-value">{newCheckOut || '—'}</span>
+          <div className="ext-hero-right">
+            <div className="ext-hero-dates-row">
+              <div className="ext-hero-date-block">
+                <span className="ext-hero-date-label">Current Check-out</span>
+                <span className="ext-hero-date-val">{booking.check_out}</span>
+              </div>
+              <ArrowRight size={18} className="ext-hero-arrow" />
+              <div className="ext-hero-date-block">
+                <span className="ext-hero-date-label">New Check-out</span>
+                <span className="ext-hero-date-val ext-hero-date-val--new">
+                  {newCheckOut || '—'}
+                </span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -191,14 +217,16 @@ export default function BookingExtendPage() {
             {/* STEP 1 — Pick new checkout */}
             <div className={`ext-card ${step !== 'dates' ? 'ext-card--muted' : ''}`}>
               <div className="ext-step-header">
-                <span className="ext-step-num">1</span>
-                <span className="ext-step-label">Select New Check-out Date</span>
+                <span className={`ext-step-num ${step === 'dates' ? 'active' : ''}`}>1</span>
+                <span className={`ext-step-label ${step === 'dates' ? 'active' : ''}`}>
+                  Select New Check-out Date
+                </span>
               </div>
 
               {step === 'dates' ? (
                 <>
                   <div className="ext-field">
-                    <label className="ext-label">New Check-out</label>
+                    <label className="ext-label">New Check-out Date</label>
                     <input
                       type="date"
                       min={booking.check_out}
@@ -215,7 +243,7 @@ export default function BookingExtendPage() {
                   {extraNights > 0 && (
                     <div className="ext-nights-preview">
                       <Clock size={14} />
-                      Adding <strong>{extraNights}</strong> extra night{extraNights !== 1 ? 's' : ''}
+                      Adding <strong>&nbsp;{extraNights}&nbsp;</strong> extra night{extraNights !== 1 ? 's' : ''}
                     </div>
                   )}
 
@@ -232,7 +260,7 @@ export default function BookingExtendPage() {
                   >
                     {extLoading
                       ? <><span className="ext-spinner" /> Checking availability…</>
-                      : 'Preview Extension →'}
+                      : <>Preview Extension <ArrowRight size={15} /></>}
                   </button>
                 </>
               ) : (
@@ -262,7 +290,9 @@ export default function BookingExtendPage() {
                 <div className="ext-cost-card">
                   <div className="ext-cost-row">
                     <span>Additional nights</span>
-                    <strong>{mod.new_nights - mod.original_nights} night{(mod.new_nights - mod.original_nights) !== 1 ? 's' : ''}</strong>
+                    <strong>
+                      {mod.new_nights - mod.original_nights} night{(mod.new_nights - mod.original_nights) !== 1 ? 's' : ''}
+                    </strong>
                   </div>
                   <div className="ext-cost-row">
                     <span>New check-out</span>
@@ -352,7 +382,7 @@ export default function BookingExtendPage() {
           {/* ── RIGHT SIDEBAR ─────────────────────────────────────────────── */}
           <aside className="ext-sidebar">
             <div className="ext-sidebar-card">
-              <h3 className="ext-sidebar-title">Current Booking</h3>
+              <span className="ext-sidebar-title">Current Booking</span>
               <div className="ext-sidebar-rows">
                 <SideRow label="Room"      value={`#${booking.room_number}`} />
                 <SideRow label="Check-in"  value={booking.check_in} />
@@ -364,7 +394,7 @@ export default function BookingExtendPage() {
 
             {mod && (
               <div className="ext-sidebar-card ext-sidebar-card--new">
-                <h3 className="ext-sidebar-title">After Extension</h3>
+                <span className="ext-sidebar-title">After Extension</span>
                 <div className="ext-sidebar-rows">
                   <SideRow label="Check-out"    value={mod.new_check_out} highlight />
                   <SideRow label="Total Nights" value={`${mod.new_nights}`} highlight />
@@ -374,7 +404,7 @@ export default function BookingExtendPage() {
             )}
 
             <div className="ext-sidebar-card ext-policy-card">
-              <h3 className="ext-sidebar-title">Extend Stay Policy</h3>
+              <span className="ext-sidebar-title">Extend Stay Policy</span>
               <ul className="ext-policy-list">
                 <li>Extension is subject to room availability.</li>
                 <li>Only dates after current check-out can be selected.</li>
@@ -387,6 +417,8 @@ export default function BookingExtendPage() {
 
         </div>
       </div>
+
+      <Footer />
     </div>
   );
 }
@@ -399,21 +431,6 @@ function SideRow({ label, value, bold, highlight }) {
       <span className={`ext-side-value ${bold ? 'bold' : ''} ${highlight ? 'highlight' : ''}`}>
         {value}
       </span>
-    </div>
-  );
-}
-function PageShell({ children }) {
-  return (
-    <div className="ext-page">
-      <div className="ext-container" style={{ paddingTop: '2rem' }}>{children}</div>
-    </div>
-  );
-}
-function LoadingCard() {
-  return (
-    <div className="ext-loading">
-      <span className="ext-spinner ext-spinner--lg" />
-      <p>Loading booking…</p>
     </div>
   );
 }

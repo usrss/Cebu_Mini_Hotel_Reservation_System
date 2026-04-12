@@ -44,12 +44,19 @@ const NAV_BY_ROLE = {
     { key: 'shifts',     label: 'My Shifts',     icon: <Calendar size={17} />,   to: '/staff/my-shifts'                 },
     { key: 'activity',   label: 'Activity Log',  icon: <Activity size={17} />,   to: '/staff/my-activity-logs'          },
   ],
+
+  kitchen_staff: [
+    { key: 'kitchen',   label: 'Orders',       icon: <ClipboardList size={17} />, to: '/staff/kitchen'          },
+    { key: 'shifts',    label: 'My Shifts',    icon: <Calendar size={17} />,      to: '/staff/my-shifts'        },
+    { key: 'activity',  label: 'Activity Log', icon: <Activity size={17} />,      to: '/staff/my-activity-logs' },
+  ],
 };
 
 export const STAFF_ROLE_HOME = {
   housekeeping: '/staff/cleaning',
   maintenance:  '/staff/maintenance',
   security:     '/staff/incidents',
+  kitchen_staff: '/staff/kitchen',
 };
 
 function PresenceDot({ status }) {

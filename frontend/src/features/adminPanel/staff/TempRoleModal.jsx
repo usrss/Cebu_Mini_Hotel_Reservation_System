@@ -5,7 +5,7 @@
  */
 import { useState } from 'react';
 import { X, Clock } from 'lucide-react';
-import { staffApi } from '../../../services/staffApi';
+import { staffApi } from '../../staff/services/staffApi';
 
 const ROLE_OPTIONS = [
   { value:'manager',      label:'Manager' },
@@ -14,6 +14,7 @@ const ROLE_OPTIONS = [
   { value:'housekeeping', label:'Housekeeping' },
   { value:'maintenance',  label:'Maintenance' },
   { value:'security',     label:'Security' },
+  { value:'kitchen_staff', label:'Kitchen Staff' },
 ];
 
 const QUICK_DURATIONS = [

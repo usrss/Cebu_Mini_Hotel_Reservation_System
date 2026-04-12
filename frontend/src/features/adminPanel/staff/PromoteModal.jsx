@@ -3,7 +3,7 @@
  */
 import { useState } from 'react';
 import { X } from 'lucide-react';
-import { staffApi } from '../../../services/staffApi';
+import { staffApi } from '../../staff/services/staffApi';
 
 const ROLE_OPTIONS = [
   { value:'manager',      label:'Manager' },

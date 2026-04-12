@@ -18,7 +18,7 @@ import {
   UserCheck, CreditCard, LogOut, Settings,
   ChevronLeft, ChevronRight, Menu, X,
   Users, Shield, LayoutDashboard, Wrench, AlertOctagon, FileText,
-  MessageSquare,
+  MessageSquare,UtensilsCrossed ,
 } from 'lucide-react';
 import { logoutUser, getStoredUser } from '../../../services/api';
 import NotificationBell from '../../notifications/NotificationBell';
@@ -34,6 +34,14 @@ const NAV_ITEMS = [
     icon: <Home size={18} />,
     to: '/staff/front-desk',
     exact: true,
+  },
+
+  {
+    key: 'food-orders',
+    label: 'Food Orders',
+    icon: <UtensilsCrossed size={17} />,
+    to: '/staff/front-desk/food-orders'
+
   },
   {
     key: 'checkin',

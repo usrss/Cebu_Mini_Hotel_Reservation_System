@@ -10,7 +10,7 @@ import {
   Clock, Edit2, Trash2,
   ShieldCheck, ShieldOff, CalendarDays, X,
 } from 'lucide-react';
-import { staffApi } from '../../../services/staffApi';
+import { staffApi } from '../../staff/services/staffApi';
 import { useAdminRole } from '../../hooks/useAdminRole';
 import StaffFormModal    from './StaffFormModal';
 import TempRoleModal     from './TempRoleModal';
@@ -20,9 +20,14 @@ import ShiftCalendar     from './ShiftCalendar';
 import './StaffManagement.css';
 
 const ROLE_LABELS = {
-  admin:'Admin', manager:'Manager', receptionist:'Receptionist',
-  front_desk:'Front Desk', housekeeping:'Housekeeping',
-  maintenance:'Maintenance', security:'Security',
+  admin:'Admin',
+  manager:'Manager',
+  receptionist:'Receptionist',
+  front_desk:'Front Desk',
+  housekeeping:'Housekeeping',
+  maintenance:'Maintenance',
+  security:'Security',
+  kitchen_staff: 'Kitchen Staff',
 };
 
 const ROLE_OPTIONS = [

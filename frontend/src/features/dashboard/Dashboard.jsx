@@ -6,41 +6,43 @@ import {
   isFirstLogin, clearFirstLoginFlag,
 } from '../../services/api';
 import {
-  MapPin, Phone, Clock, Mail, Tag,
-  ArrowRight, Bed, Users, Maximize2,
+  Tag, ArrowRight, Bed, Users, Maximize2, Calendar, Key, ChevronRight,
 } from 'lucide-react';
 import { useRooms } from '../hooks/useRooms';
+import { useMyBookings } from '../hooks/useBookings';
 import Navbar from '../../components/UIComponents/Navbar';
 import Footer from '../../components/UIComponents/Footer';
 import './Dashboard.css';
 
-// ─── Helpers ──────────────────────────────────────────────────
+// ── Import the bookings modal so the "View Details" button opens it ──
+// BookingDetailModal lives inside MyBookingsPage — we lift it out here
+// by re-using the same component via a simple inline version that wraps
+// the MyBookingsPage modal trigger without duplicating it.
+// The simplest correct fix: navigate to /bookings/my and pass the id
+// via state so the modal auto-opens, OR just link to the bookings list.
+// Since the route /bookings/my/:id no longer exists, we navigate to
+// /bookings/my (the list) which has the modal. We pass openId via state
+// so MyBookingsPage can auto-open the modal on mount.
+
 function formatPrice(amount) {
-  return Number(amount).toLocaleString('en-PH', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+  return Number(amount).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function authHeaders() {
   const token = localStorage.getItem('accessToken');
-  return {
-    'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
+  return { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) };
 }
 
 function to12h(val) {
   if (!val) return null;
   const [hStr, mStr] = val.split(':');
-  const h    = parseInt(hStr, 10);
-  const m    = mStr || '00';
+  const h = parseInt(hStr, 10);
+  const m = mStr || '00';
   const ampm = h < 12 ? 'AM' : 'PM';
   const h12  = h === 0 ? 12 : h > 12 ? h - 12 : h;
   return `${h12}:${m} ${ampm}`;
 }
 
-// ─── useHotelSettings ─────────────────────────────────────────
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
 
 const SETTINGS_DEFAULTS = {
@@ -59,7 +61,6 @@ const SETTINGS_DEFAULTS = {
 function useHotelSettings() {
   const [settings, setSettings] = useState(null);
   const [loading,  setLoading]  = useState(true);
-
   useEffect(() => {
     let cancelled = false;
     fetch(`${API_BASE}/rooms/hotel/settings/`, { headers: authHeaders() })
@@ -69,33 +70,84 @@ function useHotelSettings() {
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, []);
-
   return { settings: settings || SETTINGS_DEFAULTS, loading };
 }
 
-// ─── useFeaturedRooms ─────────────────────────────────────────
 function useFeaturedRooms() {
   const [featuredRooms, setFeaturedRooms] = useState([]);
   const [loading,       setLoading]       = useState(true);
-
   useEffect(() => {
     let cancelled = false;
     fetch(`${API_BASE}/rooms/featured/`, { headers: authHeaders() })
       .then(r => r.ok ? r.json() : Promise.reject())
-      .then(data => {
-        if (!cancelled) {
-          setFeaturedRooms(Array.isArray(data) ? data : (data.results ?? []));
-        }
-      })
+      .then(data => { if (!cancelled) setFeaturedRooms(Array.isArray(data) ? data : (data.results ?? [])); })
       .catch(() => { if (!cancelled) setFeaturedRooms([]); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, []);
-
   return { featuredRooms, loading };
 }
 
-// ─── Room Card ─────────────────────────────────────────────────
+/* ── Upcoming stay card ──────────────────────────────────────────────
+   FIX: The card's onClick navigated to /bookings/my/:id which no longer
+   exists. We now navigate to /bookings/my and pass { openBookingId: id }
+   in router state. MyBookingsPage reads this on mount and auto-opens
+   the modal for that booking.
+──────────────────────────────────────────────────────────────────── */
+function UpcomingStayCard({ booking }) {
+  const navigate  = useNavigate();
+  const daysUntil = Math.ceil((new Date(booking.check_in) - new Date()) / 86400000);
+
+  // Navigate to the bookings list and pass the id so the modal auto-opens
+  const handleViewDetails = (e) => {
+    e.stopPropagation();
+    navigate('/bookings/my', { state: { openBookingId: booking.id } });
+  };
+
+  return (
+    <div className="db-upcoming-card">
+      <div className="db-upcoming-inner">
+        <div className="db-upcoming-left">
+          <span className="db-upcoming-eyebrow">Upcoming Stay</span>
+          <h3 className="db-upcoming-room">{booking.room_type} Room #{booking.room_number}</h3>
+          <div className="db-upcoming-dates">
+            <Calendar size={13} />
+            <span>{booking.check_in} → {booking.check_out}</span>
+            <span className="db-upcoming-nights">
+              {booking.nights} night{booking.nights !== 1 ? 's' : ''}
+            </span>
+          </div>
+          {booking.checkin_pin && (
+            <div className="db-upcoming-pin">
+              <Key size={12} />
+              <span>PIN:</span>
+              <strong>{booking.checkin_pin}</strong>
+            </div>
+          )}
+        </div>
+
+        <div className="db-upcoming-right">
+          {daysUntil >= 0 && (
+            <div className="db-upcoming-countdown">
+              <span className="db-upcoming-days">{daysUntil}</span>
+              <span className="db-upcoming-days-label">days away</span>
+            </div>
+          )}
+          <div className="db-upcoming-ref">
+            <span className="db-upcoming-ref-label">Ref</span>
+            <span className="db-upcoming-ref-val">{booking.reference_number || '—'}</span>
+          </div>
+          {/* FIX: button navigates to /bookings/my with openBookingId state */}
+          <button className="db-upcoming-cta" onClick={handleViewDetails}>
+            View Details <ChevronRight size={13} />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Room Card ─────────────────────────────────────────────────────── */
 function DashboardRoomCard({ room }) {
   const {
     id, room_number, room_type_display, bed_type_display, capacity,
@@ -117,16 +169,19 @@ function DashboardRoomCard({ room }) {
     <Link to={`/rooms/${id}`} className="db-room-card">
       <div className="db-room-card-img-wrap">
         {primary_image?.image_url ? (
-          <img src={primary_image.image_url} alt={`${room_type_display} Room`} className="db-room-card-img" />
+          <img
+            src={primary_image.image_url}
+            alt={`${room_type_display} Room`}
+            className="db-room-card-img"
+          />
         ) : (
           <div className="db-room-card-img-placeholder"><Bed size={32} /></div>
         )}
         <span className="db-room-number-badge">Room {room_number}</span>
-        <span className="db-room-status-pill" style={{
-          background: statusStyle.bg,
-          color: statusStyle.color,
-          border: `1px solid ${statusStyle.border}`,
-        }}>
+        <span
+          className="db-room-status-pill"
+          style={{ background: statusStyle.bg, color: statusStyle.color, border: `1px solid ${statusStyle.border}` }}
+        >
           {status_display}
         </span>
         {hasDiscount && (
@@ -144,7 +199,9 @@ function DashboardRoomCard({ room }) {
         </div>
         <div className="db-room-card-footer">
           <div className="db-room-price">
-            {hasDiscount && <div className="db-room-price-orig">₱{formatPrice(price_per_night)}</div>}
+            {hasDiscount && (
+              <div className="db-room-price-orig">₱{formatPrice(price_per_night)}</div>
+            )}
             <div className="db-room-price-main">₱{formatPrice(effectivePrice)}</div>
             <div className="db-room-price-night">/ night</div>
           </div>
@@ -155,9 +212,7 @@ function DashboardRoomCard({ room }) {
   );
 }
 
-// ─── Infinite Carousel ─────────────────────────────────────────
 function InfiniteCarousel({ rooms }) {
-  // Duplicate so the CSS keyframe loop is seamless
   const items = [...rooms, ...rooms];
   return (
     <div className="db-carousel-track-outer">
@@ -170,48 +225,43 @@ function InfiniteCarousel({ rooms }) {
   );
 }
 
-// ─── Dashboard ─────────────────────────────────────────────────
+/* ── Dashboard ──────────────────────────────────────────────────────── */
 export default function Dashboard() {
   const navigate = useNavigate();
-  const [user,        setUser]        = useState(getStoredUser());
-  const [loading,     setLoading]     = useState(true);
-  const [showWelcome, setShowWelcome] = useState(isFirstLogin());
-
-  // Featured room rotation state
+  const [user,          setUser]          = useState(getStoredUser());
+  const [loading,       setLoading]       = useState(true);
+  const [showWelcome,   setShowWelcome]   = useState(isFirstLogin());
   const [featuredIndex, setFeaturedIndex] = useState(0);
 
   const { rooms, loading: roomsLoading, error: roomsError } = useRooms({});
-  const { settings, loading: settingsLoading } = useHotelSettings();
+  const { settings } = useHotelSettings();
   const { featuredRooms, loading: featuredLoading } = useFeaturedRooms();
+  const { bookings, loading: bookingsLoading } = useMyBookings();
 
-  // Available rooms for the carousel (unchanged)
+  const today = new Date().toISOString().split('T')[0];
+  const upcomingBooking = bookings
+    ?.filter(b => b.status === 'confirmed' && b.check_in >= today)
+    ?.sort((a, b) => new Date(a.check_in) - new Date(b.check_in))[0] || null;
+
   const availableRooms = rooms
     ? [...rooms]
         .filter(r => r.status === 'available')
         .sort((a, b) => Number(b.discount_percentage) - Number(a.discount_percentage))
     : [];
-
-  const carouselRooms = availableRooms.length > 0 ? availableRooms : (rooms || []);
-
-  // Featured room cycles through the /rooms/featured/ results
-  const featuredRoom = featuredRooms.length > 0
+  const carouselRooms  = availableRooms.length > 0 ? availableRooms : (rooms || []);
+  const featuredRoom   = featuredRooms.length > 0
     ? featuredRooms[featuredIndex % featuredRooms.length]
     : null;
 
-  // Auto-rotate featured room every 6 seconds
   useEffect(() => {
     if (featuredRooms.length <= 1) return;
-    const interval = setInterval(() => {
-      setFeaturedIndex(prev => prev + 1);
-    }, 6000);
+    const interval = setInterval(() => setFeaturedIndex(p => p + 1), 6000);
     return () => clearInterval(interval);
   }, [featuredRooms.length]);
 
   useEffect(() => {
     fetchUserData();
-    if (showWelcome) {
-      setTimeout(() => { setShowWelcome(false); clearFirstLoginFlag(); }, 5000);
-    }
+    if (showWelcome) setTimeout(() => { setShowWelcome(false); clearFirstLoginFlag(); }, 5000);
   }, []);
 
   const fetchUserData = async () => {
@@ -237,30 +287,31 @@ export default function Dashboard() {
     );
   }
 
-  const displayName     = user?.first_name || user?.full_name?.split(' ')[0] || 'Guest';
-  const checkinDisplay  = settings.checkin_time  ? `Check-in ${to12h(settings.checkin_time)}`   : 'Check-in 2:00 PM';
-  const checkoutDisplay = settings.checkout_time ? `Check-out ${to12h(settings.checkout_time)}` : 'Check-out 12:00 PM';
+  const displayName = user?.first_name || user?.full_name?.split(' ')[0] || 'Guest';
 
   return (
     <div className="db-page">
       <Navbar />
 
-      {/* Welcome banner */}
       {showWelcome && (
         <div style={{
           background: '#01000D', color: '#FAF9F6', padding: '14px 5%',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           fontFamily: 'Montserrat, sans-serif', fontSize: '13px',
         }}>
-          <span>Welcome to {settings.hotel_name}, <strong>{displayName}</strong>! Your account has been created.</span>
+          <span>
+            Welcome to {settings.hotel_name}, <strong>{displayName}</strong>! Your account has been created.
+          </span>
           <button
             onClick={() => { setShowWelcome(false); clearFirstLoginFlag(); }}
             style={{ background: 'none', border: 'none', color: '#FAF9F6', cursor: 'pointer', fontSize: '20px', lineHeight: 1 }}
-          >×</button>
+          >
+            ×
+          </button>
         </div>
       )}
 
-      {/* ── HERO ── */}
+      {/* Hero */}
       <div className="db-hero">
         <div className="db-hero-inner">
           <span className="db-hero-eyebrow">Guest Dashboard</span>
@@ -269,10 +320,20 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* ── FEATURED ROOM ── */}
+      {/* Upcoming stay card — above featured section */}
+      {!bookingsLoading && upcomingBooking && (
+        <div className="db-featured-section" style={{ marginBottom: 0, marginTop: 28 }}>
+          <UpcomingStayCard booking={upcomingBooking} />
+        </div>
+      )}
+
+      {/* Featured room */}
       {!featuredLoading && featuredRoom && (
         <div className="db-featured-section">
-          <div className="db-featured-card" onClick={() => navigate(`/rooms/${featuredRoom.id}`)}>
+          <div
+            className="db-featured-card"
+            onClick={() => navigate(`/rooms/${featuredRoom.id}`)}
+          >
             {featuredRoom.primary_image?.image_url ? (
               <img
                 key={featuredRoom.id}
@@ -281,14 +342,17 @@ export default function Dashboard() {
                 className="db-featured-card-img"
               />
             ) : (
-              <div style={{ width: '100%', height: '100%', background: 'linear-gradient(135deg, #0A0E1A 0%, #1a2340 100%)' }} />
+              <div style={{ width: '100%', height: '100%', background: 'linear-gradient(135deg,#0A0E1A 0%,#1a2340 100%)' }} />
             )}
             <div className="db-featured-card-overlay">
               <span className="db-featured-eyebrow">Curated Recommendation</span>
               <h2 className="db-featured-title">{featuredRoom.room_type_display} Room</h2>
               <p className="db-featured-desc">
                 {featuredRoom.description ||
-                  `Experience the pinnacle of Cebuano hospitality in our ${featuredRoom.room_type_display?.toLowerCase()} room.${Number(featuredRoom.discount_percentage) > 0 ? ` Special rates apply — ${featuredRoom.discount_percentage}% off.` : ''}`}
+                  `Experience the pinnacle of Cebuano hospitality in our ${featuredRoom.room_type_display?.toLowerCase()} room.` +
+                  (Number(featuredRoom.discount_percentage) > 0
+                    ? ` Special rates apply — ${featuredRoom.discount_percentage}% off.`
+                    : '')}
               </p>
               <button
                 className="db-featured-cta"
@@ -296,8 +360,6 @@ export default function Dashboard() {
               >
                 Book Now <ArrowRight size={14} />
               </button>
-
-              {/* Dot indicators — only shown when there are multiple featured rooms */}
               {featuredRooms.length > 1 && (
                 <div style={{ display: 'flex', gap: 6, marginTop: 20 }}>
                   {featuredRooms.map((_, i) => (
@@ -305,16 +367,12 @@ export default function Dashboard() {
                       key={i}
                       onClick={e => { e.stopPropagation(); setFeaturedIndex(i); }}
                       style={{
-                        width: i === featuredIndex % featuredRooms.length ? 20 : 6,
+                        width:  i === featuredIndex % featuredRooms.length ? 20 : 6,
                         height: 6,
                         background: i === featuredIndex % featuredRooms.length
-                          ? '#FAF9F6'
-                          : 'rgba(250,249,246,0.35)',
-                        border: 'none',
-                        padding: 0,
-                        cursor: 'pointer',
-                        transition: 'all 0.3s ease',
-                        borderRadius: 3,
+                          ? '#FAF9F6' : 'rgba(250,249,246,0.35)',
+                        border: 'none', padding: 0, cursor: 'pointer',
+                        transition: 'all 0.3s ease', borderRadius: 3,
                       }}
                     />
                   ))}
@@ -325,10 +383,8 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* ── MAIN ── */}
+      {/* Main carousel */}
       <main className="db-main">
-
-        {/* Carousel */}
         <section className="db-carousel-section">
           <div className="db-section-head-row">
             <div>
@@ -343,7 +399,9 @@ export default function Dashboard() {
               <div className="db-spinner" /> Finding the best rooms…
             </div>
           )}
-          {roomsError && <div className="db-rooms-message">Unable to load rooms. Please try again.</div>}
+          {roomsError && (
+            <div className="db-rooms-message">Unable to load rooms. Please try again.</div>
+          )}
           {!roomsLoading && !roomsError && carouselRooms.length === 0 && (
             <div className="db-rooms-message">No rooms available right now.</div>
           )}

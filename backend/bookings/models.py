@@ -35,6 +35,15 @@ class RefundStatus(models.TextChoices):
     FAILED    = "failed",    "Failed"
 
 
+# ─── NEW: Booking-level payment type ─────────────────────────────────────────
+# Distinct from payments.PaymentType which tracks individual payment records.
+# This records whether the guest chose to pay in full or by deposit at booking time.
+
+class BookingPaymentType(models.TextChoices):
+    FULL    = "full",    "Full Payment"
+    DEPOSIT = "deposit", "Deposit (30%)"
+
+
 # ─── Status transition map ────────────────────────────────────────────────────
 
 ALLOWED_TRANSITIONS = {
@@ -96,6 +105,7 @@ class Booking(models.Model):
       • `reference_number`, `checkin_pin` are NULL — not yet generated.
       • Room is soft-blocked via BLOCKING_STATUSES.
       • A payment window timer starts (PAYMENT_WINDOW_MINUTES).
+      • `payment_expires_at` is set to created_at + PAYMENT_WINDOW_MINUTES.
 
     Phase 2 — Confirmation (CONFIRMED):
       • Payment is verified externally (payments app).
@@ -117,7 +127,6 @@ class Booking(models.Model):
     PAYMENT_WINDOW_MINUTES = 30
 
     # ── Internal ID (never exposed to guests before confirmation) ──────────
-    # reference_number is NULL until payment is confirmed
     reference_number = models.CharField(
         max_length=20,
         unique=True,
@@ -127,7 +136,6 @@ class Booking(models.Model):
         help_text="Generated ONLY after payment is confirmed. NULL for pending/expired bookings.",
     )
 
-    # checkin_pin is NULL until payment is confirmed
     checkin_pin = models.CharField(
         max_length=4,
         null=True,
@@ -155,6 +163,13 @@ class Booking(models.Model):
     email     = models.EmailField()
     phone     = models.CharField(max_length=30)
 
+    # ── NEW: Special requests (optional, from booking form) ───────────────
+    special_requests = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Optional guest requests submitted at booking time (e.g. early check-in, ground floor).",
+    )
+
     # Stay — field names match what rooms.is_available_for_dates() queries
     check_in     = models.DateField()
     check_out    = models.DateField()
@@ -167,6 +182,16 @@ class Booking(models.Model):
     tax                 = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     service_fee         = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     total_price         = models.DecimalField(max_digits=10, decimal_places=2)
+
+    # ── NEW: Payment type chosen at booking time ──────────────────────────
+    # Records whether the guest chose full payment or deposit (30%) at booking.
+    # The payments app uses this to determine the initial charge amount.
+    payment_type = models.CharField(
+        max_length=10,
+        choices=BookingPaymentType.choices,
+        default=BookingPaymentType.FULL,
+        help_text="Payment type chosen by the guest at booking time.",
+    )
 
     # Status
     status = models.CharField(
@@ -185,6 +210,20 @@ class Booking(models.Model):
     confirmed_at = models.DateTimeField(
         null=True, blank=True,
         help_text="Set when booking transitions to CONFIRMED after payment.",
+    )
+
+    # ── NEW: Payment deadline datetime ────────────────────────────────────
+    # Stored explicitly so the frontend countdown timer can read it from the API
+    # without recalculating from created_at + PAYMENT_WINDOW_MINUTES.
+    # Set on creation, never updated.
+    payment_expires_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=(
+            "Datetime by which payment must be completed. "
+            "Set to created_at + PAYMENT_WINDOW_MINUTES at booking creation. "
+            "Used by frontend countdown timer."
+        ),
     )
 
     # Cancellation / refund
@@ -229,7 +268,14 @@ class Booking(models.Model):
 
     @property
     def payment_deadline(self):
-        """Datetime by which payment must be completed."""
+        """
+        Datetime by which payment must be completed.
+        Returns payment_expires_at if set (preferred), otherwise falls back
+        to created_at + PAYMENT_WINDOW_MINUTES for backward compatibility
+        with bookings created before this field existed.
+        """
+        if self.payment_expires_at:
+            return self.payment_expires_at
         return self.created_at + timedelta(minutes=self.PAYMENT_WINDOW_MINUTES)
 
     @property
@@ -306,12 +352,21 @@ class Booking(models.Model):
 
     def compute_refund(self):
         """
-        Returns (refund_percentage, refund_amount) based on policy.
-        Only CONFIRMED bookings are eligible for a refund (payment was made).
-        PENDING_PAYMENT cancellations never have a refund.
-          ≥ 48 h before check-in  → 90 %
-          <  48 h before check-in → 50 %
-          Same day / past         →  0 %
+        Returns (refund_percentage, refund_amount) based on the hotel's
+        configured cancellation tiers from HotelSettings.
+
+        Tier format (stored in HotelSettings.cancellation_tiers):
+            [
+              {"hours_before": 48, "refund_pct": 90},
+              {"hours_before": 24, "refund_pct": 50},
+              {"hours_before": 0,  "refund_pct": 0},
+            ]
+
+        Evaluation: tiers are sorted descending by hours_before.
+        The first tier where hours_until_checkin >= hours_before wins.
+        A tier with hours_before=0 is the catch-all.
+
+        Falls back to hardcoded 48h/90%/50%/0% if settings are unavailable.
         """
         from decimal import Decimal
 
@@ -319,15 +374,41 @@ class Booking(models.Model):
         if self.payment_status != PaymentStatus.PAID:
             return Decimal("0"), Decimal("0")
 
-        now_date    = timezone.now().date()
+        now_date = timezone.now().date()
         hours_until = (self.check_in - now_date).total_seconds() / 3600
 
-        if hours_until >= 48:
-            pct = Decimal("90")
-        elif hours_until > 0:
-            pct = Decimal("50")
-        else:
-            pct = Decimal("0")
+        # ── Load tiers from HotelSettings ────────────────────────────────────
+        pct = Decimal("0")
+        try:
+            from rooms.models import HotelSettings
+            settings_obj = HotelSettings.objects.first()
+            tiers = (settings_obj.cancellation_tiers or []) if settings_obj else []
+
+            if tiers:
+                # Sort descending by hours_before so the most generous tier
+                # (furthest in advance) is checked first.
+                sorted_tiers = sorted(tiers, key=lambda t: t.get("hours_before", 0), reverse=True)
+                for tier in sorted_tiers:
+                    if hours_until >= tier.get("hours_before", 0):
+                        pct = Decimal(str(tier.get("refund_pct", 0)))
+                        break
+            else:
+                # ── Fallback: original hardcoded logic ───────────────────────
+                if hours_until >= 48:
+                    pct = Decimal("90")
+                elif hours_until > 0:
+                    pct = Decimal("50")
+                else:
+                    pct = Decimal("0")
+
+        except Exception:
+            # ── Failsafe: never crash compute_refund() ────────────────────────
+            if hours_until >= 48:
+                pct = Decimal("90")
+            elif hours_until > 0:
+                pct = Decimal("50")
+            else:
+                pct = Decimal("0")
 
         amount = (self.total_price * pct / 100).quantize(Decimal("0.01"))
         return pct, amount
@@ -359,9 +440,6 @@ class BookingStatusHistory(models.Model):
 
 
 # ─── Modification Enums ───────────────────────────────────────────────────────
-# These are appended below the existing models.
-# BookingStatusHistory is already defined above so BookingModification
-# can reference it directly with no import.
 
 class ModificationType(models.TextChoices):
     RESCHEDULE = "reschedule", "Reschedule"
@@ -440,13 +518,10 @@ class BookingModification(models.Model):
     new_total               = models.DecimalField(max_digits=10, decimal_places=2)
 
     # ── Financial delta ───────────────────────────────────────────────────
-    # positive  → guest owes more   (additional payment)
-    # negative  → guest gets refund
     price_difference = models.DecimalField(
         max_digits=10, decimal_places=2, default=Decimal("0")
     )
 
-    # For REFUND case only — deductions from raw difference
     processing_fee_deduction = models.DecimalField(
         max_digits=10, decimal_places=2, default=Decimal("0"),
         help_text="Non-refundable payment processing fee deducted from refund.",
@@ -465,7 +540,6 @@ class BookingModification(models.Model):
     updated_at   = models.DateTimeField(auto_now=True)
     confirmed_at = models.DateTimeField(null=True, blank=True)
 
-    # Optional note from staff or system
     note = models.TextField(blank=True)
 
     class Meta:
@@ -497,25 +571,12 @@ class BookingModification(models.Model):
         return self.price_difference == Decimal("0")
 
     def compute_penalty(self) -> Decimal:
-        """
-        Returns a penalty amount for same-day reschedules.
-        Same-day = modification is requested on the original check-in date.
-        Penalty = 10 % of original total.
-        """
         today = timezone.now().date()
         if today == self.original_check_in:
             return (self.original_total * Decimal("0.10")).quantize(Decimal("0.01"))
         return Decimal("0")
 
     def commit_to_booking(self, changed_by=None):
-        """
-        Apply the approved modification to the parent Booking.
-        Must only be called when status == CONFIRMED.
-        Wrapped in a transaction by the caller.
-
-        BookingStatusHistory is defined above in this same file —
-        no import needed.
-        """
         booking = self.booking
         booking.check_in            = self.new_check_in
         booking.check_out           = self.new_check_out
@@ -538,7 +599,7 @@ class BookingModification(models.Model):
         BookingStatusHistory.objects.create(
             booking    = booking,
             old_status = booking.status,
-            new_status = booking.status,   # booking status itself does not change
+            new_status = booking.status,
             changed_by = changed_by,
             note       = (
                 f"[{self.get_modification_type_display()}] "
@@ -555,7 +616,6 @@ class BookingModification(models.Model):
 class ModificationPayment(models.Model):
     """
     Links a BookingModification to the Payment record that settled it.
-    A modification may have at most one linked payment (charge or refund).
     """
 
     modification = models.OneToOneField(

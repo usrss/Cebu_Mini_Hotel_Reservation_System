@@ -1,5 +1,5 @@
 /* ============================================================
-   BookingConfirmationPage.css — Cebu Mini Hotel · Luxury Dark Theme
+   BookingConfirmationPage.css — Cebu Mini Hotel · Luxury Dark
    ============================================================ */
 
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700&family=Raleway:wght@300;400;500;600;700&display=swap');
@@ -14,176 +14,381 @@
   --gold-border: rgba(201,168,76,0.22);
   --white:       #F8F6F0;
   --white-dim:   rgba(248,246,240,0.55);
+  --success:     #6EE7B7;
 }
 
-.booking-confirmation-page {
+/* ── Page wrapper ────────────────────────────────────────────── */
+.confirmation-page {
   min-height: 100vh;
   background: var(--navy);
   font-family: 'Raleway', sans-serif;
   color: var(--white);
-  display: flex;
-  flex-direction: column;
+}
+
+/* ── Nav breadcrumb ──────────────────────────────────────────── */
+.confirmation-nav { padding: 16px 0; border-bottom: 1px solid var(--gold-border); }
+.nav-container { max-width: 1100px; margin: 0 auto; padding: 0 40px; }
+.back-link {
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  padding: 48px 24px;
-}
-
-.confirm-card {
-  background: var(--navy-card);
-  border: 1px solid var(--gold-border);
-  width: 100%;
-  max-width: 560px;
-  overflow: hidden;
-}
-.confirm-card::before {
-  content: '';
-  display: block;
-  height: 2px;
-  background: linear-gradient(90deg, var(--gold), var(--gold-l), var(--gold));
-}
-
-.confirm-icon-wrap {
-  padding: 40px 40px 0;
-  display: flex;
-  justify-content: center;
-}
-.confirm-icon {
-  width: 72px;
-  height: 72px;
-  border: 1px solid;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.confirm-icon-pending {
-  border-color: var(--gold-border);
-  background: var(--gold-dim);
-  color: var(--gold);
-}
-.confirm-icon-success {
-  border-color: rgba(110,231,183,0.4);
-  background: rgba(110,231,183,0.06);
-  color: #6EE7B7;
-}
-
-.confirm-body {
-  padding: 28px 40px 36px;
-  text-align: center;
-}
-.confirm-eyebrow {
-  font-size: 10px;
+  gap: 7px;
+  color: var(--white-dim);
+  font-size: 11px;
   font-weight: 600;
-  letter-spacing: 2.5px;
+  letter-spacing: 1.5px;
   text-transform: uppercase;
-  color: var(--gold);
-  margin-bottom: 10px;
+  text-decoration: none;
+  transition: color 0.2s;
 }
-.confirm-title {
+.back-link:hover { color: var(--gold); }
+
+/* ── Hero ────────────────────────────────────────────────────── */
+.confirmation-hero {
+  text-align: center;
+  padding: 56px 24px 40px;
+  border-bottom: 1px solid var(--gold-border);
+}
+.confirmation-hero-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 72px; height: 72px;
+  border-radius: 50%;
+  background: rgba(110,231,183,0.10);
+  color: var(--success);
+  border: 1px solid rgba(110,231,183,0.25);
+  margin-bottom: 20px;
+}
+.confirmation-hero-title {
   font-family: 'Playfair Display', serif;
-  font-size: 28px;
+  font-size: clamp(24px, 4vw, 36px);
   font-weight: 700;
   color: var(--white);
   margin: 0 0 12px;
 }
-.confirm-subtitle {
+.confirmation-hero-subtitle {
   font-size: 14px;
   color: var(--white-dim);
-  margin: 0 0 28px;
+  margin: 0 auto 20px;
+  max-width: 480px;
   line-height: 1.7;
 }
-.confirm-divider {
-  height: 1px;
-  background: var(--gold-border);
-  margin: 0 0 24px;
+
+/* FIX: email notice */
+.confirmation-email-notice {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--success);
+  background: rgba(110,231,183,0.07);
+  border: 1px solid rgba(110,231,183,0.20);
+  padding: 8px 16px;
+  border-radius: 100px;
+}
+.confirmation-email-notice strong { color: var(--white); }
+
+/* ── Layout ──────────────────────────────────────────────────── */
+.confirmation-container { max-width: 1100px; margin: 0 auto; padding: 40px 40px 80px; }
+.confirmation-layout {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: 24px;
+  align-items: start;
+}
+@media (max-width: 900px) {
+  .confirmation-layout { grid-template-columns: 1fr; }
+  .confirmation-container { padding: 28px 24px 60px; }
 }
 
-.confirm-details {
-  background: var(--navy-mid);
+/* ── Cards ───────────────────────────────────────────────────── */
+.confirmation-card {
+  background: var(--navy-card);
   border: 1px solid var(--gold-border);
-  padding: 18px 20px;
-  text-align: left;
-  margin-bottom: 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+  margin-bottom: 16px;
+  position: relative;
+  overflow: hidden;
 }
-.confirm-detail-row {
-  display: flex;
-  justify-content: space-between;
-  font-size: 13px;
+.confirmation-card::before {
+  content: '';
+  display: block;
+  height: 1px;
+  background: linear-gradient(90deg, var(--gold), transparent 60%);
 }
-.confirm-detail-label { color: var(--white-dim); }
-.confirm-detail-value { color: var(--white); font-weight: 600; }
-.confirm-detail-value.gold {
+.card-section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
   color: var(--gold);
-  font-family: 'Playfair Display', serif;
-  font-size: 16px;
+  margin: 0 0 16px;
 }
 
-.confirm-actions {
+/* ── Reference card ──────────────────────────────────────────── */
+.reference-card { padding: 24px; }
+.reference-qr-row {
   display: flex;
-  gap: 12px;
-  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
 }
-.confirm-btn-primary {
+.reference-text-block { flex: 1; min-width: 0; }
+.reference-eyebrow {
   display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  color: var(--gold);
+  opacity: 0.7;
+  margin: 0 0 7px;
+}
+
+/* FIX: reference number row with copy button */
+.reference-number-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.reference-number {
+  font-family: 'Courier New', monospace;
+  font-size: clamp(16px, 3vw, 22px);
+  font-weight: 700;
+  color: var(--white);
+  letter-spacing: 0.06em;
+  margin: 0;
+  line-height: 1.1;
+}
+
+/* FIX: copy button */
+.copy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(201,168,76,0.08);
+  border: 1px solid var(--gold-border);
+  color: var(--gold);
+  padding: 5px 8px;
+  cursor: pointer;
+  font-size: 11px;
+  font-family: 'Raleway', sans-serif;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  transition: all 0.18s;
+  border-radius: 0;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.copy-btn:hover { background: var(--gold-dim); border-color: var(--gold); }
+.copy-btn--light {
+  background: rgba(110,231,183,0.07);
+  border-color: rgba(110,231,183,0.22);
+  color: var(--success);
+}
+.copy-btn--light:hover {
+  background: rgba(110,231,183,0.12);
+  border-color: rgba(110,231,183,0.40);
+}
+
+/* ── Status badge ────────────────────────────────────────────── */
+.booking-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  border: 1px solid;
+}
+.status-awaiting  { background: rgba(252,211,77,0.07);  color: #FCD34D; border-color: rgba(252,211,77,0.25); }
+.status-confirmed { background: rgba(110,231,183,0.07); color: var(--success); border-color: rgba(110,231,183,0.25); }
+.status-checkedin { background: var(--gold-dim);        color: var(--gold); border-color: var(--gold-border); }
+.status-checkedout,
+.status-cancelled,
+.status-noshow    { background: rgba(248,246,240,0.04); color: var(--white-dim); border-color: rgba(248,246,240,0.12); }
+
+/* ── QR ──────────────────────────────────────────────────────── */
+.booking-qr-wrapper { display: flex; flex-direction: column; align-items: center; gap: 10px; flex-shrink: 0; }
+.booking-qr-frame {
+  position: relative;
+  padding: 10px;
+  background: var(--white);
+  display: inline-block;
+}
+.booking-qr-img { display: block; }
+.booking-qr-placeholder,
+.booking-qr-fallback {
+  display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 8px;
+  background: var(--navy-mid);
+  color: var(--white-dim);
+}
+/* FIX: QR fallback style */
+.booking-qr-fallback { font-size: 11px; text-align: center; padding: 16px 12px; }
+.qr-fallback-hint { font-size: 10px; color: var(--gold); opacity: 0.8; line-height: 1.4; }
+.booking-qr-hint { font-size: 11px; color: var(--white-dim); text-align: center; max-width: 160px; line-height: 1.5; }
+
+/* QR corner decorators */
+.qr-corner {
+  position: absolute;
+  width: 12px; height: 12px;
+  border-color: var(--gold);
+  border-style: solid;
+}
+.qr-tl { top: 2px; left: 2px;   border-width: 2px 0 0 2px; }
+.qr-tr { top: 2px; right: 2px;  border-width: 2px 2px 0 0; }
+.qr-bl { bottom: 2px; left: 2px;  border-width: 0 0 2px 2px; }
+.qr-br { bottom: 2px; right: 2px; border-width: 0 2px 2px 0; }
+
+/* ── PIN card ────────────────────────────────────────────────── */
+.pin-card { padding: 24px; }
+.pin-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.pin-display { display: flex; gap: 7px; }
+.pin-digit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px; height: 56px;
+  background: var(--gold-dim);
+  border: 1px solid var(--gold-border);
+  font-family: 'Playfair Display', serif;
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--gold);
+}
+.pin-note { font-size: 12px; color: var(--white-dim); margin: 0; line-height: 1.55; }
+
+/* ── Detail rows ─────────────────────────────────────────────── */
+.confirmation-card .detail-rows { padding: 0 24px 20px; }
+.confirmation-card .card-section-title { padding: 20px 24px 0; }
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--gold-border);
+  gap: 16px;
+}
+.detail-row:last-child { border-bottom: none; }
+.detail-label { font-size: 10px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase; color: var(--white-dim); flex-shrink: 0; }
+.detail-value { font-size: 13px; font-weight: 600; color: var(--white); text-align: right; line-height: 1.45; }
+
+/* ── Price card ──────────────────────────────────────────────── */
+.price-card .card-section-title { padding: 20px 20px 0; }
+.price-rows { display: flex; flex-direction: column; gap: 0; }
+.price-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--white-dim);
+  padding: 9px 20px;
+  border-bottom: 1px solid var(--gold-border);
+}
+.price-row:last-child { border-bottom: none; }
+.price-row-discount span:last-child { color: var(--success); }
+.price-total-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 20px;
+  border-top: 1px solid var(--gold-border);
+  border-bottom: 1px solid var(--gold-border);
+}
+.price-total-row > span:first-child {
+  font-size: 10px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--white-dim);
+}
+.price-total-amount { font-family: 'Playfair Display', serif; font-size: 22px; font-weight: 700; color: var(--gold); }
+.payment-status-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 10px 20px; font-size: 11px; font-weight: 600; letter-spacing: 0.5px; color: var(--white-dim);
+}
+.payment-badge { padding: 3px 9px; font-size: 9px; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase; border: 1px solid; }
+.payment-unpaid             { color: var(--white-dim); background: rgba(248,246,240,0.04); border-color: rgba(248,246,240,0.12); }
+.payment-paid               { color: var(--success); background: rgba(110,231,183,0.07); border-color: rgba(110,231,183,0.25); }
+.payment-refunded           { color: #c4b5fd; background: rgba(167,139,250,0.07); border-color: rgba(167,139,250,0.25); }
+.payment-partially_refunded { color: #FCD34D; background: rgba(252,211,77,0.07); border-color: rgba(252,211,77,0.25); }
+
+/* FIX: Calendar card */
+.calendar-card { padding: 20px; }
+.calendar-card .card-section-title { padding: 0; margin-bottom: 8px; }
+.calendar-desc { font-size: 12px; color: var(--white-dim); margin: 0 0 14px; line-height: 1.55; }
+.calendar-actions { display: flex; gap: 8px; }
+.calendar-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 9px 12px;
   background: linear-gradient(135deg, var(--gold), var(--gold-l));
   border: none;
   color: var(--navy);
   font-family: 'Raleway', sans-serif;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
-  letter-spacing: 2px;
+  letter-spacing: 1.5px;
   text-transform: uppercase;
-  padding: 14px 24px;
-  cursor: pointer;
   text-decoration: none;
+  cursor: pointer;
   transition: opacity 0.2s;
 }
-.confirm-btn-primary:hover { opacity: 0.88; }
-.confirm-btn-secondary {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  background: none;
+.calendar-btn:hover { opacity: 0.88; }
+.calendar-btn--outline {
+  background: transparent;
   border: 1px solid var(--gold-border);
   color: var(--gold);
-  font-family: 'Raleway', sans-serif;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 2px;
-  text-transform: uppercase;
-  padding: 13px 24px;
-  cursor: pointer;
-  text-decoration: none;
-  transition: all 0.2s;
 }
-.confirm-btn-secondary:hover {
-  background: var(--gold-dim);
-  border-color: var(--gold);
-}
+.calendar-btn--outline:hover { background: var(--gold-dim); border-color: var(--gold); }
 
-.confirm-loading {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 18px;
-  color: var(--white-dim);
-  font-size: 13px;
-  letter-spacing: 2px;
-  text-transform: uppercase;
+/* ── Action buttons ──────────────────────────────────────────── */
+.confirmation-actions { display: flex; flex-direction: column; gap: 8px; }
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 13px 20px; font-family: 'Raleway', sans-serif; font-size: 10px;
+  font-weight: 700; letter-spacing: 2px; text-transform: uppercase;
+  border: none; cursor: pointer; transition: all 0.2s; text-decoration: none;
+  border-radius: 0;
 }
-.cf-spinner {
-  width: 32px;
-  height: 32px;
-  border: 2px solid var(--gold-border);
-  border-top-color: var(--gold);
-  border-radius: 50%;
-  animation: cf-spin 0.8s linear infinite;
+.btn-primary { background: linear-gradient(135deg, var(--gold), var(--gold-l)); color: var(--navy); }
+.btn-primary:hover { opacity: 0.9; }
+.btn-outline {
+  background: transparent; color: var(--gold);
+  border: 1px solid var(--gold-border);
 }
-@keyframes cf-spin { to { transform: rotate(360deg); } }
+.btn-outline:hover { background: var(--gold-dim); border-color: var(--gold); }
+.btn-full { width: 100%; }
+
+/* ── Error page ──────────────────────────────────────────────── */
+.confirmation-error-container {
+  display: flex; align-items: center; justify-content: center;
+  padding: 80px 24px; min-height: 60vh;
+}
+.error-content { text-align: center; max-width: 420px; }
+.error-heading { font-family: 'Playfair Display', serif; font-size: 22px; color: var(--white); margin: 0 0 8px; }
+.error-message { font-size: 13px; color: var(--white-dim); margin: 0 0 24px; }
+
+/* ── Skeleton ────────────────────────────────────────────────── */
+.skeleton { background: rgba(248,246,240,0.05); animation: sk-pulse 1.8s ease-in-out infinite; }
+@keyframes sk-pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+.skeleton-back   { height: 16px; width: 110px; }
+.skeleton-hero   { height: 200px; margin-bottom: 32px; }
+.skeleton-card-lg { height: 220px; margin-bottom: 16px; }
+.skeleton-card-md { height: 140px; margin-bottom: 16px; }
+.skeleton-sidebar { height: 500px; }

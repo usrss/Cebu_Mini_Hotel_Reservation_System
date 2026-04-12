@@ -7,9 +7,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   CalendarCheck, Users, BedDouble, XCircle,
-  Star, Shield, TrendingUp, AlertTriangle,
+  Star, Shield, TrendingUp, AlertTriangle, UtensilsCrossed,
 } from 'lucide-react';
-import { analyticsApi, reviewApi } from '../../../services/adminApi';
+import { analyticsApi, reviewApi, foodApi } from '../../../services/adminApi';
 import { useAdminRole } from '../../hooks/useAdminRole';
 import BookingAnalytics      from './BookingAnalytics';
 import OccupancyAnalytics    from './OccupancyAnalytics';
@@ -17,10 +17,10 @@ import GuestAnalytics        from './GuestAnalytics';
 import RoomPerformance       from './RoomPerformance';
 import CancellationAnalytics from './CancellationAnalytics';
 import ReviewAnalytics       from './ReviewAnalytics';
-import StaffAnalytics        from './StaffAnalytics';
+import FoodAnalytics         from './FoodAnalytics';
 import './AnalyticsDashboard.css';
 
-const POLL_INTERVAL = 30_000; // 30 seconds
+const POLL_INTERVAL = 30_000;
 
 const SECTIONS = [
   { id: 'booking',      label: 'Bookings',        icon: <CalendarCheck size={14} />, accent: 'var(--c-booking)' },
@@ -29,11 +29,13 @@ const SECTIONS = [
   { id: 'room',         label: 'Room Performance', icon: <TrendingUp size={14} />,    accent: 'var(--c-room)' },
   { id: 'cancellation', label: 'Cancellations',    icon: <XCircle size={14} />,       accent: 'var(--c-cancel)' },
   { id: 'review',       label: 'Reviews',          icon: <Star size={14} />,          accent: 'var(--c-review)' },
-//   { id: 'staff',        label: 'Staff',            icon: <Shield size={14} />,        accent: 'var(--c-staff)' },
+  { id: 'food',         label: 'Food & Drinks',    icon: <UtensilsCrossed size={14} />, accent: 'var(--gold)' },
 ];
 
 const PERIODS = ['Today', 'Week', 'Month', 'Year'];
 const PERIOD_MAP = { Today: 'today', Week: 'week', Month: 'month', Year: 'year' };
+// Map global period labels to food analytics period param
+const FOOD_PERIOD_MAP = { Today: 'daily', Week: 'weekly', Month: 'monthly', Year: 'yearly' };
 
 export default function AnalyticsDashboard() {
   const { role } = useAdminRole();
@@ -41,25 +43,27 @@ export default function AnalyticsDashboard() {
   const [globalPeriod,  setGlobalPeriod]  = useState('Month');
   const [dashboard,     setDashboard]     = useState(null);
   const [reviewStats,   setReviewStats]   = useState(null);
+  const [foodSummary,   setFoodSummary]   = useState(null);
   const [loading,       setLoading]       = useState(true);
   const [lastUpdated,   setLastUpdated]   = useState(null);
   const intervalRef = useRef(null);
 
   const loadKPIs = useCallback(async () => {
     try {
-      const [dash, rev] = await Promise.allSettled([
+      const [dash, rev, food] = await Promise.allSettled([
         analyticsApi.dashboard(),
         reviewApi.stats(),
+        foodApi.analytics('monthly'),
       ]);
       if (dash.status === 'fulfilled') setDashboard(dash.value);
       if (rev.status  === 'fulfilled') setReviewStats(rev.value);
+      if (food.status === 'fulfilled') setFoodSummary(food.value?.summary);
       setLastUpdated(new Date());
     } finally {
       setLoading(false);
     }
   }, []);
 
-  // Initial load + polling — no manual refresh
   useEffect(() => {
     loadKPIs();
     intervalRef.current = setInterval(loadKPIs, POLL_INTERVAL);
@@ -109,12 +113,12 @@ export default function AnalyticsDashboard() {
       section: 'review',
     },
     {
-      label: 'Staff Online',
-      value: d?.staff?.online ?? '—',
-      sub:   `of ${d?.staff?.total ?? '—'} active`,
-      accent: 'var(--c-staff)',
-      icon:  <Shield size={16} />,
-      section: 'staff',
+      label: 'Food Orders',
+      value: foodSummary?.total_orders ?? '—',
+      sub:   foodSummary ? `₱${Number(foodSummary.total_revenue || 0).toLocaleString('en-PH', { maximumFractionDigits: 0 })} revenue` : 'This month',
+      accent: 'var(--gold)',
+      icon:  <UtensilsCrossed size={16} />,
+      section: 'food',
     },
     {
       label: 'Pending Tasks',
@@ -126,7 +130,8 @@ export default function AnalyticsDashboard() {
     },
   ];
 
-  const period = PERIOD_MAP[globalPeriod];
+  const period     = PERIOD_MAP[globalPeriod];
+  const foodPeriod = FOOD_PERIOD_MAP[globalPeriod];
 
   return (
     <div className="an-page">
@@ -142,7 +147,6 @@ export default function AnalyticsDashboard() {
             </p>
           )}
         </div>
-        {/* Global period selector */}
         <div className="an-period-selector">
           {PERIODS.map(p => (
             <button
@@ -198,7 +202,7 @@ export default function AnalyticsDashboard() {
         {activeSection === 'room'         && <RoomPerformance       period={period} />}
         {activeSection === 'cancellation' && <CancellationAnalytics period={period} />}
         {activeSection === 'review'       && <ReviewAnalytics       stats={reviewStats} />}
-{/*         {activeSection === 'staff'        && <StaffAnalytics        dashboard={d} />} */}
+        {activeSection === 'food'         && <FoodAnalytics         period={foodPeriod} />}
       </div>
     </div>
   );

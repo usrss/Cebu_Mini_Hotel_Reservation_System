@@ -22,6 +22,7 @@ class ReportType(models.TextChoices):
     OCCUPANCY  = "occupancy",  "Occupancy"
     GUESTS     = "guests",     "Guests"
     STAFF      = "staff",      "Staff Performance"
+    FOOD = "food",             "Food & Drinks"
 
 
 class ExportFormat(models.TextChoices):

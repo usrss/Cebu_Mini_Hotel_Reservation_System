@@ -13,6 +13,7 @@ const REPORT_TYPES = [
   { value: 'occupancy', label: 'Occupancy',          icon: '🏨' },
   { value: 'guests',    label: 'Guests',             icon: '👥' },
   { value: 'staff',     label: 'Staff Performance',  icon: '⭐' },
+  { value: 'food',      label: 'Food & Beverage',    icon: '🍽️' },
 ];
 
 const PERIODS = [
@@ -72,10 +73,10 @@ function ReportSummary({ type, summary }) {
   );
   if (type === 'guests') return (
     <div className="sf-summary-grid">
-      <SummaryCard label="New Registrations"  value={summary.new_registrations} />
-      <SummaryCard label="Repeat Guests"      value={summary.repeat_guests} />
+      <SummaryCard label="New Registrations"   value={summary.new_registrations} />
+      <SummaryCard label="Repeat Guests"       value={summary.repeat_guests} />
       <SummaryCard label="Registered Bookings" value={summary.registered_bookings} />
-      <SummaryCard label="Walk-in Bookings"   value={summary.walk_in_bookings} />
+      <SummaryCard label="Walk-in Bookings"    value={summary.walk_in_bookings} />
     </div>
   );
   if (type === 'staff') return (
@@ -84,6 +85,16 @@ function ReportSummary({ type, summary }) {
       <SummaryCard label="Cleaning Tasks Done"    value={summary.total_cleaning_done} />
       <SummaryCard label="Maintenance Tasks Done" value={summary.total_maintenance_done} />
       <SummaryCard label="Period" value={summary.period_start} sub={`→ ${summary.period_end}`} />
+    </div>
+  );
+  if (type === 'food') return (
+    <div className="sf-summary-grid">
+      <SummaryCard label="Total Orders"     value={summary.total_orders} />
+      <SummaryCard label="Completed Orders" value={summary.completed_orders} />
+      <SummaryCard label="Pending Orders"   value={summary.pending_orders} />
+      <SummaryCard label="Total Revenue"    value={currency(summary.total_revenue)} />
+      <SummaryCard label="Paid Revenue"     value={currency(summary.paid_revenue)} />
+      <SummaryCard label="Avg Order Value"  value={currency(summary.avg_order_value)} />
     </div>
   );
   return null;

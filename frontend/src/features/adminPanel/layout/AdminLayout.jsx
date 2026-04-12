@@ -5,7 +5,7 @@ import {
   LogOut, Settings, ChevronLeft, ChevronRight,
   Menu, X, Building2, Shield, Wrench, BedDouble,
   LineChart, UserCog, ClipboardList, ChevronDown,
-  MessageSquare, SlidersHorizontal,FileText,
+  MessageSquare, SlidersHorizontal,FileText,UtensilsCrossed,
 } from 'lucide-react';
 import { logoutUser, getStoredUser } from '../../../services/api';
 import NotificationBell from '../../notifications/NotificationBell';
@@ -39,6 +39,16 @@ const NAV_STRUCTURE = [
     to: '/admin/staff',
     roles: ['admin'],
   },
+
+   {
+    type: 'link',
+    key: 'food-menu',
+    label: 'Food Menu',
+    icon: <UtensilsCrossed size={18} />,
+    to: '/admin/food-menu',
+    roles: ['admin'],
+  },
+
   {
     type: 'link',
     key: 'guests',
@@ -98,7 +108,8 @@ const NAV_STRUCTURE = [
       { key: 'maintenance',          label: 'Maintenance Tasks', to: '/staff/maintenance',           roles: ['admin', 'manager'] },
       { key: 'maintenance-requests', label: 'Maint. Requests',  to: '/staff/maintenance-requests',   roles: ['admin', 'manager'] },
       { key: 'incidents',            label: 'Incidents',        to: '/staff/incidents',              roles: ['admin', 'manager'] },
-      { key: 'monitoring',           label: 'Staff Monitoring', to: '/staff/monitoring',             roles: ['admin', 'manager'] }
+      { key: 'monitoring',           label: 'Staff Monitoring', to: '/staff/monitoring',             roles: ['admin', 'manager'] },
+      { key: 'food-orders',          label: 'Food Orders',       to: '/admin/food-orders',          roles: ['admin', 'manager'] }
     ],
   },
   // ── Support Tickets ──────────────────────────────────────────────────────
@@ -133,7 +144,7 @@ const NAV_STRUCTURE = [
 const ROLE_LABELS = {
   admin:'Administrator', manager:'Manager', receptionist:'Receptionist',
   front_desk:'Front Desk', housekeeping:'Housekeeping',
-  maintenance:'Maintenance', security:'Security',
+  maintenance:'Maintenance', security:'Security',kitchen_staff: 'Kitchen Staff',
 };
 const ROLE_ICONS = {
   admin:        <Shield size={11} />,
@@ -143,6 +154,7 @@ const ROLE_ICONS = {
   housekeeping: <BedDouble size={11} />,
   maintenance:  <Wrench size={11} />,
   security:     <Shield size={11} />,
+  kitchen_staff: <UtensilsCrossed size={11} />
 };
 
 // ── NavGroup ──────────────────────────────────────────────────────────────────

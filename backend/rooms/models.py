@@ -790,7 +790,20 @@ class HotelSettings(models.Model):
     """Singleton model for global hotel configuration."""
     checkin_time  = models.TimeField(default="14:00")
     checkout_time = models.TimeField(default="12:00")
-    updated_at    = models.DateTimeField(auto_now=True)
+    hotel_name = models.CharField(max_length=255, default="Cebu Mini Hotel")
+    hotel_address = models.CharField(max_length=500, default="123 Colon St., Cebu City, 6000")
+    hotel_phone = models.CharField(max_length=50, default="+63 32 123 4567")
+    hotel_email = models.EmailField(blank=True, default="info@cebuminihotel.com")
+    hotel_description = models.TextField(blank=True, default="")
+    terms_url = models.CharField(max_length=500, default="/terms-and-conditions")
+    privacy_url = models.CharField(max_length=500, default="/privacy-policy")
+
+    cancellation_tiers = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Ordered list of cancellation refund tiers."
+    )
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         verbose_name        = "Hotel Settings"

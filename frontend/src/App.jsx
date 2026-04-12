@@ -18,8 +18,15 @@ import { staffRoutes }        from './features/staff/StaffRoutes';
 import ChatWidget             from './features/chatbot/ChatWidget';
 import StaffActivatePage      from './features/adminPanel/staff/StaffActivatePage';
 import { legalRoutes } from './components/legalRoutes';
+// ── at the top with other imports ─────────────────────────────────────────────
+import FoodAndDrinks         from './features/food/FoodAndDrinks';
+import FoodPaymentSuccessPage from './features/food/FoodPaymentSuccessPage';
+import FoodPaymentCancelPage  from './features/food/FoodPaymentCancelPage';
+
 import './features/home/HotelHomepage.css';
+
 import './App.css';
+
 
 function getHomeRoute() {
   const user = getStoredUser();
@@ -53,9 +60,25 @@ function App() {
           element={<ProtectedRoute><AccountSettings /></ProtectedRoute>}
         />
 
+
+        <Route
+          path="/food"
+          element={<ProtectedRoute><FoodAndDrinks /></ProtectedRoute>}
+        />
+        <Route
+          path="/food-payment/success"
+          element={<ProtectedRoute><FoodPaymentSuccessPage /></ProtectedRoute>}
+        />
+        <Route
+          path="/food-payment/cancel"
+          element={<ProtectedRoute><FoodPaymentCancelPage /></ProtectedRoute>}
+        />
+
+
         {/* ── Rooms (public) ───────────────────────────────────────────── */}
         <Route path="/rooms"     element={<RoomListPage />} />
         <Route path="/rooms/:id" element={<RoomDetailPage />} />
+
 
         {/* ── Bookings & Payments ──────────────────────────────────────── */}
         {bookingRoutes}

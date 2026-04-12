@@ -34,7 +34,7 @@ urlpatterns = [
     path("api/chat/", include("chatbot.urls", namespace="chatbot")),
     path("api/reports/", include("reports.urls", namespace="reports")),
     path('api/legal/', include('legal.urls')),
-
+    path("api/food/", include("food.urls")),
 
 
 ]

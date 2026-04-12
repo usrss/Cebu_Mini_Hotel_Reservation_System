@@ -1,44 +1,51 @@
 /* ============================================================
-   BookingForm.css — Cebu Mini Hotel · Luxury Dark Theme
-   Lives inside .sidebar-card (navy-card background)
+   BookingForm.css — Cebu Mini Hotel · Editorial Light Theme
+   Palette: FAF9F6 / F2EFE8 / 01000D / 535252 / 909090
+            success #059669 / warn #d97706 / danger #dc2626
+   NO navy (#0A0E1A) or gold (#C9A84C) used in this file.
    ============================================================ */
 
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&family=Raleway:wght@400;500;600;700&display=swap');
 
+/* ── Design tokens (light theme only) ───────────────────── */
 :root {
-  --navy:        #0A0E1A;
-  --navy-mid:    #0F1729;
-  --navy-card:   #111827;
-  --gold:        #C9A84C;
-  --gold-l:      #E2C97E;
-  --gold-dim:    rgba(201,168,76,0.10);
-  --gold-border: rgba(201,168,76,0.22);
-  --white:       #F8F6F0;
-  --white-dim:   rgba(248,246,240,0.55);
-  --white-faint: rgba(248,246,240,0.06);
-  --error:       #F87171;
-  --success:     #6EE7B7;
+  --bf-bg:          #FAF9F6;
+  --bf-bg-warm:     #F2EFE8;
+  --bf-bg-section:  #F0EDE6;
+  --bf-text:        #01000D;
+  --bf-text-mid:    #535252;
+  --bf-text-muted:  #909090;
+  --bf-white:       #FFFFFF;
+  --bf-border:      rgba(1, 0, 13, 0.08);
+  --bf-border-mid:  rgba(1, 0, 13, 0.14);
+  --bf-success:     #059669;
+  --bf-success-lt:  rgba(5, 150, 105, 0.08);
+  --bf-success-br:  rgba(5, 150, 105, 0.22);
+  --bf-warn:        #d97706;
+  --bf-warn-lt:     rgba(217, 119, 6, 0.07);
+  --bf-warn-br:     rgba(217, 119, 6, 0.22);
+  --bf-danger:      #dc2626;
+  --bf-error:       #dc2626;
 }
 
-/* ── Wrapper ───────────────────────────────────────────────── */
+/* ── Wrapper ─────────────────────────────────────────── */
 .booking-form {
   display: flex;
   flex-direction: column;
   gap: 0;
   font-family: 'Raleway', sans-serif;
+  color: var(--bf-text);
 }
 
-/* ── Sections ──────────────────────────────────────────────── */
+/* ── Sections ────────────────────────────────────────── */
 .booking-form-section {
   padding: 18px 0;
-  border-bottom: 1px solid var(--gold-border);
+  border-bottom: 1px solid var(--bf-border);
 }
-
 .booking-form-section:last-of-type {
   border-bottom: none;
   padding-bottom: 0;
 }
-
 .booking-section-header {
   display: flex;
   align-items: center;
@@ -46,7 +53,6 @@
   gap: 8px;
   margin-bottom: 12px;
 }
-
 .booking-section-title {
   display: flex;
   align-items: center;
@@ -55,138 +61,105 @@
   font-weight: 700;
   letter-spacing: 2px;
   text-transform: uppercase;
-  color: var(--gold);
+  color: var(--bf-text-muted);
   margin: 0;
 }
-
 .section-icon {
   display: flex;
   align-items: center;
-  color: var(--gold);
-  opacity: 0.7;
+  color: var(--bf-text-muted);
 }
-
-/* Auto-fill badge */
 .booking-autofill-badge {
   font-size: 10px;
   font-weight: 600;
-  color: var(--success);
-  background: rgba(110,231,183,0.08);
-  border: 1px solid rgba(110,231,183,0.22);
+  color: var(--bf-success);
+  background: var(--bf-success-lt);
+  border: 1px solid var(--bf-success-br);
   padding: 3px 9px;
   white-space: nowrap;
   letter-spacing: 0.3px;
 }
-
-/* User loading */
 .booking-user-loading {
   display: flex;
   align-items: center;
   gap: 8px;
   font-size: 12px;
-  color: var(--white-dim);
+  color: var(--bf-text-muted);
   padding: 8px 0;
   letter-spacing: 1px;
 }
 
-/* ── Shared input base ─────────────────────────────────────── */
+/* ── Shared input base ───────────────────────────────── */
 .booking-date-input,
 .booking-guest-input,
-.booking-field input {
+.booking-field input,
+.booking-special-requests {
   width: 100%;
   padding: 10px 13px;
-  background: var(--navy);
-  border: 1px solid var(--gold-border);
-  color: var(--white);
+  background: var(--bf-white);
+  border: 1px solid var(--bf-border-mid);
+  color: var(--bf-text);
   font-family: 'Raleway', sans-serif;
   font-size: 13px;
   outline: none;
   transition: border-color 0.2s, box-shadow 0.2s;
   box-sizing: border-box;
-  color-scheme: dark;
   border-radius: 0;
 }
-
 .booking-date-input:focus,
 .booking-guest-input:focus,
-.booking-field input:focus {
-  border-color: var(--gold);
-  box-shadow: 0 0 0 3px rgba(201,168,76,0.10);
-  background: var(--navy-mid);
+.booking-field input:focus,
+.booking-special-requests:focus {
+  border-color: var(--bf-text);
+  box-shadow: 0 0 0 3px rgba(1, 0, 13, 0.06);
 }
-
 .booking-date-input::placeholder,
 .booking-guest-input::placeholder,
-.booking-field input::placeholder {
-  color: rgba(248,246,240,0.18);
+.booking-field input::placeholder,
+.booking-special-requests::placeholder {
+  color: var(--bf-text-muted);
+  opacity: 0.7;
 }
-
 .booking-date-input.input-error,
 .booking-guest-input.input-error,
-.booking-field input.input-error {
-  border-color: rgba(248,113,113,0.55);
-}
-
-.booking-date-input:disabled {
-  background: var(--navy);
-  opacity: 0.32;
-  cursor: not-allowed;
-}
-
-/* Calendar icon gold tint */
+.booking-field input.input-error { border-color: rgba(220, 38, 38, 0.5); }
+.booking-date-input:disabled { background: var(--bf-bg-section); opacity: 0.5; cursor: not-allowed; }
 .booking-date-input::-webkit-calendar-picker-indicator {
-  filter: invert(0.7) sepia(1) saturate(3) hue-rotate(5deg);
-  opacity: 0.65;
+  opacity: 0.5;
   cursor: pointer;
 }
-
-/* ── Date inputs ───────────────────────────────────────────── */
-.booking-date-inputs {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
+.booking-special-requests {
+  resize: vertical;
+  min-height: 72px;
+  line-height: 1.6;
 }
 
-.booking-date-wrapper {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-
+/* ── Date inputs ─────────────────────────────────────── */
+.booking-date-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.booking-date-wrapper { display: flex; flex-direction: column; gap: 5px; }
 .booking-date-wrapper label {
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 1.5px;
   text-transform: uppercase;
-  color: var(--white-dim);
+  color: var(--bf-text-muted);
 }
-
 .booking-nights-label {
   margin: 8px 0 0;
   font-size: 12px;
-  font-weight: 600;
-  color: var(--gold);
+  font-weight: 700;
+  color: var(--bf-text-mid);
   letter-spacing: 0.5px;
 }
 
-/* ── Guests ────────────────────────────────────────────────── */
-.booking-guest-wrapper {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.booking-guest-quick {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 7px;
-}
-
+/* ── Guests ──────────────────────────────────────────── */
+.booking-guest-wrapper { display: flex; flex-direction: column; gap: 10px; }
+.booking-guest-quick { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; }
 .booking-guest-btn {
   padding: 8px 6px;
-  background: var(--navy);
-  border: 1px solid var(--gold-border);
-  color: var(--white-dim);
+  background: var(--bf-bg);
+  border: 1px solid var(--bf-border-mid);
+  color: var(--bf-text-muted);
   font-family: 'Raleway', sans-serif;
   font-size: 13px;
   font-weight: 600;
@@ -194,39 +167,13 @@
   transition: all 0.18s;
   border-radius: 0;
 }
+.booking-guest-btn:hover { color: var(--bf-text); border-color: var(--bf-text); background: var(--bf-bg-warm); }
+.booking-guest-btn.active { background: var(--bf-bg-section); border-color: var(--bf-text); color: var(--bf-text); }
+.booking-capacity-hint { font-size: 11px; color: var(--bf-text-muted); margin: 6px 0 0; letter-spacing: 0.3px; }
 
-.booking-guest-btn:hover {
-  color: var(--gold);
-  border-color: var(--gold);
-  background: var(--gold-dim);
-}
-
-.booking-guest-btn.active {
-  background: var(--gold-dim);
-  border-color: var(--gold);
-  color: var(--gold);
-}
-
-.booking-capacity-hint {
-  font-size: 11px;
-  color: var(--white-dim);
-  margin: 0;
-  letter-spacing: 0.3px;
-}
-
-/* ── Guest info ────────────────────────────────────────────── */
-.booking-guest-info {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.booking-field {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-
+/* ── Guest info ──────────────────────────────────────── */
+.booking-guest-info { display: flex; flex-direction: column; gap: 12px; }
+.booking-field { display: flex; flex-direction: column; gap: 5px; }
 .booking-field label {
   display: flex;
   align-items: center;
@@ -235,37 +182,27 @@
   font-weight: 700;
   letter-spacing: 1.5px;
   text-transform: uppercase;
-  color: var(--gold);
-  opacity: 0.85;
+  color: var(--bf-text-mid);
 }
+.booking-field label svg { opacity: 0.6; }
+.field-error { font-size: 11px; color: var(--bf-danger); font-weight: 500; letter-spacing: 0.3px; }
 
-.booking-field label svg { opacity: 0.7; }
-
-/* ── Field errors ──────────────────────────────────────────── */
-.field-error {
-  font-size: 11px;
-  color: var(--error);
-  font-weight: 500;
-  letter-spacing: 0.3px;
-}
-
-/* ── Price breakdown ───────────────────────────────────────── */
+/* ── Price breakdown ─────────────────────────────────── */
 .booking-price-breakdown {
-  background: var(--navy);
-  border: 1px solid var(--gold-border);
+  background: var(--bf-bg);
+  border: 1px solid var(--bf-border-mid);
   padding: 16px 18px;
   margin: 4px 0;
   position: relative;
 }
-
 .booking-price-breakdown::before {
   content: '';
   position: absolute;
   top: 0; left: 0; right: 0;
-  height: 1px;
-  background: linear-gradient(90deg, var(--gold), transparent);
+  height: 2px;
+  background: var(--bf-text);
+  opacity: 0.06;
 }
-
 .breakdown-title {
   display: flex;
   align-items: center;
@@ -274,118 +211,162 @@
   font-weight: 700;
   letter-spacing: 2px;
   text-transform: uppercase;
-  color: var(--gold);
+  color: var(--bf-text-muted);
   margin: 0 0 14px;
 }
-
-.breakdown-rows {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
+.breakdown-rows { display: flex; flex-direction: column; gap: 8px; }
 .breakdown-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
   font-size: 13px;
-  color: var(--white-dim);
+  color: var(--bf-text-mid);
 }
-
 .breakdown-discount-badge {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  background: var(--gold-dim);
-  border: 1px solid var(--gold-border);
-  color: var(--gold);
+  background: var(--bf-success-lt);
+  border: 1px solid var(--bf-success-br);
+  color: var(--bf-success);
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 1px;
   padding: 4px 10px;
   margin-bottom: 4px;
 }
-
 .breakdown-original-price {
   text-decoration: line-through;
-  color: rgba(248,246,240,0.28);
+  color: var(--bf-text-muted);
   font-size: 11px;
   margin-right: 4px;
 }
-
-.breakdown-savings {
-  color: var(--success);
-  font-weight: 600;
-  font-size: 12px;
-}
-
+.breakdown-savings { color: var(--bf-success); font-weight: 600; font-size: 12px; }
 .breakdown-total {
   padding-top: 12px;
   margin-top: 4px;
-  border-top: 1px solid var(--gold-border);
+  border-top: 1px solid var(--bf-border-mid);
   font-family: 'Playfair Display', serif;
   font-size: 18px;
   font-weight: 600;
-  color: var(--gold);
+  color: var(--bf-text);
 }
-
-/* Deposit info */
-.breakdown-deposit-info {
-  margin-top: 12px;
-  padding: 12px 14px;
-  background: rgba(201,168,76,0.05);
-  border: 1px dashed var(--gold-border);
-}
-
-.deposit-info-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 4px 0;
-}
-
-.deposit-info-label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  color: var(--white-dim);
-}
-
-.deposit-info-label svg { color: var(--gold); flex-shrink: 0; }
-
-.deposit-info-amount {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--white-dim);
-}
-
-.deposit-info-amount.deposit-now { color: var(--success); }
-
-.deposit-info-note {
-  margin-top: 8px;
+.breakdown-payment-hint {
   font-size: 11px;
-  color: rgba(248,246,240,0.28);
-  border-top: 1px solid var(--gold-border);
-  padding-top: 8px;
-  letter-spacing: 0.3px;
+  color: var(--bf-text-muted);
+  margin: 10px 0 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
   line-height: 1.5;
 }
 
-/* ── API error ─────────────────────────────────────────────── */
+/* ════════════════════════════════════════════════════════
+   CANCELLATION POLICY BLOCK
+   Shown before the submit button. Editorial Light palette.
+   No navy, no gold.
+   ════════════════════════════════════════════════════════ */
+.bf-policy-block {
+  background: var(--bf-bg-warm);
+  border: 1px solid var(--bf-border-mid);
+  border-left: 3px solid var(--bf-text-muted);
+  padding: 14px 16px;
+  margin: 12px 0 4px;
+}
+
+.bf-policy-header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 10px;
+}
+
+.bf-policy-icon {
+  color: var(--bf-text-mid);
+  flex-shrink: 0;
+}
+
+.bf-policy-title {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--bf-text-mid);
+}
+
+/* Bullet list layout — when policy has multiple sentences */
+.bf-policy-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.bf-policy-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--bf-text-mid);
+  line-height: 1.6;
+  font-weight: 500;
+}
+
+.bf-policy-dot {
+  flex-shrink: 0;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--bf-text-muted);
+  margin-top: 7px;
+}
+
+/* Single paragraph layout — when policy is one sentence */
+.bf-policy-text {
+  font-size: 12px;
+  color: var(--bf-text-mid);
+  line-height: 1.65;
+  margin: 0;
+  font-weight: 500;
+}
+
+/* Skeleton loading state */
+.bf-policy-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.bf-skeleton {
+  background: var(--bf-border);
+  border-radius: 3px;
+  animation: bf-sk-pulse 1.6s ease-in-out infinite;
+}
+
+.bf-skeleton--line {
+  height: 11px;
+}
+
+@keyframes bf-sk-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+
+/* ── API error ───────────────────────────────────────── */
 .booking-api-error {
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 12px 14px;
-  background: rgba(248,113,113,0.07);
-  border: 1px solid rgba(248,113,113,0.3);
-  color: var(--error);
+  background: rgba(220, 38, 38, 0.06);
+  border: 1px solid rgba(220, 38, 38, 0.2);
+  color: var(--bf-danger);
   font-size: 13px;
 }
 
-/* ── Submit ────────────────────────────────────────────────── */
+/* ── Submit ──────────────────────────────────────────── */
 .booking-submit-btn {
   display: flex;
   align-items: center;
@@ -393,9 +374,9 @@
   gap: 8px;
   width: 100%;
   padding: 14px 24px;
-  background: linear-gradient(135deg, var(--gold) 0%, var(--gold-l) 100%);
+  background: var(--bf-text);
   border: none;
-  color: var(--navy);
+  color: var(--bf-bg);
   font-family: 'Raleway', sans-serif;
   font-size: 11px;
   font-weight: 700;
@@ -406,60 +387,201 @@
   margin-top: 10px;
   border-radius: 0;
 }
-
 .booking-submit-btn:hover:not(:disabled) {
-  opacity: 0.9;
+  opacity: 0.88;
   transform: translateY(-1px);
-  box-shadow: 0 8px 24px rgba(201,168,76,0.22);
+  box-shadow: 0 8px 24px rgba(1, 0, 13, 0.14);
 }
-
 .booking-submit-btn:active:not(:disabled) { transform: none; }
+.booking-submit-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.btn-loading { display: flex; align-items: center; gap: 8px; }
 
-.booking-submit-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-/* Loading state */
-.btn-loading {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-/* Spinners */
+/* ── Spinners ────────────────────────────────────────── */
 .spinner {
   display: inline-block;
   width: 15px; height: 15px;
-  border: 2px solid rgba(10,14,26,0.25);
-  border-top-color: var(--navy);
+  border: 2px solid rgba(1, 0, 13, 0.1);
+  border-top-color: var(--bf-bg);
   border-radius: 50%;
   animation: bf-spin 0.7s linear infinite;
   flex-shrink: 0;
 }
-
 .spinner.spinner-sm {
   width: 13px; height: 13px;
-  border-color: var(--gold-border);
-  border-top-color: var(--gold);
+  border-color: var(--bf-border-mid);
+  border-top-color: var(--bf-text-mid);
 }
-
 @keyframes bf-spin { to { transform: rotate(360deg); } }
 
-/* Disclaimer */
+/* ── Disclaimer ──────────────────────────────────────── */
 .booking-disclaimer {
   text-align: center;
   font-size: 11px;
-  color: var(--white-dim);
-  opacity: 0.55;
+  color: var(--bf-text-muted);
   margin: 8px 0 0;
   line-height: 1.6;
   letter-spacing: 0.3px;
 }
+.booking-disclaimer strong { color: var(--bf-text-mid); }
 
-/* Divider used between sections */
-.sidebar-divider {
-  height: 1px;
-  background: var(--gold-border);
-  margin: 0 0 20px;
+.sidebar-divider { height: 1px; background: var(--bf-border); margin: 0 0 20px; }
+
+/* ── payment-type-toggle — kept for compatibility but styled light ── */
+.payment-type-toggle {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--bf-border);
 }
+.payment-type-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.8px;
+  text-transform: uppercase;
+  color: var(--bf-text-muted);
+  margin: 0 0 10px;
+}
+.payment-type-options { display: flex; flex-direction: column; gap: 7px; }
+.payment-type-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--bf-bg);
+  border: 1px solid var(--bf-border-mid);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.18s, background 0.18s;
+  border-radius: 0;
+  width: 100%;
+}
+.payment-type-btn:hover { border-color: var(--bf-border-mid); background: var(--bf-bg-warm); }
+.payment-type-btn.active {
+  border-color: var(--bf-text);
+  background: var(--bf-bg-section);
+}
+.pt-radio {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid var(--bf-border-mid);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: border-color 0.18s;
+}
+.payment-type-btn.active .pt-radio { border-color: var(--bf-text); }
+.pt-radio-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--bf-text);
+}
+.pt-content { display: flex; flex-direction: column; gap: 2px; }
+.pt-title { font-size: 13px; font-weight: 600; color: var(--bf-text); }
+.pt-amount { font-size: 12px; color: var(--bf-text-mid); font-weight: 600; }
+.pt-balance { color: var(--bf-text-muted); font-weight: 400; }
+
+
+
+/* ============================================================
+   BookingForm.css — additions for structured tier display
+   Append these rules to the BOTTOM of your existing BookingForm.css.
+   Replace the old .bf-policy-list / .bf-policy-item rules entirely.
+   ============================================================ */
+
+/* ── Tier timeline layout ────────────────────────────────────── */
+.bf-policy-tiers {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 2px 0;
+}
+
+.bf-tier-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-height: 44px;
+}
+
+/* ── Timeline column ─────────────────────────────────────────── */
+.bf-tier-timeline {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+  width: 16px;
+  padding-top: 4px;
+}
+
+.bf-tier-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  transition: background 0.2s;
+}
+
+.bf-tier-connector {
+  width: 1px;
+  flex: 1;
+  min-height: 18px;
+  background: var(--bf-border-mid);
+  margin: 3px 0;
+}
+
+/* ── Content column ──────────────────────────────────────────── */
+.bf-tier-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-bottom: 14px;
+}
+
+.bf-tier-row:last-child .bf-tier-content {
+  padding-bottom: 0;
+}
+
+.bf-tier-condition {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--bf-text-mid);
+  letter-spacing: 0.2px;
+  line-height: 1.3;
+}
+
+.bf-tier-detail {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* ── Refund badge ────────────────────────────────────────────── */
+.bf-tier-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 3px 9px;
+  border: 1px solid;
+  border-radius: 100px;
+  flex-shrink: 0;
+}
+
+/* ── Optional label text ─────────────────────────────────────── */
+.bf-tier-label {
+  font-size: 11px;
+  color: var(--bf-text-muted);
+  font-weight: 500;
+  letter-spacing: 0.2px;
+  line-height: 1.4;
+}
+
+/* Remove old list styles if they're still in the file */
+.bf-policy-list { display: none; }
+.bf-policy-item { display: none; }

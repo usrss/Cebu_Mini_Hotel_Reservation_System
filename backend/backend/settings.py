@@ -66,6 +66,7 @@ INSTALLED_APPS = [
     'chatbot',
     'reports',
     'legal',
+    'food',
     'bookings.apps.BookingsConfig',
     'rest_framework',
     'rest_framework_simplejwt',

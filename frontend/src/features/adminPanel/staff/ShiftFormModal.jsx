@@ -4,7 +4,7 @@
  */
 import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
-import { staffApi } from '../../../services/staffApi';
+import { staffApi } from '../../staff/services/staffApi';
 
 function fmt(dt) {
   if (!dt) return '';

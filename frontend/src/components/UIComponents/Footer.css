@@ -1,125 +1,207 @@
-.hp-footer {
-  background: var(--navy);
-  color: var(--white);
-  padding: 120px 5% 50px;
-}
+/* ============================================================
+   Footer.css — Cebu Mini Hotel · App Footer
+   Professional two-row footer for Dashboard & inner pages.
+   ============================================================ */
 
-.hp-footer-top {
-  display: flex;
-  justify-content: space-between;
-  gap: 60px;
-  margin-bottom: 100px;
-  max-width: 1200px;
-  margin-left: auto;
-  margin-right: auto;
-}
-
-.hp-footer-brand { max-width: 360px; }
-
-.hp-footer-logo {
+.app-footer {
+  background: var(--bg, #FAF9F6);
+  border-top: 1px solid rgba(1, 0, 13, 0.08);
   font-family: 'Montserrat', sans-serif;
-  font-size: 22px;
-  font-weight: 900;
-  letter-spacing: 0.15em;
-  text-transform: uppercase;
-  margin-bottom: 6px;
+  padding: 0 5%;
 }
 
-.hp-footer-logo-sub {
-  font-size: 8px;
-  font-weight: 700;
-  letter-spacing: 0.25em;
-  color: rgba(255,255,255,0.4);
-  text-transform: uppercase;
-  margin-bottom: 22px;
-  display: block;
-}
-
-.hp-footer-desc {
-  font-size: 13px;
-  line-height: 1.85;
-  color: rgba(255,255,255,0.38);
-  font-weight: 400;
-}
-
-.hp-footer-socials {
+/* ── Upper row ───────────────────────────────────────────── */
+.app-footer-upper {
+  max-width: 1280px;
+  margin: 0 auto;
   display: flex;
-  gap: 14px;
-  margin-top: 28px;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 32px;
+  padding: 32px 0 28px;
+  border-bottom: 1px solid rgba(1, 0, 13, 0.06);
 }
 
-.hp-footer-social {
-  width: 34px; height: 34px;
-  border: 1px solid rgba(255,255,255,0.14);
-  display: flex; align-items: center; justify-content: center;
-  cursor: pointer;
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: 0.05em;
-  color: rgba(255,255,255,0.4);
+/* Brand */
+.app-footer-brand {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.app-footer-logo {
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
-  transition: all 0.3s ease;
-  background: none;
+  color: var(--text, #01000D);
+  line-height: 1;
 }
 
-.hp-footer-social:hover {
-  border-color: rgba(255,255,255,0.5);
-  color: var(--white);
+.app-footer-tagline {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: var(--text-muted, #909090);
+  text-transform: uppercase;
 }
 
-.hp-footer-nav { display: flex; gap: 80px; }
+/* Nav groups */
+.app-footer-nav {
+  display: flex;
+  align-items: flex-start;
+  gap: 48px;
+}
 
-.hp-footer-col-title {
+.app-footer-nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.app-footer-nav-label {
   font-size: 8px;
   font-weight: 900;
-  letter-spacing: 0.35em;
+  letter-spacing: 0.28em;
   text-transform: uppercase;
-  color: rgba(255,255,255,0.4);
-  margin-bottom: 28px;
-  display: block;
+  color: var(--text-muted, #909090);
+  margin-bottom: 2px;
 }
 
-.hp-footer-link {
-  display: block;
-  color: rgba(255,255,255,0.45);
-  font-size: 12px;
+.app-footer-nav-link {
+  font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.08em;
-  margin-bottom: 14px;
+  letter-spacing: 0.05em;
+  color: var(--text-mid, #535252);
   text-decoration: none;
-  transition: color 0.3s;
   background: none;
   border: none;
+  padding: 0;
   cursor: pointer;
   text-align: left;
-  padding: 0;
+  transition: color 0.22s ease;
+  line-height: 1.2;
 }
 
-.hp-footer-link:hover { color: var(--white); }
-
-.hp-footer-divider {
-  height: 1px;
-  background: rgba(255,255,255,0.07);
-  max-width: 1200px;
-  margin: 0 auto 34px;
+.app-footer-nav-link:hover {
+  color: var(--text, #01000D);
 }
 
-.hp-footer-bottom {
+/* Contact block */
+.app-footer-contact {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  max-width: 1200px;
-  margin: 0 auto;
-  flex-wrap: wrap;
-  gap: 12px;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
-.hp-footer-copy {
+.app-footer-contact-label {
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--text-muted, #909090);
+  margin-bottom: 2px;
+}
+
+.app-footer-contact-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-mid, #535252);
+  text-decoration: none;
+  transition: color 0.22s ease;
+}
+
+a.app-footer-contact-item:hover {
+  color: var(--text, #01000D);
+}
+
+.app-footer-contact-item svg {
+  flex-shrink: 0;
+  opacity: 0.45;
+}
+
+/* ── Lower row ───────────────────────────────────────────── */
+.app-footer-lower {
+  max-width: 1280px;
+  margin: 0 auto;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.app-footer-copy {
   font-size: 10px;
   font-weight: 600;
-  letter-spacing: 0.1em;
-  color: rgba(255,255,255,0.22);
-  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted, #909090);
+  white-space: nowrap;
 }
 
-.hp-footer-legal { display: flex; gap: 24px; }
+.app-footer-legal {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.app-footer-legal-link {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted, #909090);
+  text-decoration: none;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  transition: color 0.22s ease;
+  white-space: nowrap;
+}
+
+.app-footer-legal-link:hover {
+  color: var(--text, #01000D);
+}
+
+.app-footer-legal-sep {
+  width: 1px;
+  height: 10px;
+  background: rgba(1, 0, 13, 0.12);
+  flex-shrink: 0;
+}
+
+/* ── Responsive ──────────────────────────────────────────── */
+@media (max-width: 1024px) {
+  .app-footer-nav { gap: 32px; }
+}
+
+@media (max-width: 768px) {
+  .app-footer-upper {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 28px 0 22px;
+    gap: 24px;
+  }
+
+  .app-footer-nav {
+    flex-wrap: wrap;
+    gap: 28px;
+  }
+
+  .app-footer-lower {
+    height: auto;
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 14px 0 20px;
+    gap: 10px;
+  }
+
+  .app-footer-legal { flex-wrap: wrap; gap: 14px; }
+  .app-footer-legal-sep { display: none; }
+}

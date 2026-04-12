@@ -1,0 +1,323 @@
+/* KitchenDashboard.css — matches AdminDashboard gold/navy theme */
+
+.kd-page {
+  padding: 44px 48px 80px;
+  max-width: 1100px;
+  margin: 0 auto;
+  font-family: 'Raleway', sans-serif;
+  color: var(--white);
+}
+
+/* ── Header ── */
+.kd-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 32px;
+}
+.kd-eyebrow {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin: 0 0 8px;
+}
+.kd-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--white);
+  margin: 0 0 4px;
+}
+.kd-subtitle {
+  font-size: 13px;
+  color: var(--white-dim);
+  margin: 0 0 16px;
+}
+.kd-divider {
+  width: 44px;
+  height: 1px;
+  background: linear-gradient(90deg, var(--gold), transparent);
+}
+.kd-refresh-note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: rgba(248,246,240,0.3);
+  margin-top: 6px;
+}
+
+/* ── Strips ── */
+.kd-strips {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin-bottom: 28px;
+}
+.kd-strip {
+  background: var(--navy-card);
+  border: 1px solid var(--gold-border);
+  padding: 18px 20px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  position: relative;
+  overflow: hidden;
+}
+.kd-strip::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, var(--gold), transparent);
+}
+.kd-strip-icon { flex-shrink: 0; }
+.kd-strip-icon--amber { color: var(--amber, #C9A84C); }
+.kd-strip-icon--green { color: var(--green, #4ade80); }
+.kd-strip-icon--gold  { color: var(--gold); }
+.kd-strip-value {
+  font-family: 'Playfair Display', serif;
+  font-size: 26px;
+  color: var(--white);
+  line-height: 1;
+}
+.kd-strip-name {
+  font-size: 11px;
+  color: var(--white-dim);
+  margin-top: 3px;
+  letter-spacing: 0.3px;
+}
+
+/* ── Error ── */
+.kd-error {
+  background: rgba(248,113,113,0.08);
+  border: 1px solid rgba(248,113,113,0.3);
+  color: #f87171;
+  padding: 10px 16px;
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+/* ── Tabs ── */
+.kd-tabs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--gold-border);
+  padding-bottom: 12px;
+}
+.kd-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 18px;
+  background: none;
+  border: 1px solid var(--gold-border);
+  color: var(--white-dim);
+  font-family: 'Raleway', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.kd-tab:hover { color: var(--gold-l); border-color: var(--gold); }
+.kd-tab--active {
+  background: var(--gold-dim);
+  border-color: var(--gold);
+  color: var(--gold);
+}
+.kd-tab-badge {
+  background: var(--gold);
+  color: var(--navy);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 999px;
+  min-width: 18px;
+  text-align: center;
+}
+.kd-refresh-btn {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  background: none;
+  border: 1px solid var(--gold-border);
+  color: var(--white-dim);
+  font-family: 'Raleway', sans-serif;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.kd-refresh-btn:hover { color: var(--gold); border-color: var(--gold); }
+.kd-refresh-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ── Orders ── */
+.kd-orders { display: flex; flex-direction: column; gap: 10px; }
+.kd-loading {
+  text-align: center;
+  padding: 48px;
+  color: var(--white-dim);
+  font-size: 13px;
+  letter-spacing: 1px;
+}
+.kd-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 64px 0;
+  color: var(--white-dim);
+  font-size: 13px;
+}
+.kd-empty-icon { opacity: 0.25; color: var(--gold); }
+
+/* ── Order row ── */
+.kd-order-row {
+  display: grid;
+  grid-template-columns: 72px 1fr auto auto;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  background: var(--navy-card);
+  border: 1px solid var(--gold-border);
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.15s;
+}
+.kd-order-row::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, var(--gold), transparent);
+}
+.kd-order-row--done { opacity: 0.6; }
+.kd-order-row--done::before {
+  background: linear-gradient(90deg, rgba(74,222,128,0.4), transparent);
+}
+
+.kd-order-room {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  background: var(--gold-dim);
+  border: 1px solid var(--gold-border);
+  padding: 8px;
+}
+.kd-room-label {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+.kd-room-number {
+  font-family: 'Playfair Display', serif;
+  font-size: 20px;
+  color: var(--white);
+  line-height: 1;
+}
+
+.kd-order-info { min-width: 0; }
+.kd-food-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--white);
+  margin: 0 0 4px;
+}
+.kd-food-meta {
+  font-size: 12px;
+  color: var(--white-dim);
+  margin: 0 0 3px;
+}
+.kd-notes {
+  color: rgba(248,246,240,0.35);
+  font-style: italic;
+}
+.kd-food-time {
+  font-size: 11px;
+  color: rgba(248,246,240,0.3);
+  margin: 0;
+}
+
+.kd-order-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+/* Badges */
+.kd-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+.kd-badge--amber { background: rgba(201,168,76,0.15); color: var(--gold); border: 1px solid var(--gold-border); }
+.kd-badge--green { background: rgba(74,222,128,0.1);  color: #4ade80;     border: 1px solid rgba(74,222,128,0.25); }
+.kd-badge--gray  { background: rgba(248,246,240,0.05); color: var(--white-dim); border: 1px solid var(--gold-border); }
+
+.kd-pay-badge {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: rgba(248,246,240,0.35);
+  text-transform: uppercase;
+}
+
+/* Action */
+.kd-complete-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 16px;
+  background: var(--gold-dim);
+  border: 1px solid var(--gold);
+  color: var(--gold);
+  font-family: 'Raleway', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.kd-complete-btn:hover:not(:disabled) {
+  background: var(--gold);
+  color: var(--navy);
+}
+.kd-complete-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.kd-done-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: #4ade80;
+  font-weight: 600;
+}
+
+/* Spinner */
+.kd-spin {
+  animation: kd-rotate 0.8s linear infinite;
+}
+@keyframes kd-rotate { to { transform: rotate(360deg); } }
+
+/* Responsive */
+@media (max-width: 768px) {
+  .kd-page { padding: 24px 16px 60px; }
+  .kd-strips { grid-template-columns: repeat(2, 1fr); }
+  .kd-order-row { grid-template-columns: 60px 1fr; gap: 10px; }
+  .kd-order-meta { display: none; }
+  .kd-order-action { grid-column: 2; }
+}

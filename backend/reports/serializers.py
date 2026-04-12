@@ -40,6 +40,11 @@ METRICS_BY_TYPE = {
     ReportType.STAFF: [
         "total_check_ins", "total_cleaning_done", "total_maintenance_done",
     ],
+
+     ReportType.FOOD: [
+           "total_orders", "total_revenue", "paid_revenue",
+           "avg_order_value", "pending_orders", "completed_orders",
+    ],
 }
 
 GROUP_BY_OPTIONS = ["day", "week", "month", "room_type", "status"]
@@ -61,6 +66,7 @@ VALID_GROUP_BY_PER_TYPE = {
     "occupancy": ["room_type"],          # occupancy is already broken down by room_type
     "guests":    ["day", "week", "month"],
     "staff":     ["day", "week", "month"],
+    "food": ["day", "week", "month", "category"],
 }
 
 

@@ -13,19 +13,13 @@ export const frontDeskRoomsApi = {
   /**
    * GET /rooms/
    * All rooms with their current status.
-   * Used for the Room Status Board.
    */
   list: (params = {}) =>
-    api.get('/rooms/', { params: { ...params } }).then((r) => r.data),
+    api.get('/rooms/', { params }).then((r) => r.data),
 
   /**
    * POST /rooms/availability/
    * Returns only rooms available for the given date range.
-   * Used by Walk-In Booking to filter rooms by check-in/check-out.
-   *
-   * @param {string} checkIn  - YYYY-MM-DD
-   * @param {string} checkOut - YYYY-MM-DD
-   * @returns {Promise<Array>} - list of available room objects
    */
   available: (checkIn, checkOut) =>
     api.post('/rooms/availability/', {
@@ -33,7 +27,6 @@ export const frontDeskRoomsApi = {
       check_out: checkOut,
     }).then((r) => {
       const data = r.data;
-      // Backend may return { results: [...] } or a plain array
       return Array.isArray(data) ? data : (data.results ?? data.available_rooms ?? []);
     }),
 };
@@ -61,7 +54,7 @@ export const frontDeskBookingsApi = {
 
   /**
    * GET /bookings/admin/<pk>/
-   * Single booking detail.
+   * Single booking detail — includes amount_due, amount_paid, room_number.
    */
   detail: (pk) =>
     api.get(`/bookings/admin/${pk}/`).then((r) => r.data),
@@ -88,11 +81,41 @@ export const frontDeskBookingsApi = {
   checkIn: (pk, method = 'manual_entry') =>
     api.post(`/bookings/admin/${pk}/check-in/`, { method }).then((r) => r.data),
 
-    checkout: (pk, note = '') =>
-      api.post(`/bookings/admin/${pk}/checkout/`, { note }).then((r) => r.data),
+  /**
+   * POST /bookings/admin/<pk>/checkout/
+   *
+   * Calls StaffCheckoutAndCollectView (Option A).
+   * Atomically in ONE request:
+   *   1. Creates a BALANCE_PAYMENT Payment record if accommodation balance > 0
+   *   2. Calls payment.mark_paid() → generates receipt
+   *   3. Transitions CHECKED_IN → CHECKED_OUT
+   *   4. Creates ReviewToken + sends review invitation email
+   *
+   * @param {string|number} pk            - Booking primary key
+   * @param {string}        note          - Optional checkout note
+   * @param {string|null}   paymentMethod - 'cash' | 'card' | null
+   *                                        Required when accommodation balance > 0.
+   *                                        Safely ignored by the backend when balance = 0.
+   *
+   * @returns {Promise} - BookingDetailSerializer data + checkout_summary {
+   *   accommodation_balance_collected,
+   *   payment_method,
+   *   receipt_number,
+   *   checked_out_at,
+   * }
+   */
+  checkout: (pk, note = '', paymentMethod = null) =>
+    api.post(`/bookings/admin/${pk}/checkout/`, {
+      note,
+      ...(paymentMethod ? { payment_method: paymentMethod } : {}),
+    }).then((r) => r.data),
 
-    extend: (pk, body) =>
-      api.post(`/bookings/admin/${pk}/extend/`, body).then((r) => r.data),
+  /**
+   * POST /bookings/admin/<pk>/extend/
+   * Extend an active booking. Cash & card only.
+   */
+  extend: (pk, body) =>
+    api.post(`/bookings/admin/${pk}/extend/`, body).then((r) => r.data),
 };
 
 // ─── Payments ──────────────────────────────────────────────────────────────────
@@ -140,7 +163,8 @@ export function formatTime(dtStr) {
   });
 }
 
-// Room status config
+// ─── Room status config ────────────────────────────────────────────────────────
+
 export const ROOM_STATUS_CONFIG = {
   available:   { label: 'Available',   color: 'var(--green)',  bg: 'var(--green-bg)',  border: 'var(--green-border)'  },
   occupied:    { label: 'Occupied',    color: 'var(--gold)',   bg: 'var(--gold-dim)',  border: 'var(--gold-border)'   },

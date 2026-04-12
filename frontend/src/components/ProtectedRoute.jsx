@@ -9,6 +9,7 @@ function getRoleHome(role) {
     case 'housekeeping': return '/staff/cleaning';
     case 'maintenance':  return '/staff/maintenance';
     case 'security':     return '/staff/incidents';
+    case 'kitchen_staff': return '/staff/kitchen';
     case 'admin':
     case 'manager':
     case 'receptionist': return '/admin/dashboard';

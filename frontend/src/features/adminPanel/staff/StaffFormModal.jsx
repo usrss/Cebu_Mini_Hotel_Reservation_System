@@ -6,7 +6,7 @@
 
 import { useState, useEffect } from 'react';
 import { X, Mail, CheckCircle2 } from 'lucide-react';
-import { staffApi } from '../../../services/staffApi';
+import { staffApi } from '../../staff/services/staffApi';
 
 // Receptionist excluded per spec
 const ROLE_OPTIONS = [
@@ -16,6 +16,7 @@ const ROLE_OPTIONS = [
   { value:'housekeeping', label:'Housekeeping' },
   { value:'maintenance',  label:'Maintenance' },
   { value:'security',     label:'Security' },
+  { value:'kitchen_staff', label:'Kitchen Staff' }
 ];
 
 function Field({ label, error, required, children }) {
