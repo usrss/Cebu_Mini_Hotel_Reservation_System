@@ -2,26 +2,12 @@
  * src/features/staff/checkin/services/checkInApi.js
  *
  * All API calls for the Front Desk Check-In system.
- * Written against the REAL bookings backend:
  *
- *   GET  /bookings/lookup/?reference=CMH-YYYY-XXXXXX
- *        → BookingDetailSerializer (has amount_paid, amount_due fields)
- *
- *   POST /bookings/admin/<pk>/verify-pin/
- *        body: { pin: "1234" }   ← 4 digits, not 6
- *        → { valid: true } | 400 { valid: false, error: "..." }
- *
- *   POST /bookings/admin/<pk>/check-in/
- *        body: { method: "qr_scan" | "manual_entry" }
- *        → BookingDetailSerializer
- *
- *   POST /bookings/admin/<pk>/collect-payment/
- *        body: { payment_method: "cash" | "gcash" | "card" | "other" }
- *        → BookingDetailSerializer
- *
- *   POST /bookings/admin/<pk>/check-in-with-balance/
- *        body: { method: "qr_scan" | "manual_entry" }
- *        → BookingDetailSerializer + remaining_balance field
+ * CHANGES vs previous version:
+ *  - canCheckIn() now validates check_in date:
+ *      • Blocks check-in if check_in > today (future booking)
+ *      • Returns a warning (not a block) if check_in < today (late check-in)
+ *    This fixes the bug where staff could check in guests regardless of date.
  */
 
 import api from '../../../services/api';
@@ -76,7 +62,6 @@ export const checkInApi = {
 };
 
 // ─── Payment method options ────────────────────────────────────────────────────
-// Matches PaymentMethod choices in payments/models.py + 'other'
 
 export const PAYMENT_METHODS = [
   { value: 'cash',  label: 'Cash',                icon: '💵' },
@@ -85,7 +70,7 @@ export const PAYMENT_METHODS = [
   { value: 'other', label: 'Other',               icon: '•••' },
 ];
 
-// ─── Booking status values (matches BookingStatus in bookings/models.py) ──────
+// ─── Booking status values ────────────────────────────────────────────────────
 
 export const BOOKING_STATUS = {
   PENDING_PAYMENT: 'pending_payment',
@@ -107,7 +92,7 @@ export const BOOKING_STATUS_LABELS = {
   no_show:         'No Show',
 };
 
-// ─── Payment status values (matches PaymentStatus in bookings/models.py) ──────
+// ─── Payment status values ────────────────────────────────────────────────────
 
 export const BOOKING_PAYMENT_STATUS = {
   UNPAID:             'unpaid',
@@ -117,22 +102,14 @@ export const BOOKING_PAYMENT_STATUS = {
   FAILED:             'failed',
 };
 
-// ─── Helpers ───────────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-/**
- * Get remaining balance from a BookingDetailSerializer response.
- * Uses the computed `amount_due` field which the serializer calculates
- * by summing paid Payment records and subtracting from total_price.
- */
 export function getRemainingBalance(booking) {
   if (!booking) return 0;
   const due = parseFloat(booking.amount_due || '0');
   return Math.max(0, due);
 }
 
-/**
- * Get the amount already paid from a BookingDetailSerializer response.
- */
 export function getAmountPaid(booking) {
   if (!booking) return 0;
   return parseFloat(booking.amount_paid || '0');
@@ -140,8 +117,13 @@ export function getAmountPaid(booking) {
 
 /**
  * Validate that a booking can be checked in.
- * Runs locally before making any API calls.
- * Returns { ok: boolean, reason: string | null }
+ *
+ * Returns:
+ *   { ok: false, reason: string }         — hard block, show error
+ *   { ok: true,  reason: null }            — all clear
+ *   { ok: true,  reason: null,
+ *     warning: string }                    — allowed but show amber notice
+ *                                            (late check-in)
  */
 export function canCheckIn(booking) {
   if (!booking) return { ok: false, reason: 'No booking found.' };
@@ -167,17 +149,51 @@ export function canCheckIn(booking) {
     return { ok: false, reason: 'This booking was marked as no-show.' };
 
   if (s !== BOOKING_STATUS.CONFIRMED)
-    return { ok: false, reason: `Unexpected booking status: ${booking.status_display || s}` };
+    return {
+      ok: false,
+      reason: `Unexpected booking status: ${booking.status_display || s}`,
+    };
 
   if (!booking.has_credentials)
     return { ok: false, reason: 'This booking has no check-in credentials.' };
 
+  // ── Date validation ────────────────────────────────────────────────────────
+  const today      = new Date().toISOString().split('T')[0]; // 'YYYY-MM-DD'
+  const checkInDate = booking.check_in;                      // 'YYYY-MM-DD'
+
+  if (!checkInDate)
+    return { ok: false, reason: 'This booking has no check-in date.' };
+
+  // HARD BLOCK: check-in date is in the future
+  if (checkInDate > today) {
+    const formatted = new Date(checkInDate + 'T00:00:00').toLocaleDateString('en-PH', {
+      weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
+    });
+    return {
+      ok: false,
+      reason: `Check-in date is ${formatted}. This booking cannot be checked in yet.`,
+    };
+  }
+
+  // SOFT WARNING: check-in date was in the past (late arrival)
+  const daysDiff = Math.round(
+    (new Date(today + 'T00:00:00') - new Date(checkInDate + 'T00:00:00')) / 86400000,
+  );
+
+  if (daysDiff > 0) {
+    const formatted = new Date(checkInDate + 'T00:00:00').toLocaleDateString('en-PH', {
+      month: 'short', day: 'numeric', year: 'numeric',
+    });
+    return {
+      ok: true,
+      reason: null,
+      warning: `Scheduled check-in was ${daysDiff} day${daysDiff !== 1 ? 's' : ''} ago (${formatted}). Proceeding as a late arrival.`,
+    };
+  }
+
   return { ok: true, reason: null };
 }
 
-/**
- * Format a number as Philippine Peso currency.
- */
 export function formatPHP(amount) {
   return `₱${Number(amount || 0).toLocaleString('en-PH', {
     minimumFractionDigits: 2,

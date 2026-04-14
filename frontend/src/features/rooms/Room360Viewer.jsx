@@ -1,18 +1,15 @@
 // src/features/rooms/Room360Viewer.jsx
+// Logic: unchanged — pannellum integration exactly as before.
+// Visual: Editorial Light theme via new Room360Viewer.css.
 import { useEffect, useRef, useState } from 'react';
-import { X, Maximize2, RotateCw, Loader2 } from 'lucide-react';
+import { X, Maximize2, RotateCw } from 'lucide-react';
 import './Room360Viewer.css';
 
-/**
- * 360° Panorama Viewer
- * Uses Pannellum for equirectangular panorama display.
- * Logic unchanged — only UI/CSS updated.
- */
 export default function Room360Viewer({ imageUrl, roomName, onClose }) {
-  const viewerRef    = useRef(null);
-  const pannellumRef = useRef(null);
-  const [loading, setLoading]         = useState(true);
-  const [error, setError]             = useState(null);
+  const viewerRef      = useRef(null);
+  const pannellumRef   = useRef(null);
+  const [loading, setLoading]           = useState(true);
+  const [error, setError]               = useState(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   useEffect(() => {
@@ -44,15 +41,15 @@ export default function Room360Viewer({ imageUrl, roomName, onClose }) {
     try {
       if (window.pannellum) { initViewer(); return; }
 
-      const link = document.createElement('link');
-      link.rel   = 'stylesheet';
-      link.href  = 'https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.css';
+      const link  = document.createElement('link');
+      link.rel    = 'stylesheet';
+      link.href   = 'https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.css';
       document.head.appendChild(link);
 
-      const script    = document.createElement('script');
-      script.src      = 'https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.js';
-      script.onload   = initViewer;
-      script.onerror  = () => setError('Failed to load 360° viewer');
+      const script   = document.createElement('script');
+      script.src     = 'https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.js';
+      script.onload  = initViewer;
+      script.onerror = () => setError('Failed to load 360° viewer');
       document.head.appendChild(script);
     } catch {
       setError('Failed to initialize viewer');
@@ -63,23 +60,26 @@ export default function Room360Viewer({ imageUrl, roomName, onClose }) {
     if (!viewerRef.current || !window.pannellum) return;
     try {
       pannellumRef.current = window.pannellum.viewer(viewerRef.current, {
-        type: 'equirectangular',
-        panorama: imageUrl,
-        autoLoad: true,
+        type:         'equirectangular',
+        panorama:     imageUrl,
+        autoLoad:     true,
         showControls: false,
-        mouseZoom: true,
+        mouseZoom:    true,
         doubleClickZoom: false,
-        draggable: true,
+        draggable:    true,
         keyboardZoom: true,
-        friction: 0.15,
-        hfov: 100,
-        minHfov: 50,
-        maxHfov: 120,
-        pitch: 0,
-        yaw: 0,
+        friction:     0.15,
+        hfov:         100,
+        minHfov:      50,
+        maxHfov:      120,
+        pitch:        0,
+        yaw:          0,
       });
       pannellumRef.current.on('load',  () => setLoading(false));
-      pannellumRef.current.on('error', () => { setError('Failed to load panorama image'); setLoading(false); });
+      pannellumRef.current.on('error', () => {
+        setError('Failed to load panorama image');
+        setLoading(false);
+      });
     } catch {
       setError('Failed to initialize viewer');
       setLoading(false);
@@ -114,10 +114,11 @@ export default function Room360Viewer({ imageUrl, roomName, onClose }) {
         {/* ── Header ── */}
         <div className="room-360-header">
           <div className="room-360-title">
+            {/* Continuously rotating globe icon */}
             <RotateCw size={16} className="rotate-icon" />
             <div className="room-360-title-sep" />
             <div>
-              <p className="room-360-title-eyebrow">Virtual Tour</p>
+              <span className="room-360-title-eyebrow">Virtual Tour</span>
               <p className="room-360-title-name">{roomName || 'Room'} · 360°</p>
             </div>
           </div>

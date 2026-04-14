@@ -1,28 +1,15 @@
 /**
- * src/features/chatbot/FrontDeskSupportPage.jsx
- *
- * Support ticket page for Front Desk / Receptionist role.
- *
- * What Front Desk sees:
- *   - Only FRONT_DESK tier tickets assigned to them (backend enforces this)
- *   - Full conversation history per ticket
- *   - Reply to guest
- *   - Escalate to Manager (with required reason)
- *   - Close ticket when resolved
- *
- * What they do NOT see:
- *   - Manager-tier or Admin-tier tickets
- *   - Tier filter (irrelevant — they only have one tier)
- *   - Priority filter (shown as labels only, not as a routing control)
- *
- * Route: /front-desk/support  (or wherever FD panel lives)
- *
- * Usage:
- *   import FrontDeskSupportPage from './features/chatbot/FrontDeskSupportPage';
- *   <Route path="/front-desk/support" element={<FrontDeskSupportPage />} />
+ * FrontDeskSupportPage.jsx — Revised
+ * Matches FrontDeskDashboard light theme (DM Sans / DM Serif Display, fd- tokens).
+ * Lucide icons only — no emoji. Real-time auto-poll every 20s.
+ * No back button, no refresh button, no arrow symbols.
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import {
+  MessageSquare, Send, ArrowUpCircle, CheckCircle2,
+  AlertCircle, Clock, User, Bot, Headphones, X, ChevronRight,
+} from 'lucide-react';
 import {
   getSupportTickets,
   getSupportTicketDetail,
@@ -30,60 +17,59 @@ import {
   closeTicket,
   escalateTicket,
 } from '../../services/chatApi';
-import './FrontDeskSupportPage.css';
+import '../staff/frontdesk/FrontDesk.css';
+import '../staff/Staff.css';
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+// ─── Config ───────────────────────────────────────────────────────────────────
 
 const PRIORITY_CONFIG = {
-  low:      { label: 'Low',      color: '#9ca3af' },
-  normal:   { label: 'Normal',   color: '#6EE7B7' },
-  high:     { label: 'High',     color: '#FCD34D' },
-  critical: { label: 'Critical', color: '#F87171' },
+  low:      { label: 'Low',      cls: 'fd-badge-muted'  },
+  normal:   { label: 'Normal',   cls: 'fd-badge-green'  },
+  high:     { label: 'High',     cls: 'fd-badge-amber'  },
+  critical: { label: 'Critical', cls: 'fd-badge-red'    },
 };
 
 const STATUS_CONFIG = {
-  open:        { label: 'Open',        color: '#FCD34D' },
-  in_progress: { label: 'In Progress', color: '#6EE7B7' },
-  escalated:   { label: 'Escalated',   color: '#818CF8' },
-  closed:      { label: 'Closed',      color: '#9ca3af' },
+  open:        { label: 'Open',        cls: 'fd-badge-amber' },
+  in_progress: { label: 'In Progress', cls: 'fd-badge-blue'  },
+  escalated:   { label: 'Escalated',   cls: 'fd-badge-red'   },
+  closed:      { label: 'Closed',      cls: 'fd-badge-muted' },
 };
 
-const CATEGORY_ICONS = {
-  booking_inquiry:  '📅',
-  payment_issue:    '💳',
-  room_complaint:   '🛏',
-  cancellation:     '❌',
-  vip_request:      '⭐',
-  technical_error:  '⚠️',
-  general_inquiry:  '💬',
-  security_concern: '🔒',
-  other:            '📋',
+const CATEGORY_LABELS = {
+  booking_inquiry:  'Booking Inquiry',
+  payment_issue:    'Payment Issue',
+  room_complaint:   'Room Complaint',
+  cancellation:     'Cancellation',
+  vip_request:      'VIP Request',
+  technical_error:  'Technical Error',
+  general_inquiry:  'General Inquiry',
+  security_concern: 'Security',
+  other:            'Other',
 };
 
-// ─── Reusable badge components ────────────────────────────────────────────────
+// ─── Badges ───────────────────────────────────────────────────────────────────
 
 function PriorityBadge({ priority }) {
   const cfg = PRIORITY_CONFIG[priority] || PRIORITY_CONFIG.normal;
-  return (
-    <span className="fd-badge" style={{ color: cfg.color, borderColor: `${cfg.color}40`, background: `${cfg.color}10` }}>
-      {cfg.label}
-    </span>
-  );
+  return <span className={`fd-badge ${cfg.cls}`}>{cfg.label}</span>;
 }
 
 function StatusBadge({ status }) {
   const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.open;
-  return (
-    <span className="fd-badge" style={{ color: cfg.color, borderColor: `${cfg.color}40`, background: `${cfg.color}10` }}>
-      {cfg.label}
-    </span>
-  );
+  return <span className={`fd-badge ${cfg.cls}`}>{cfg.label}</span>;
 }
 
 function CategoryTag({ category }) {
-  const icon  = CATEGORY_ICONS[category] || '📋';
-  const label = category?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || 'Other';
-  return <span className="fd-category">{icon} {label}</span>;
+  return (
+    <span style={{
+      fontSize: 10, fontWeight: 600, padding: '2px 8px',
+      background: 'var(--fd-accent-lt)', color: 'var(--fd-text-muted)',
+      borderRadius: 'var(--fd-radius-sm)',
+    }}>
+      {CATEGORY_LABELS[category] || category}
+    </span>
+  );
 }
 
 // ─── Escalation Modal ─────────────────────────────────────────────────────────
@@ -92,34 +78,57 @@ function EscalateModal({ ticketId, onConfirm, onCancel, loading }) {
   const [reason, setReason] = useState('');
 
   return (
-    <div className="fd-modal-overlay" onClick={onCancel}>
-      <div className="fd-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="fd-modal-header">
-          <h3>Escalate Ticket #{ticketId} to Manager</h3>
-          <button className="fd-modal-close" onClick={onCancel}>✕</button>
+    <div
+      style={{
+        position: 'fixed', inset: 0, zIndex: 800,
+        background: 'rgba(1,0,13,0.40)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: 20, backdropFilter: 'blur(4px)',
+      }}
+      onClick={(e) => e.target === e.currentTarget && onCancel()}
+    >
+      <div style={{
+        background: '#fff', borderRadius: 20,
+        width: '100%', maxWidth: 440,
+        boxShadow: '0 8px 40px rgba(1,0,13,0.18)',
+        overflow: 'hidden',
+      }}>
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '18px 22px 16px',
+          borderBottom: '1px solid #F2F3F7', background: '#F2F3F7',
+        }}>
+          <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 18, fontWeight: 400, color: '#01000D' }}>
+            Escalate Ticket #{ticketId}
+          </span>
+          <button onClick={onCancel} style={{ width: 28, height: 28, borderRadius: 7, background: '#E4E6ED', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <X size={14} />
+          </button>
         </div>
-        <p className="fd-modal-desc">
-          Escalating sends this ticket to the <strong>Manager</strong> team.
-          Please describe why you're escalating so the Manager has context.
-        </p>
-        <textarea
-          className="fd-reply-input"
-          placeholder="Reason for escalation (required)…"
-          value={reason}
-          onChange={(e) => setReason(e.target.value)}
-          rows={4}
-          autoFocus
-        />
-        <div className="fd-modal-actions">
-          <button className="fd-cancel-btn" onClick={onCancel} disabled={loading}>
+        <div style={{ padding: '18px 22px' }}>
+          <p style={{ fontSize: 13, color: '#52515E', marginBottom: 14, lineHeight: 1.6 }}>
+            This ticket will be escalated to the Manager team. Describe why so the Manager has context.
+          </p>
+          <textarea
+            className="fd-textarea-lg"
+            placeholder="Reason for escalation (required)"
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            rows={3}
+            autoFocus
+          />
+        </div>
+        <div style={{ padding: '0 22px 18px', display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <button onClick={onCancel} disabled={loading} className="fd-btn" style={{ padding: '9px 16px' }}>
             Cancel
           </button>
           <button
-            className="fd-escalate-btn"
             onClick={() => onConfirm(reason)}
             disabled={loading || !reason.trim()}
+            className="fd-btn fd-btn-primary"
+            style={{ padding: '9px 16px' }}
           >
-            {loading ? 'Escalating…' : '↑ Escalate to Manager'}
+            {loading ? 'Escalating…' : 'Escalate to Manager'}
           </button>
         </div>
       </div>
@@ -130,27 +139,43 @@ function EscalateModal({ ticketId, onConfirm, onCancel, loading }) {
 // ─── Ticket list item ─────────────────────────────────────────────────────────
 
 function TicketItem({ ticket, isActive, onClick }) {
+  const isUrgent = ticket.priority === 'critical' || ticket.priority === 'high';
   return (
     <button
-      className={`fd-ticket-item ${isActive ? 'fd-ticket-item--active' : ''} ${ticket.priority === 'critical' || ticket.priority === 'high' ? 'fd-ticket-item--urgent' : ''}`}
       onClick={onClick}
+      style={{
+        width: '100%', textAlign: 'left',
+        background: isActive ? 'var(--fd-accent-lt)' : 'transparent',
+        border: 'none',
+        borderLeft: `3px solid ${isActive ? 'var(--fd-accent)' : isUrgent ? 'var(--fd-amber)' : 'transparent'}`,
+        borderBottom: '1px solid var(--fd-surface-2)',
+        padding: '14px 16px',
+        cursor: 'pointer',
+        transition: 'background 0.15s',
+        fontFamily: "'DM Sans', sans-serif",
+      }}
+      onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'var(--fd-surface-2)'; }}
+      onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
     >
-      <div className="fd-ticket-top">
-        <span className="fd-ticket-id">#{ticket.id}</span>
-        <div className="fd-ticket-badges">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--fd-text-muted)', letterSpacing: '0.04em' }}>
+          #{ticket.id}
+        </span>
+        <div style={{ display: 'flex', gap: 4 }}>
           <StatusBadge status={ticket.status} />
           <PriorityBadge priority={ticket.priority} />
         </div>
       </div>
-      <p className="fd-ticket-subject">{ticket.subject || 'No subject'}</p>
-      <div className="fd-ticket-meta">
+      <p style={{ margin: '0 0 6px', fontSize: 13, fontWeight: 600, color: 'var(--fd-text)', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
+        {ticket.subject || 'No subject'}
+      </p>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
         <CategoryTag category={ticket.category} />
-        <span className="fd-ticket-guest">✉️ {ticket.user_email}</span>
-        <span className="fd-ticket-count">💬 {ticket.message_count}</span>
+        <span style={{ fontSize: 11, color: 'var(--fd-text-faint)' }}>{ticket.user_email}</span>
+        <span style={{ fontSize: 11, color: 'var(--fd-text-faint)', display: 'flex', alignItems: 'center', gap: 3 }}>
+          <MessageSquare size={10} /> {ticket.message_count}
+        </span>
       </div>
-      {ticket.assigned_to_name && (
-        <span className="fd-ticket-assigned">👤 {ticket.assigned_to_name}</span>
-      )}
     </button>
   );
 }
@@ -160,29 +185,46 @@ function TicketItem({ ticket, isActive, onClick }) {
 function ConvMessage({ msg }) {
   const isUser    = msg.sender === 'user';
   const isSupport = msg.sender === 'support';
+  const isBot     = msg.sender === 'bot';
+
+  const Icon = isUser ? User : isSupport ? Headphones : Bot;
+  const senderLabel = isUser ? 'Guest' : isSupport ? 'You' : 'Bot';
+
   return (
-    <div className={`fd-msg fd-msg--${msg.sender}`}>
-      <div className="fd-msg-meta">
-        <span className="fd-msg-sender">
-          {isUser ? '👤 Guest' : isSupport ? '🛎 You (Support)' : '🤖 Bot'}
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: isSupport ? 'flex-end' : 'flex-start',
+      gap: 4,
+      maxWidth: '72%',
+      alignSelf: isSupport ? 'flex-end' : 'flex-start',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <Icon size={10} style={{ color: 'var(--fd-text-faint)' }} />
+        <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--fd-text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+          {senderLabel}
         </span>
-        <span className="fd-msg-time">{new Date(msg.timestamp).toLocaleString()}</span>
+        <span style={{ fontSize: 10, color: 'var(--fd-text-faint)' }}>
+          {new Date(msg.timestamp).toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' })}
+        </span>
       </div>
-      <div className={`fd-msg-bubble fd-msg-bubble--${msg.sender}`}>
+      <div style={{
+        padding: '10px 14px',
+        borderRadius: isSupport ? '12px 12px 2px 12px' : '12px 12px 12px 2px',
+        fontSize: 13,
+        lineHeight: 1.55,
+        wordBreak: 'break-word',
+        background: isSupport
+          ? 'var(--fd-accent)'
+          : isBot
+          ? 'var(--fd-surface-2)'
+          : 'var(--fd-surface)',
+        color: isSupport ? '#fff' : 'var(--fd-text)',
+        boxShadow: 'var(--fd-shadow-xs)',
+        fontStyle: isBot ? 'italic' : 'normal',
+      }}>
         {msg.message_text}
       </div>
-    </div>
-  );
-}
-
-// ─── Empty states ─────────────────────────────────────────────────────────────
-
-function EmptyQueue() {
-  return (
-    <div className="fd-empty-queue">
-      <span>✅</span>
-      <p>No open tickets in your queue</p>
-      <small>New guest support requests will appear here automatically</small>
     </div>
   );
 }
@@ -202,13 +244,9 @@ export default function FrontDeskSupportPage() {
   const [escalating,   setEscalating]   = useState(false);
   const bottomRef = useRef(null);
 
-  // ── Load front-desk tier tickets ────────────────────────────────────────────
   const loadTickets = useCallback(async () => {
     try {
-      const data = await getSupportTickets({
-        tier:   'front_desk',
-        status: statusFilter,
-      });
+      const data = await getSupportTickets({ tier: 'front_desk', status: statusFilter });
       setTickets(data.tickets || []);
     } catch {
       setError('Failed to load tickets.');
@@ -218,14 +256,11 @@ export default function FrontDeskSupportPage() {
   }, [statusFilter]);
 
   useEffect(() => { loadTickets(); }, [loadTickets]);
-
-  // Auto-refresh every 20s
   useEffect(() => {
-    const interval = setInterval(loadTickets, 20_000);
-    return () => clearInterval(interval);
+    const iv = setInterval(loadTickets, 20_000);
+    return () => clearInterval(iv);
   }, [loadTickets]);
 
-  // ── Open ticket ─────────────────────────────────────────────────────────────
   const openTicket = useCallback(async (ticket) => {
     setActiveTicket(ticket);
     setConversation(null);
@@ -243,7 +278,6 @@ export default function FrontDeskSupportPage() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [conversation?.messages]);
 
-  // ── Send reply ──────────────────────────────────────────────────────────────
   const handleReply = useCallback(async () => {
     if (!replyText.trim() || sending || !activeTicket) return;
     setSending(true);
@@ -251,10 +285,7 @@ export default function FrontDeskSupportPage() {
       const data = await replyToTicket(activeTicket.id, replyText.trim());
       setReplyText('');
       setActiveTicket(data.ticket);
-      setConversation((prev) => ({
-        ...prev,
-        messages: [...(prev?.messages || []), data.message],
-      }));
+      setConversation(prev => ({ ...prev, messages: [...(prev?.messages || []), data.message] }));
       loadTickets();
     } catch {
       setError('Failed to send reply.');
@@ -263,7 +294,6 @@ export default function FrontDeskSupportPage() {
     }
   }, [replyText, sending, activeTicket, loadTickets]);
 
-  // ── Close ticket ─────────────────────────────────────────────────────────────
   const handleClose = useCallback(async () => {
     if (!activeTicket || !window.confirm('Mark this ticket as resolved and close it?')) return;
     try {
@@ -275,7 +305,6 @@ export default function FrontDeskSupportPage() {
     }
   }, [activeTicket, loadTickets]);
 
-  // ── Escalate ticket to Manager ───────────────────────────────────────────────
   const handleEscalate = useCallback(async (reason) => {
     if (!activeTicket || !reason.trim()) return;
     setEscalating(true);
@@ -295,155 +324,210 @@ export default function FrontDeskSupportPage() {
   const isEscalated = activeTicket?.status === 'escalated';
   const canAct      = activeTicket && !isClosed && !isEscalated;
 
-  // Count by priority for the header stats
-  const urgentCount = tickets.filter(t => ['high', 'critical'].includes(t.priority) && t.status !== 'closed').length;
   const openCount   = tickets.filter(t => t.status !== 'closed').length;
+  const urgentCount = tickets.filter(t => ['high', 'critical'].includes(t.priority) && t.status !== 'closed').length;
+
+  const STATUS_FILTERS = [
+    { value: '',            label: 'All'         },
+    { value: 'open',        label: 'Open'        },
+    { value: 'in_progress', label: 'In Progress' },
+    { value: 'closed',      label: 'Closed'      },
+  ];
 
   return (
-    <div className="fd-page">
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="fd-header">
-        <div className="fd-header-left">
-          <h1 className="fd-title">🛎 Guest Support</h1>
-          <p className="fd-subtitle">Front Desk · Incoming guest tickets</p>
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      height: '100vh',
+      background: 'var(--fd-bg)',
+      fontFamily: "'DM Sans', sans-serif",
+      color: 'var(--fd-text)',
+    }}>
+
+      {/* ── Top bar ─────────────────────────────────────────────────────── */}
+      <div style={{
+        background: '#fff',
+        borderBottom: '1px solid var(--fd-surface-2)',
+        padding: '14px 28px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: 12,
+        flexShrink: 0,
+      }}>
+        <div>
+          <p className="fd-eyebrow" style={{ marginBottom: 2 }}>Front Desk</p>
+          <h1 style={{ fontFamily: "'DM Serif Display', serif", fontSize: 20, fontWeight: 400, margin: 0, color: 'var(--fd-text)' }}>
+            Guest Support
+          </h1>
         </div>
 
-        <div className="fd-header-stats">
-          <div className="fd-stat">
-            <span className="fd-stat-val">{openCount}</span>
-            <span className="fd-stat-label">Open</span>
-          </div>
-          {urgentCount > 0 && (
-            <div className="fd-stat fd-stat--urgent">
-              <span className="fd-stat-val">{urgentCount}</span>
-              <span className="fd-stat-label">Urgent</span>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+          {/* KPI pills */}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <div className="fd-card" style={{ padding: '8px 16px', marginBottom: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 60 }}>
+              <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 20, color: 'var(--fd-text)' }}>{openCount}</span>
+              <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fd-text-muted)' }}>Open</span>
             </div>
-          )}
-        </div>
+            {urgentCount > 0 && (
+              <div className="fd-card" style={{ padding: '8px 16px', marginBottom: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 60, background: 'var(--fd-amber-bg)' }}>
+                <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 20, color: 'var(--fd-amber)' }}>{urgentCount}</span>
+                <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fd-amber)' }}>Urgent</span>
+              </div>
+            )}
+          </div>
 
-        <div className="fd-filters">
-          {['', 'open', 'in_progress', 'closed'].map((s) => (
-            <button
-              key={s}
-              className={`fd-filter-btn ${statusFilter === s ? 'fd-filter-btn--active' : ''}`}
-              onClick={() => setStatusFilter(s)}
-            >
-              {s === '' ? 'All Active' : s === 'in_progress' ? 'In Progress' : s.charAt(0).toUpperCase() + s.slice(1)}
-            </button>
-          ))}
-          <button className="fd-refresh-btn" onClick={loadTickets} title="Refresh">↻</button>
+          {/* Status filters */}
+          <div className="fd-status-tabs" style={{ marginBottom: 0 }}>
+            {STATUS_FILTERS.map(f => (
+              <button
+                key={f.value}
+                className={`fd-status-tab${statusFilter === f.value ? ' active' : ''}`}
+                onClick={() => setStatusFilter(f.value)}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
       {error && (
-        <div className="fd-error">⚠️ {error} <button onClick={() => setError(null)}>✕</button></div>
+        <div className="fd-notice fd-notice-error" style={{ margin: '0 28px 0', borderRadius: 0, marginBottom: 0 }}>
+          <AlertCircle size={14} />
+          <span>{error}</span>
+          <button onClick={() => setError(null)} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer' }}>
+            <X size={14} />
+          </button>
+        </div>
       )}
 
-      <div className="fd-body">
-        {/* ── Ticket list ──────────────────────────────────────────────────── */}
-        <div className="fd-ticket-list">
+      {/* ── Body ─────────────────────────────────────────────────────────── */}
+      <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '300px 1fr', overflow: 'hidden' }}>
+
+        {/* ── Ticket list ─────────────────────────────────────────────── */}
+        <div style={{
+          borderRight: '1px solid var(--fd-surface-2)',
+          overflowY: 'auto',
+          background: '#fff',
+        }}>
           {loading ? (
-            <div className="fd-empty-queue"><span>⏳</span><p>Loading tickets…</p></div>
+            <div className="fd-loading" style={{ minHeight: 200 }}><div className="fd-spinner" /></div>
           ) : tickets.length === 0 ? (
-            <EmptyQueue />
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '48px 20px', color: 'var(--fd-text-faint)', textAlign: 'center' }}>
+              <CheckCircle2 size={32} style={{ opacity: 0.4 }} />
+              <p style={{ margin: 0, fontSize: 13, fontWeight: 600 }}>No open tickets</p>
+              <p style={{ margin: 0, fontSize: 11 }}>New guest requests will appear here</p>
+            </div>
           ) : (
-            tickets.map((t) => (
-              <TicketItem
-                key={t.id}
-                ticket={t}
-                isActive={activeTicket?.id === t.id}
-                onClick={() => openTicket(t)}
-              />
+            tickets.map(t => (
+              <TicketItem key={t.id} ticket={t} isActive={activeTicket?.id === t.id} onClick={() => openTicket(t)} />
             ))
           )}
         </div>
 
-        {/* ── Conversation panel ────────────────────────────────────────────── */}
-        <div className="fd-conv-panel">
+        {/* ── Conversation panel ───────────────────────────────────────── */}
+        <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--fd-surface-2)' }}>
           {!activeTicket ? (
-            <div className="fd-conv-placeholder">
-              <span>💬</span>
-              <p>Select a ticket to start responding</p>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 12, color: 'var(--fd-text-faint)' }}>
+              <MessageSquare size={40} style={{ opacity: 0.3 }} />
+              <p style={{ margin: 0, fontSize: 13, fontWeight: 500 }}>Select a ticket to start responding</p>
             </div>
           ) : (
             <>
-              {/* Ticket header */}
-              <div className="fd-conv-header">
-                <div className="fd-conv-header-info">
-                  <span className="fd-conv-id">Ticket #{activeTicket.id}</span>
+              {/* Conversation header */}
+              <div style={{
+                background: '#fff',
+                borderBottom: '1px solid var(--fd-surface-2)',
+                padding: '12px 20px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: 8,
+                flexShrink: 0,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--fd-text)' }}>#{activeTicket.id}</span>
                   <StatusBadge status={activeTicket.status} />
                   <PriorityBadge priority={activeTicket.priority} />
                   <CategoryTag category={activeTicket.category} />
-                  <span className="fd-conv-guest">✉️ {activeTicket.user_email}</span>
+                  <span style={{ fontSize: 11, color: 'var(--fd-text-faint)' }}>{activeTicket.user_email}</span>
                 </div>
-
-                <div className="fd-conv-header-actions">
-                  {/* Escalate — only when ticket is still active at FD level */}
+                <div style={{ display: 'flex', gap: 8 }}>
                   {canAct && activeTicket.can_escalate && (
-                    <button
-                      className="fd-escalate-trigger"
-                      onClick={() => setShowEscalate(true)}
-                      title="Can't resolve? Pass to Manager"
-                    >
-                      ↑ Escalate to Manager
+                    <button className="fd-btn" style={{ fontSize: 11, padding: '6px 12px', display: 'flex', alignItems: 'center', gap: 5 }} onClick={() => setShowEscalate(true)}>
+                      <ArrowUpCircle size={13} /> Escalate to Manager
                     </button>
                   )}
                   {canAct && (
-                    <button className="fd-close-trigger" onClick={handleClose}>
-                      ✓ Resolve &amp; Close
+                    <button className="fd-btn fd-btn-primary" style={{ fontSize: 11, padding: '6px 12px', display: 'flex', alignItems: 'center', gap: 5 }} onClick={handleClose}>
+                      <CheckCircle2 size={13} /> Resolve
                     </button>
                   )}
                 </div>
               </div>
 
               {/* Subject */}
-              <div className="fd-conv-subject">📋 {activeTicket.subject || 'No subject'}</div>
+              <div style={{ padding: '8px 20px', background: 'var(--fd-surface-2)', borderBottom: '1px solid var(--fd-surface-3)', flexShrink: 0, fontSize: 12, color: 'var(--fd-text-muted)' }}>
+                {activeTicket.subject || 'No subject'}
+              </div>
 
               {/* Escalation notice */}
               {isEscalated && (
-                <div className="fd-escalated-notice">
-                  ↑ This ticket has been escalated to Manager.
-                  {activeTicket.escalation_reason && (
-                    <> Reason: <em>{activeTicket.escalation_reason}</em></>
-                  )}
+                <div className="fd-notice fd-notice-amber" style={{ margin: '8px 20px', borderRadius: 'var(--fd-radius-md)' }}>
+                  <ArrowUpCircle size={14} />
+                  <span>Escalated to Manager.{activeTicket.escalation_reason && ` Reason: ${activeTicket.escalation_reason}`}</span>
                 </div>
               )}
 
               {/* Messages */}
-              <div className="fd-conv-messages">
+              <div style={{
+                flex: 1,
+                overflowY: 'auto',
+                padding: '20px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 14,
+              }}>
                 {!conversation ? (
-                  <div className="fd-empty-queue"><span>⏳</span><p>Loading…</p></div>
+                  <div className="fd-loading"><div className="fd-spinner" /></div>
                 ) : conversation.messages?.length === 0 ? (
-                  <div className="fd-empty-queue"><span>💬</span><p>No messages yet.</p></div>
+                  <div style={{ textAlign: 'center', color: 'var(--fd-text-faint)', fontSize: 12, padding: '40px 0' }}>No messages yet.</div>
                 ) : (
-                  conversation.messages?.map((msg) => (
-                    <ConvMessage key={msg.id} msg={msg} />
-                  ))
+                  conversation.messages?.map(msg => <ConvMessage key={msg.id} msg={msg} />)
                 )}
                 <div ref={bottomRef} />
               </div>
 
-              {/* Reply — only when active */}
+              {/* Reply box */}
               {canAct && (
-                <div className="fd-reply-box">
+                <div style={{
+                  borderTop: '1px solid var(--fd-surface-2)',
+                  background: '#fff',
+                  padding: '14px 20px',
+                  flexShrink: 0,
+                }}>
                   <textarea
-                    className="fd-reply-input"
-                    placeholder="Type your reply to the guest… (Ctrl+Enter to send)"
+                    className="fd-textarea-lg"
+                    placeholder="Reply to guest… (Ctrl + Enter to send)"
                     value={replyText}
-                    onChange={(e) => setReplyText(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) handleReply();
-                    }}
+                    onChange={e => setReplyText(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) handleReply(); }}
                     rows={3}
                     disabled={sending}
+                    style={{ marginBottom: 10 }}
                   />
-                  <div className="fd-reply-actions">
-                    <span className="fd-reply-hint">Ctrl + Enter to send</span>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: 11, color: 'var(--fd-text-faint)' }}>Ctrl + Enter to send</span>
                     <button
-                      className="fd-reply-btn"
+                      className="fd-btn fd-btn-primary"
+                      style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}
                       onClick={handleReply}
                       disabled={sending || !replyText.trim()}
                     >
+                      <Send size={13} />
                       {sending ? 'Sending…' : 'Send Reply'}
                     </button>
                   </div>
@@ -451,14 +535,28 @@ export default function FrontDeskSupportPage() {
               )}
 
               {isClosed && (
-                <div className="fd-closed-notice">✅ This ticket has been resolved and closed.</div>
+                <div style={{
+                  padding: '12px 20px',
+                  textAlign: 'center',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: 'var(--fd-green, #0D9488)',
+                  background: 'var(--fd-green-bg)',
+                  borderTop: '1px solid var(--fd-surface-2)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6,
+                  flexShrink: 0,
+                }}>
+                  <CheckCircle2 size={14} /> Ticket resolved and closed.
+                </div>
               )}
             </>
           )}
         </div>
       </div>
 
-      {/* ── Escalation modal ─────────────────────────────────────────────────── */}
       {showEscalate && (
         <EscalateModal
           ticketId={activeTicket?.id}

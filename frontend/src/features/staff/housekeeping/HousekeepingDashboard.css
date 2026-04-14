@@ -1,6 +1,6 @@
 /* HousekeepingDashboard.css
-   Extends Staff.css — uses the same CSS variables.
-   Do NOT redefine :root variables here.
+   Extends Staff.css — uses the redesigned CSS variables.
+   Modern Light Theme
 */
 
 /* ── Page override ───────────────────────────────────────────────────────────── */
@@ -19,22 +19,26 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 11px !important;
-  color: rgba(248,246,240,0.3) !important;
-  letter-spacing: 0.3px;
+  font-size: 12px !important;
+  color: var(--sf-text-faint) !important;
+  letter-spacing: 0.02em;
 }
 
 .hk-refresh-btn {
   background: none;
   border: none;
-  color: rgba(248,246,240,0.3);
+  color: var(--sf-text-faint);
   cursor: pointer;
-  padding: 2px;
+  padding: 3px;
   display: flex;
   align-items: center;
   transition: color 0.18s;
+  border-radius: 4px;
 }
-.hk-refresh-btn:hover { color: var(--gold); }
+
+.hk-refresh-btn:hover {
+  color: var(--sf-accent);
+}
 
 /* ── Summary cards ───────────────────────────────────────────────────────────── */
 .hk-summary-grid {
@@ -45,52 +49,60 @@
 }
 
 .hk-summary-card {
-  background: var(--navy-card);
-  border: 1px solid var(--gold-border);
+  background: var(--sf-surface);
+  border-radius: var(--sf-radius-lg);
   padding: 20px 22px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
+  box-shadow: var(--sf-shadow-sm);
   position: relative;
   overflow: hidden;
 }
+
 .hk-summary-card::before {
   content: '';
-  position: absolute; top: 0; left: 0; right: 0;
-  height: 2px;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  border-radius: var(--sf-radius-lg) var(--sf-radius-lg) 0 0;
 }
-.hk-summary-card--red::before    { background: var(--red); }
-.hk-summary-card--amber::before  { background: var(--amber); }
-.hk-summary-card--green::before  { background: var(--green); }
-.hk-summary-card--overdue::before { background: #f97316; }
-.hk-summary-card--muted::before  { background: var(--gold-border); }
+
+.hk-summary-card--red::before    { background: var(--sf-red); }
+.hk-summary-card--amber::before  { background: var(--sf-amber); }
+.hk-summary-card--green::before  { background: var(--sf-green); }
+.hk-summary-card--overdue::before { background: #EA580C; }
+.hk-summary-card--muted::before  { background: var(--sf-surface-3); }
 
 .hk-summary-icon {
-  color: var(--white-dim);
-  opacity: 0.6;
+  color: var(--sf-text-muted);
 }
-.hk-summary-card--red    .hk-summary-icon { color: var(--red); opacity: 1; }
-.hk-summary-card--amber  .hk-summary-icon { color: var(--amber); opacity: 1; }
-.hk-summary-card--green  .hk-summary-icon { color: var(--green); opacity: 1; }
-.hk-summary-card--overdue .hk-summary-icon { color: #f97316; opacity: 1; }
+
+.hk-summary-card--red    .hk-summary-icon { color: var(--sf-red); }
+.hk-summary-card--amber  .hk-summary-icon { color: var(--sf-amber); }
+.hk-summary-card--green  .hk-summary-icon { color: var(--sf-green); }
+.hk-summary-card--overdue .hk-summary-icon { color: #EA580C; }
 
 .hk-summary-value {
-  font-family: 'Playfair Display', serif;
+  font-family: 'DM Serif Display', serif;
   font-size: 32px;
-  color: var(--white);
+  color: var(--sf-text-primary);
   line-height: 1;
 }
-.hk-summary-card--red    .hk-summary-value { color: var(--red); }
-.hk-summary-card--amber  .hk-summary-value { color: var(--amber); }
-.hk-summary-card--green  .hk-summary-value { color: var(--green); }
-.hk-summary-card--overdue .hk-summary-value { color: #f97316; }
+
+.hk-summary-card--red    .hk-summary-value { color: var(--sf-red); }
+.hk-summary-card--amber  .hk-summary-value { color: var(--sf-amber); }
+.hk-summary-card--green  .hk-summary-value { color: var(--sf-green); }
+.hk-summary-card--overdue .hk-summary-value { color: #EA580C; }
 
 .hk-summary-label {
   font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 2px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--white-dim);
+  color: var(--sf-text-muted);
 }
 
 /* ── Overdue banner ──────────────────────────────────────────────────────────── */
@@ -98,103 +110,106 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  background: rgba(249,115,22,0.10);
-  border: 1px solid rgba(249,115,22,0.35);
+  background: rgba(234,88,12,0.07);
+  border-radius: var(--sf-radius-md);
   padding: 13px 18px;
   margin-bottom: 20px;
   font-size: 13px;
-  color: #fdba74;
+  color: #EA580C;
   flex-wrap: wrap;
 }
-.hk-overdue-banner strong { font-weight: 700; }
-.hk-overdue-banner span   { color: rgba(253,186,116,0.75); font-size: 12px; }
+
+.hk-overdue-banner strong {
+  font-weight: 700;
+}
+
+.hk-overdue-banner span {
+  color: rgba(234,88,12,0.7);
+  font-size: 12px;
+}
 
 /* ── Filter pills ────────────────────────────────────────────────────────────── */
 .hk-filter-label {
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 2px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--white-dim);
+  color: var(--sf-text-muted);
 }
 
 .hk-filter-pill {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  background: none;
-  border: 1px solid var(--gold-border);
-  color: var(--white-dim);
-  font-family: 'Raleway', sans-serif;
-  font-size: 10px;
+  background: var(--sf-surface);
+  border: 1.5px solid var(--sf-surface-3);
+  border-radius: var(--sf-radius-md);
+  color: var(--sf-text-muted);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
   font-weight: 600;
-  letter-spacing: 1.5px;
-  text-transform: uppercase;
-  padding: 6px 14px;
+  padding: 7px 14px;
   cursor: pointer;
   transition: all 0.18s;
+  box-shadow: var(--sf-shadow-xs);
 }
+
 .hk-filter-pill:hover {
-  color: var(--gold);
-  background: var(--gold-dim);
-  border-color: var(--gold);
+  color: var(--sf-accent);
+  background: var(--sf-accent-light);
+  border-color: transparent;
 }
+
 .hk-filter-pill.active {
-  background: var(--gold-dim);
-  border-color: var(--gold);
-  color: var(--gold);
+  background: var(--sf-accent-light);
+  border-color: transparent;
+  color: var(--sf-accent);
 }
 
 .hk-filter-count {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 18px; height: 18px;
-  border-radius: 50%;
-  font-size: 9px;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  font-size: 10px;
   font-weight: 700;
-  background: var(--gold-dim);
-  color: var(--gold);
+  background: var(--sf-accent-light);
+  color: var(--sf-accent);
 }
-.hk-filter-count--red   { background: var(--red-bg);   color: var(--red);   }
-.hk-filter-count--amber { background: var(--amber-bg); color: var(--amber); }
-.hk-filter-count--green { background: var(--green-bg); color: var(--green); }
+
+.hk-filter-count--red   { background: var(--sf-red-bg);   color: var(--sf-red);   }
+.hk-filter-count--amber { background: var(--sf-amber-bg); color: var(--sf-amber); }
+.hk-filter-count--green { background: var(--sf-green-bg); color: var(--sf-green); }
 
 /* ── Task card overrides ─────────────────────────────────────────────────────── */
 .hk-task-card {
-  background: var(--navy-card);
-  border: 1px solid var(--gold-border);
+  background: var(--sf-surface);
+  border-radius: var(--sf-radius-lg);
   padding: 20px 22px;
   position: relative;
   overflow: hidden;
-  transition: border-color 0.22s, transform 0.22s;
+  transition: box-shadow 0.22s, transform 0.22s;
   display: flex;
   flex-direction: column;
   gap: 10px;
+  box-shadow: var(--sf-shadow-sm);
 }
-.hk-task-card::before {
-  content: '';
-  position: absolute; top: 0; left: 0; right: 0;
-  height: 1px;
-  background: linear-gradient(90deg, var(--gold), transparent);
-}
+
 .hk-task-card:hover {
-  border-color: rgba(201,168,76,0.50);
+  box-shadow: var(--sf-shadow-md);
   transform: translateY(-2px);
 }
+
 .hk-task-card--overdue {
-  border-left: 3px solid #f97316;
+  border-left: 3px solid #EA580C;
 }
-.hk-task-card--overdue::after {
-  content: '';
-  position: absolute;
-  top: 0; left: 0; bottom: 0;
-  width: 3px;
-  background: #f97316;
-}
+
 .hk-task-card--done {
-  opacity: 0.7;
+  opacity: 0.75;
 }
+
 .hk-task-card--done:hover {
   opacity: 1;
 }
@@ -211,17 +226,19 @@
   flex-direction: column;
   gap: 2px;
 }
+
 .hk-task-room-label {
   font-size: 9px;
-  font-weight: 600;
-  letter-spacing: 2px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--gold);
+  color: var(--sf-accent);
 }
+
 .hk-task-room-number {
-  font-family: 'Playfair Display', serif;
+  font-family: 'DM Serif Display', serif;
   font-size: 22px;
-  color: var(--white);
+  color: var(--sf-text-primary);
   line-height: 1.2;
 }
 
@@ -235,51 +252,59 @@
 
 .hk-task-assigned {
   font-size: 12px;
-  color: rgba(248,246,240,0.4);
+  color: var(--sf-text-muted);
   margin: 0;
+}
+
+.hk-unassigned {
+  color: var(--sf-text-faint);
+  font-style: italic;
 }
 
 /* ── Overdue / done badges ───────────────────────────────────────────────────── */
 .hk-badge-overdue {
-  border-color: rgba(249,115,22,0.4);
-  color: #fdba74;
-  background: rgba(249,115,22,0.10);
+  background: rgba(234,88,12,0.09);
+  color: #EA580C;
 }
+
 .hk-badge-done {
-  border-color: var(--green-border);
-  color: var(--green);
-  background: var(--green-bg);
+  background: var(--sf-green-bg);
+  color: var(--sf-green);
 }
 
 /* ── Cleaning window ─────────────────────────────────────────────────────────── */
 .hk-cleaning-window {
-  background: var(--white-faint);
-  border: 1px solid var(--gold-border);
+  background: var(--sf-surface-2);
+  border-radius: var(--sf-radius-sm);
   padding: 10px 12px;
   display: flex;
   flex-direction: column;
   gap: 5px;
 }
+
 .hk-window-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
   font-size: 12px;
 }
+
 .hk-window-label {
   display: flex;
   align-items: center;
   gap: 5px;
-  color: var(--white-dim);
+  color: var(--sf-text-muted);
   font-size: 11px;
 }
+
 .hk-window-value {
   font-weight: 600;
-  color: var(--white);
+  color: var(--sf-text-primary);
   font-size: 12px;
 }
-.hk-text-amber  { color: var(--amber) !important; }
-.hk-text-danger { color: var(--red) !important; }
+
+.hk-text-amber  { color: var(--sf-amber) !important; }
+.hk-text-danger { color: var(--sf-red) !important; }
 
 /* ── Live timer ──────────────────────────────────────────────────────────────── */
 .hk-timer {
@@ -288,16 +313,18 @@
   gap: 6px;
   font-size: 12px;
   font-weight: 600;
-  color: var(--green);
-  letter-spacing: 0.3px;
+  color: var(--sf-green);
+  letter-spacing: 0.02em;
 }
+
 .hk-timer--overdue {
-  color: #f97316;
+  color: #EA580C;
   animation: hk-pulse 2s ease-in-out infinite;
 }
+
 @keyframes hk-pulse {
   0%, 100% { opacity: 1; }
-  50%       { opacity: 0.65; }
+  50%       { opacity: 0.6; }
 }
 
 /* ── Done row ────────────────────────────────────────────────────────────────── */
@@ -306,14 +333,62 @@
   align-items: center;
   gap: 6px;
   font-size: 12px;
-  color: var(--green);
+  color: var(--sf-green);
+}
+
+/* ── Assign widget ───────────────────────────────────────────────────────────── */
+.hk-assign-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: none;
+  border: 1.5px solid var(--sf-surface-3);
+  border-radius: var(--sf-radius-sm);
+  color: var(--sf-text-muted);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: all 0.18s;
+}
+
+.hk-assign-btn:hover {
+  border-color: var(--sf-accent);
+  color: var(--sf-accent);
+  background: var(--sf-accent-light);
+}
+
+.hk-assign-widget {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.hk-assign-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.hk-assign-select {
+  flex: 1;
+  font-size: 12px;
+  padding: 7px 10px;
+}
+
+.hk-assign-error {
+  font-size: 11px;
+  color: var(--sf-red);
+  margin: 0;
 }
 
 /* ── Button spinner ──────────────────────────────────────────────────────────── */
 .hk-btn-spinner {
   display: inline-block;
-  width: 10px; height: 10px;
-  border: 1.5px solid rgba(255,255,255,0.3);
+  width: 11px;
+  height: 11px;
+  border: 1.5px solid rgba(15,17,23,0.2);
   border-top-color: currentColor;
   border-radius: 50%;
   animation: sf-spin 0.7s linear infinite;
@@ -327,11 +402,12 @@
   justify-content: center;
   gap: 14px;
   padding: 80px 0;
-  color: rgba(248,246,240,0.2);
+  color: var(--sf-text-faint);
 }
+
 .hk-empty p {
   font-size: 13px;
-  letter-spacing: 1px;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   margin: 0;
 }
@@ -340,7 +416,8 @@
 @media (max-width: 1100px) {
   .hk-summary-grid { grid-template-columns: repeat(2, 1fr); }
 }
+
 @media (max-width: 600px) {
   .hk-summary-grid { grid-template-columns: repeat(2, 1fr); }
-  .hk-filter-pill  { padding: 5px 10px; font-size: 9px; }
+  .hk-filter-pill  { padding: 5px 10px; font-size: 10px; }
 }

@@ -1,14 +1,13 @@
 /**
  * FrontDeskLayout.jsx
- *
  * Sidebar layout wrapper for all Front Desk pages.
- * Matches the AdminLayout luxury dark gold theme exactly.
+ * Redesigned: Modern light theme — clean, minimal, professional.
  * All classes prefixed fdl- to avoid collision with fd- (FrontDesk.css).
  *
- * RBAC: front_desk, admin, manager
- *
- * FIX: Added "Support Tickets" nav item so Front Desk staff can see and
- *      respond to guest support tickets routed to the FRONT_DESK tier.
+ * Changes:
+ *  - Removed all ArrowRight icons
+ *  - All text color references use #01000D (black)
+ *  - No border lines on any element
  */
 
 import { useState, useEffect } from 'react';
@@ -18,7 +17,7 @@ import {
   UserCheck, CreditCard, LogOut, Settings,
   ChevronLeft, ChevronRight, Menu, X,
   Users, Shield, LayoutDashboard, Wrench, AlertOctagon, FileText,
-  MessageSquare,UtensilsCrossed ,
+  MessageSquare, UtensilsCrossed,CalendarRange,
 } from 'lucide-react';
 import { logoutUser, getStoredUser } from '../../../services/api';
 import NotificationBell from '../../notifications/NotificationBell';
@@ -26,7 +25,6 @@ import { usePresenceHeartbeat } from '../hooks/usePresenceHeartbeat';
 
 import './FrontDeskLayout.css';
 
-// ── Navigation items visible in the Front Desk sidebar ───────────────────────
 const NAV_ITEMS = [
   {
     key: 'fd-dashboard',
@@ -35,13 +33,11 @@ const NAV_ITEMS = [
     to: '/staff/front-desk',
     exact: true,
   },
-
   {
     key: 'food-orders',
     label: 'Food Orders',
     icon: <UtensilsCrossed size={17} />,
-    to: '/staff/front-desk/food-orders'
-
+    to: '/staff/front-desk/food-orders',
   },
   {
     key: 'checkin',
@@ -49,9 +45,10 @@ const NAV_ITEMS = [
     icon: <UserCheck size={18} />,
     to: '/staff/check-in',
   },
+
   {
     key: 'today',
-    label: "Today's Arrivals",
+    label: "Today's Schedule",
     icon: <Calendar size={18} />,
     to: '/staff/front-desk/today',
   },
@@ -67,16 +64,20 @@ const NAV_ITEMS = [
     icon: <ClipboardList size={18} />,
     to: '/staff/front-desk/walk-in',
   },
+
+
+{
+  key: 'extend',
+  label: 'Extend Stay',
+  icon: <CalendarRange size={18} />,
+  to: '/staff/front-desk/extend',
+},
   {
     key: 'payments',
     label: 'Payments',
     icon: <CreditCard size={18} />,
     to: '/staff/front-desk/payments',
   },
-  // ── Support Tickets (ADDED) ─────────────────────────────────────────────────
-  // Front Desk staff must be able to see and respond to guest support tickets
-  // that are routed to the FRONT_DESK tier. Without this nav item they have
-  // no way to reach the support queue.
   {
     key: 'support-tickets',
     label: 'Support Tickets',
@@ -85,7 +86,6 @@ const NAV_ITEMS = [
   },
 ];
 
-// ── Reporting section nav items ───────────────────────────────────────────────
 const REPORTING_ITEMS = [
   {
     key: 'report-maintenance',
@@ -113,7 +113,6 @@ const REPORTING_ITEMS = [
   },
 ];
 
-// ── Secondary nav items ───────────────────────────────────────────────────────
 const SECONDARY_ITEMS = [
   {
     key: 'shifts',
@@ -129,21 +128,13 @@ const SECONDARY_ITEMS = [
   },
 ];
 
-// ── Role display helpers ──────────────────────────────────────────────────────
 const ROLE_LABELS = {
   admin:        'Administrator',
   manager:      'Manager',
   front_desk:   'Front Desk',
   receptionist: 'Receptionist',
 };
-const ROLE_ICONS = {
-  admin:        <Shield size={11} />,
-  manager:      <Users  size={11} />,
-  front_desk:   <Users  size={11} />,
-  receptionist: <Users  size={11} />,
-};
 
-// ── Layout component ──────────────────────────────────────────────────────────
 export default function FrontDeskLayout({ children }) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -154,7 +145,6 @@ export default function FrontDeskLayout({ children }) {
   const [collapsed,  setCollapsed]  = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  // Close mobile drawer on route change
   useEffect(() => { setMobileOpen(false); }, [location.pathname]);
 
   const handleLogout = async () => {
@@ -190,7 +180,6 @@ export default function FrontDeskLayout({ children }) {
   return (
     <div className={`fdl-root${collapsed ? ' fdl-collapsed' : ''}${mobileOpen ? ' fdl-mobile-open' : ''}`}>
 
-      {/* Mobile overlay */}
       {mobileOpen && (
         <div className="fdl-overlay" onClick={() => setMobileOpen(false)} />
       )}
@@ -200,8 +189,7 @@ export default function FrontDeskLayout({ children }) {
 
         {/* Brand */}
         <div className="fdl-brand">
-          <div className="fdl-brand-icon">⟡</div>
-          {!collapsed && <span className="fdl-brand-name">CEBU MINI HOTEL</span>}
+          {!collapsed && <span className="fdl-brand-name">Cebu Mini Hotel</span>}
           <button
             className="fdl-collapse-btn"
             onClick={() => setCollapsed(v => !v)}
@@ -218,7 +206,7 @@ export default function FrontDeskLayout({ children }) {
             <div className="fdl-staff-info">
               <span className="fdl-staff-name">{displayName}</span>
               <span className="fdl-staff-role">
-                {ROLE_ICONS[role]}
+                <Users size={10} />
                 {ROLE_LABELS[role] ?? role}
               </span>
             </div>
@@ -229,34 +217,31 @@ export default function FrontDeskLayout({ children }) {
           </div>
         )}
 
-        {/* Primary nav + Support Tickets */}
+        {/* Primary nav */}
         <nav className="fdl-nav">
-          <div className="fdl-nav-label">{!collapsed && 'FRONT DESK'}</div>
+          {!collapsed && <span className="fdl-nav-label">Front Desk</span>}
 
           {NAV_ITEMS.map(item => (
             <NavItem key={item.key} item={item} />
           ))}
 
-          {/* Divider + reporting section */}
-          <div className="fdl-nav-divider" style={{ margin: '10px 0' }} />
-          <div className="fdl-nav-label">{!collapsed && 'REPORTING'}</div>
+          <div className="fdl-nav-divider" />
+          {!collapsed && <span className="fdl-nav-label">Reporting</span>}
 
           {REPORTING_ITEMS.map(item => (
             <NavItem key={item.key} item={item} />
           ))}
 
-          {/* Divider + secondary items */}
-          <div className="fdl-nav-divider" style={{ margin: '10px 0' }} />
-          <div className="fdl-nav-label">{!collapsed && 'MY ACCOUNT'}</div>
+          <div className="fdl-nav-divider" />
+          {!collapsed && <span className="fdl-nav-label">My Account</span>}
 
           {SECONDARY_ITEMS.map(item => (
             <NavItem key={item.key} item={item} />
           ))}
 
-          {/* Back to Admin Panel — only for admin / manager */}
           {['admin', 'manager'].includes(role) && (
             <>
-              <div className="fdl-nav-divider" style={{ margin: '10px 0' }} />
+              <div className="fdl-nav-divider" />
               <Link
                 to="/admin/dashboard"
                 className="fdl-nav-item"
@@ -296,7 +281,7 @@ export default function FrontDeskLayout({ children }) {
       {/* ── Main content ── */}
       <div className="fdl-main">
 
-        {/* Desktop topbar — notification bell top-right */}
+        {/* Desktop topbar */}
         <div className="fdl-topbar">
           <div className="fdl-topbar-right">
             <NotificationBell />
@@ -308,7 +293,7 @@ export default function FrontDeskLayout({ children }) {
           <button className="fdl-mobile-menu-btn" onClick={() => setMobileOpen(v => !v)}>
             {mobileOpen ? <X size={20} /> : <Menu size={20} />}
           </button>
-          <span className="fdl-mobile-brand">FRONT DESK</span>
+          <span className="fdl-mobile-brand">Front Desk</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <NotificationBell />
             <div className="fdl-mobile-avatar">

@@ -1,5 +1,12 @@
+/**
+ * PaymentCancelPage.jsx — Cebu Mini Hotel · Editorial Light Theme
+ * ================================================================
+ * Redesigned to match Dashboard.css palette and design language.
+ * No emoji. Lucide icons.
+ */
+
 import { useSearchParams, Link } from 'react-router-dom';
-import { ArrowLeft, AlertCircle, CreditCard } from 'lucide-react';
+import { ArrowLeft, AlertCircle, CreditCard, ArrowRight } from 'lucide-react';
 import './PaymentCancelPage.css';
 
 export default function PaymentCancelPage() {
@@ -7,37 +14,56 @@ export default function PaymentCancelPage() {
   const paymentId      = searchParams.get('payment_id');
 
   return (
-    <div className="cancel-page">
-      <div className="cancel-nav">
-        <div className="nav-container">
-          <Link to="/bookings/my" className="back-link">
-            <ArrowLeft size={18} /> My Bookings
+    <div className="pcp-page">
+
+      {/* Nav */}
+      <div className="pcp-nav">
+        <div className="pcp-nav-inner">
+          <Link to="/bookings/my" className="pcp-back-link">
+            <ArrowLeft size={16} />
+            My Bookings
           </Link>
         </div>
       </div>
 
-      <div className="cancel-container">
-        <div className="cancel-card">
-          <div className="cancel-icon">
-            <AlertCircle size={48} />
+      {/* Content */}
+      <div className="pcp-container">
+        <div className="pcp-card">
+
+          {/* Icon */}
+          <div className="pcp-status-icon">
+            <AlertCircle size={32} />
           </div>
 
-          <h2 className="cancel-title">Payment Cancelled</h2>
-          <p className="cancel-subtitle">
-            You cancelled the payment. Your booking is still <strong>pending payment</strong>.
-            No charge was made.
+          {/* Text */}
+          <span className="pcp-eyebrow">Payment Cancelled</span>
+          <h2 className="pcp-heading">Your payment was not completed</h2>
+          <p className="pcp-desc">
+            You cancelled before the payment was processed. Your booking is still{' '}
+            <strong>pending payment</strong> and has not been cancelled.
+            No charge was made to your account.
           </p>
 
-          <div className="cancel-actions">
-            {paymentId && (
-              <Link to="/bookings/my" className="btn btn-primary">
-                <CreditCard size={16} /> Try Again from My Bookings
-              </Link>
-            )}
-            <Link to="/bookings/my" className="btn btn-outline">
-              <ArrowLeft size={16} /> My Bookings
+          {/* Notice */}
+          <div className="pcp-notice">
+            <AlertCircle size={14} />
+            <span>
+              Your room hold may expire if payment is not completed. Return to My Bookings to try again.
+            </span>
+          </div>
+
+          {/* Actions */}
+          <div className="pcp-actions">
+            <Link to="/bookings/my" className="pcp-btn pcp-btn-primary">
+              <CreditCard size={15} />
+              {paymentId ? 'Try Again from My Bookings' : 'My Bookings'}
+            </Link>
+            <Link to="/rooms" className="pcp-btn pcp-btn-outline">
+              <ArrowRight size={15} />
+              Browse Rooms
             </Link>
           </div>
+
         </div>
       </div>
     </div>

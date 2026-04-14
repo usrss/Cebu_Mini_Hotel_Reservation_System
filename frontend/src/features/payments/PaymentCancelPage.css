@@ -1,141 +1,179 @@
 /* ============================================================
-   PaymentCancelPage.css — Cebu Mini Hotel · Luxury Dark Theme
+   PaymentCancelPage.css — Cebu Mini Hotel · Editorial Light Theme
    ============================================================ */
 
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700&family=Raleway:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&family=Playfair+Display:wght@400;700&display=swap');
 
-:root {
-  --navy:        #0A0E1A;
-  --navy-mid:    #0F1729;
-  --navy-card:   #111827;
-  --gold:        #C9A84C;
-  --gold-l:      #E2C97E;
-  --gold-dim:    rgba(201,168,76,0.10);
-  --gold-border: rgba(201,168,76,0.22);
-  --white:       #F8F6F0;
-  --white-dim:   rgba(248,246,240,0.55);
-  --error:       #F87171;
-}
-
-.payment-cancel-page {
+.pcp-page {
   min-height: 100vh;
-  background: var(--navy);
-  font-family: 'Raleway', sans-serif;
-  color: var(--white);
+  background: #FAF9F6;
+  font-family: 'Montserrat', sans-serif;
+  color: #01000D;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 48px 24px;
 }
 
-.confirm-card {
-  background: var(--navy-card);
-  border: 1px solid var(--gold-border);
-  width: 100%;
-  max-width: 560px;
-  overflow: hidden;
-}
-.confirm-card::before {
-  content: '';
-  display: block;
-  height: 2px;
-  background: linear-gradient(90deg, var(--error), rgba(248,113,113,0.4), var(--error));
+/* ── Nav ── */
+.pcp-nav {
+  background: #0A0E1A;
+  padding: 0 5%;
+  flex-shrink: 0;
 }
 
-.confirm-icon-wrap {
-  padding: 40px 40px 0;
-  display: flex;
-  justify-content: center;
-}
-.confirm-icon {
-  width: 72px;
-  height: 72px;
-  border: 1px solid;
+.pcp-nav-inner {
+  max-width: 760px;
+  margin: 0 auto;
+  height: 60px;
   display: flex;
   align-items: center;
-  justify-content: center;
-}
-.confirm-icon-cancel {
-  border-color: rgba(248,113,113,0.4);
-  background: rgba(248,113,113,0.06);
-  color: var(--error);
 }
 
-.confirm-body {
-  padding: 28px 40px 36px;
-  text-align: center;
-}
-.confirm-eyebrow {
+.pcp-back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
   font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 2.5px;
-  text-transform: uppercase;
-  color: var(--error);
-  margin-bottom: 10px;
-}
-.confirm-title {
-  font-family: 'Playfair Display', serif;
-  font-size: 28px;
   font-weight: 700;
-  color: var(--white);
-  margin: 0 0 12px;
-}
-.confirm-subtitle {
-  font-size: 14px;
-  color: var(--white-dim);
-  margin: 0 0 28px;
-  line-height: 1.7;
-}
-.confirm-divider {
-  height: 1px;
-  background: var(--gold-border);
-  margin: 0 0 24px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(250, 249, 246, 0.6);
+  text-decoration: none;
+  transition: color 0.18s;
 }
 
-.confirm-actions {
+.pcp-back-link:hover { color: #FAF9F6; }
+.pcp-back-link svg   { transition: transform 0.18s; }
+.pcp-back-link:hover svg { transform: translateX(-3px); }
+
+/* ── Container ── */
+.pcp-container {
+  flex: 1;
   display: flex;
-  gap: 12px;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 56px 5% 80px;
+}
+
+/* ── Card ── */
+.pcp-card {
+  background: #FFFFFF;
+  border: 1px solid rgba(1, 0, 13, 0.09);
+  border-left: 4px solid rgba(217, 119, 6, 0.6);
+  width: 100%;
+  max-width: 520px;
+  padding: 40px 40px 36px;
+  display: flex;
   flex-direction: column;
+  gap: 20px;
 }
-.confirm-btn-primary {
+
+/* ── Status icon ── */
+.pcp-status-icon {
+  width: 64px;
+  height: 64px;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  background: linear-gradient(135deg, var(--gold), var(--gold-l));
-  border: none;
-  color: var(--navy);
-  font-family: 'Raleway', sans-serif;
-  font-size: 11px;
+  background: rgba(217, 119, 6, 0.07);
+  border: 1px solid rgba(217, 119, 6, 0.22);
+  color: #d97706;
+  flex-shrink: 0;
+}
+
+/* ── Typography ── */
+.pcp-eyebrow {
+  display: block;
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: #909090;
+}
+
+.pcp-heading {
+  font-family: 'Playfair Display', serif;
+  font-size: 24px;
   font-weight: 700;
-  letter-spacing: 2px;
-  text-transform: uppercase;
-  padding: 14px 24px;
-  cursor: pointer;
-  text-decoration: none;
-  transition: opacity 0.2s;
+  color: #01000D;
+  margin: 0;
+  line-height: 1.18;
 }
-.confirm-btn-primary:hover { opacity: 0.88; }
-.confirm-btn-secondary {
+
+.pcp-desc {
+  font-size: 13px;
+  color: #535252;
+  line-height: 1.72;
+  margin: 0;
+  font-weight: 400;
+}
+
+.pcp-desc strong { color: #01000D; font-weight: 700; }
+
+/* ── Notice ── */
+.pcp-notice {
   display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 13px 16px;
+  background: rgba(1, 0, 13, 0.04);
+  border: 1px solid rgba(1, 0, 13, 0.09);
+  font-size: 12px;
+  font-weight: 500;
+  color: #535252;
+  line-height: 1.6;
+}
+
+.pcp-notice svg { flex-shrink: 0; margin-top: 1px; color: #909090; }
+
+/* ── Actions ── */
+.pcp-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.pcp-btn {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  background: none;
-  border: 1px solid var(--gold-border);
-  color: var(--gold);
-  font-family: 'Raleway', sans-serif;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 2px;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
-  padding: 13px 24px;
-  cursor: pointer;
   text-decoration: none;
-  transition: all 0.2s;
+  padding: 15px 24px;
+  cursor: pointer;
+  border: none;
+  transition: background 0.2s, transform 0.2s;
 }
-.confirm-btn-secondary:hover {
-  background: var(--gold-dim);
-  border-color: var(--gold);
+
+.pcp-btn-primary {
+  background: #0A0E1A;
+  color: #FAF9F6;
+}
+
+.pcp-btn-primary:hover {
+  background: #222;
+  transform: translateY(-1px);
+}
+
+.pcp-btn-outline {
+  background: transparent;
+  color: #01000D;
+  border: 1.5px solid rgba(1, 0, 13, 0.18);
+}
+
+.pcp-btn-outline:hover {
+  background: rgba(1, 0, 13, 0.04);
+  border-color: rgba(1, 0, 13, 0.35);
+}
+
+/* ── Responsive ── */
+@media (max-width: 640px) {
+  .pcp-container { padding: 32px 5% 60px; }
+  .pcp-card      { padding: 28px 22px 24px; }
+  .pcp-heading   { font-size: 20px; }
 }

@@ -1,328 +1,296 @@
 /* ============================================================
-   PaymentSuccessPage.css + PaymentCancelPage.css
-   BookingConfirmationPage.css — Cebu Mini Hotel
-   Luxury Dark Theme
+   PaymentSuccessPage.css — Cebu Mini Hotel · Editorial Light Theme
+   Palette and spacing match Dashboard.css exactly.
    ============================================================ */
 
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700&family=Raleway:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&family=Playfair+Display:wght@400;700&display=swap');
 
-:root {
-  --navy:        #0A0E1A;
-  --navy-mid:    #0F1729;
-  --navy-card:   #111827;
-  --gold:        #C9A84C;
-  --gold-l:      #E2C97E;
-  --gold-dim:    rgba(201,168,76,0.10);
-  --gold-border: rgba(201,168,76,0.22);
-  --white:       #F8F6F0;
-  --white-dim:   rgba(248,246,240,0.55);
-}
-
-/* ── Success Page ──────────────────────────────────────────── */
-.payment-success-page,
-.payment-cancel-page,
-.booking-confirmation-page {
+/* ── Page shell ─────────────────────────────────────────── */
+.psp-page {
   min-height: 100vh;
-  background: var(--navy);
-  font-family: 'Raleway', sans-serif;
-  color: var(--white);
+  background: #FAF9F6;
+  font-family: 'Montserrat', sans-serif;
+  color: #01000D;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 48px 24px;
 }
 
-.confirm-card {
-  background: var(--navy-card);
-  border: 1px solid var(--gold-border);
+/* ── Nav ────────────────────────────────────────────────── */
+.psp-nav {
+  background: #0A0E1A;
+  padding: 0 5%;
+  flex-shrink: 0;
+}
+
+.psp-nav-inner {
+  max-width: 760px;
+  margin: 0 auto;
+  height: 60px;
+  display: flex;
+  align-items: center;
+}
+
+.psp-back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(250, 249, 246, 0.6);
+  text-decoration: none;
+  transition: color 0.18s;
+}
+
+.psp-back-link:hover { color: #FAF9F6; }
+.psp-back-link svg { transition: transform 0.18s; }
+.psp-back-link:hover svg { transform: translateX(-3px); }
+
+/* ── Container ──────────────────────────────────────────── */
+.psp-container {
+  flex: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 56px 5% 80px;
+}
+
+/* ── Card ───────────────────────────────────────────────── */
+.psp-card {
+  background: #FFFFFF;
+  border: 1px solid rgba(1, 0, 13, 0.09);
   width: 100%;
   max-width: 560px;
-  overflow: hidden;
-  position: relative;
-}
-.confirm-card::before {
-  content: '';
-  display: block;
-  height: 2px;
-  background: linear-gradient(90deg, var(--gold), var(--gold-l), var(--gold));
-}
-
-/* ── Icon ──────────────────────────────────────────────────── */
-.confirm-icon-wrap {
-  padding: 40px 40px 0;
-  display: flex;
-  justify-content: center;
-}
-.confirm-icon {
-  width: 72px;
-  height: 72px;
-  border: 1px solid;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.confirm-icon-success {
-  border-color: rgba(110,231,183,0.4);
-  background: rgba(110,231,183,0.06);
-  color: #6EE7B7;
-}
-.confirm-icon-cancel {
-  border-color: rgba(248,113,113,0.4);
-  background: rgba(248,113,113,0.06);
-  color: #F87171;
-}
-.confirm-icon-pending {
-  border-color: var(--gold-border);
-  background: var(--gold-dim);
-  color: var(--gold);
-}
-
-/* ── Body ──────────────────────────────────────────────────── */
-.confirm-body {
-  padding: 28px 40px 36px;
-  text-align: center;
-}
-.confirm-eyebrow {
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 2.5px;
-  text-transform: uppercase;
-  color: var(--gold);
-  margin-bottom: 10px;
-}
-.confirm-title {
-  font-family: 'Playfair Display', serif;
-  font-size: 28px;
-  font-weight: 700;
-  color: var(--white);
-  margin: 0 0 12px;
-}
-.confirm-subtitle {
-  font-size: 14px;
-  color: var(--white-dim);
-  margin: 0 0 28px;
-  line-height: 1.7;
-  letter-spacing: 0.3px;
-}
-.confirm-divider {
-  height: 1px;
-  background: var(--gold-border);
-  margin: 0 0 24px;
-}
-
-/* ── Details ───────────────────────────────────────────────── */
-.confirm-details {
-  background: var(--navy-mid);
-  border: 1px solid var(--gold-border);
-  padding: 18px 20px;
-  text-align: left;
-  margin-bottom: 24px;
+  padding: 40px 40px 36px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-}
-.confirm-detail-row {
-  display: flex;
-  justify-content: space-between;
-  font-size: 13px;
-}
-.confirm-detail-label { color: var(--white-dim); }
-.confirm-detail-value { color: var(--white); font-weight: 600; }
-.confirm-detail-value.gold { color: var(--gold); font-family: 'Playfair Display', serif; font-size: 16px; }
-
-/* ── Actions ───────────────────────────────────────────────── */
-.confirm-actions {
-  display: flex;
-  gap: 12px;
-  flex-direction: column;
-}
-.confirm-btn-primary {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  background: linear-gradient(135deg, var(--gold), var(--gold-l));
-  border: none;
-  color: var(--navy);
-  font-family: 'Raleway', sans-serif;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 2px;
-  text-transform: uppercase;
-  padding: 14px 24px;
-  cursor: pointer;
-  text-decoration: none;
-  transition: opacity 0.2s;
-}
-.confirm-btn-primary:hover { opacity: 0.88; }
-.confirm-btn-secondary {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  background: none;
-  border: 1px solid var(--gold-border);
-  color: var(--gold);
-  font-family: 'Raleway', sans-serif;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 2px;
-  text-transform: uppercase;
-  padding: 13px 24px;
-  cursor: pointer;
-  text-decoration: none;
-  transition: all 0.2s;
-}
-.confirm-btn-secondary:hover {
-  background: var(--gold-dim);
-  border-color: var(--gold);
+  gap: 24px;
 }
 
-/* ── Loading ───────────────────────────────────────────────── */
-.confirm-loading {
+/* Left border accent for success */
+.psp-card--success {
+  border-left: 4px solid #059669;
+}
+
+/* ── Status icon ────────────────────────────────────────── */
+.psp-status-icon {
+  width: 64px;
+  height: 64px;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 18px;
-  color: var(--white-dim);
-  font-size: 13px;
-  letter-spacing: 2px;
-  text-transform: uppercase;
+  flex-shrink: 0;
 }
-.cf-spinner {
-  width: 32px;
-  height: 32px;
-  border: 2px solid var(--gold-border);
-  border-top-color: var(--gold);
+
+.psp-status-icon--success {
+  background: rgba(5, 150, 105, 0.08);
+  border: 1px solid rgba(5, 150, 105, 0.22);
+  color: #059669;
+}
+
+.psp-status-icon--pending {
+  background: #F0EDE6;
+  border: 1px solid rgba(1, 0, 13, 0.10);
+  color: #535252;
+}
+
+.psp-status-icon--warn {
+  background: rgba(217, 119, 6, 0.08);
+  border: 1px solid rgba(217, 119, 6, 0.22);
+  color: #d97706;
+}
+
+.psp-status-icon--error {
+  background: rgba(220, 38, 38, 0.06);
+  border: 1px solid rgba(220, 38, 38, 0.18);
+  color: #dc2626;
+}
+
+/* ── Spinner inside pending icon ────────────────────────── */
+.psp-spinner {
+  width: 28px;
+  height: 28px;
+  border: 2px solid rgba(1, 0, 13, 0.12);
+  border-top-color: #01000D;
   border-radius: 50%;
-  animation: cf-spin 0.8s linear infinite;
+  animation: psp-spin 0.8s linear infinite;
 }
-@keyframes cf-spin { to { transform: rotate(360deg); } }
 
-/* ── Cancel Page variation ─────────────────────────────────── */
-.payment-cancel-page .confirm-title { color: #F87171; }
+@keyframes psp-spin { to { transform: rotate(360deg); } }
 
-/* ── BookingForm ───────────────────────────────────────────── */
-.booking-form-page {
-  min-height: 100vh;
-  background: var(--navy);
-  font-family: 'Raleway', sans-serif;
-  color: var(--white);
-}
-.booking-form-nav {
-  padding: 18px 48px;
-  border-bottom: 1px solid var(--gold-border);
-  background: rgba(10,14,26,0.97);
-  backdrop-filter: blur(20px);
-  position: sticky;
-  top: 0;
-  z-index: 50;
-}
-.booking-form-container {
-  max-width: 900px;
-  margin: 0 auto;
-  padding: 48px 24px 80px;
-  display: grid;
-  grid-template-columns: 1fr 320px;
-  gap: 36px;
-  align-items: start;
-}
-.booking-form-card {
-  background: var(--navy-card);
-  border: 1px solid var(--gold-border);
-  overflow: hidden;
-}
-.booking-form-card::before {
-  content: '';
-  display: block;
-  height: 1px;
-  background: linear-gradient(90deg, var(--gold), transparent);
-}
-.booking-form-header {
-  padding: 22px 26px;
-  border-bottom: 1px solid var(--gold-border);
-}
-.booking-form-eyebrow {
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 2.5px;
-  text-transform: uppercase;
-  color: var(--gold);
-  margin-bottom: 6px;
-}
-.booking-form-title {
-  font-family: 'Playfair Display', serif;
-  font-size: 22px;
-  color: var(--white);
-  margin: 0;
-}
-.booking-form-body {
-  padding: 26px;
+/* ── Success header layout ──────────────────────────────── */
+.psp-success-header {
   display: flex;
-  flex-direction: column;
+  align-items: flex-start;
   gap: 18px;
 }
-.bf-field {
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-}
-.bf-field label {
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 1.5px;
+
+.psp-success-header-text { flex: 1; }
+
+/* ── Typography ─────────────────────────────────────────── */
+.psp-eyebrow {
+  display: block;
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 0.32em;
   text-transform: uppercase;
-  color: var(--gold);
+  color: #909090;
+  margin-bottom: 8px;
 }
-.bf-input,
-.bf-select,
-.bf-textarea {
-  background: var(--navy-mid);
-  border: 1px solid var(--gold-border);
-  color: var(--white);
-  font-family: 'Raleway', sans-serif;
-  font-size: 14px;
-  padding: 11px 14px;
-  outline: none;
-  width: 100%;
-  transition: border-color 0.2s;
-}
-.bf-input:focus,
-.bf-select:focus,
-.bf-textarea:focus { border-color: var(--gold); }
-.bf-input::placeholder { color: rgba(248,246,240,0.25); }
-.bf-textarea { resize: vertical; min-height: 90px; }
-.bf-date-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.bf-error {
-  font-size: 12px;
-  color: #F87171;
-  margin-top: 2px;
-}
-.bf-submit-btn {
-  width: 100%;
-  background: linear-gradient(135deg, var(--gold), var(--gold-l));
-  border: none;
-  color: var(--navy);
-  font-family: 'Raleway', sans-serif;
-  font-size: 12px;
+
+.psp-heading {
+  font-family: 'Playfair Display', serif;
+  font-size: 24px;
   font-weight: 700;
-  letter-spacing: 2px;
-  text-transform: uppercase;
-  padding: 15px;
-  cursor: pointer;
-  margin-top: 6px;
+  color: #01000D;
+  margin: 0 0 8px;
+  line-height: 1.18;
+}
+
+.psp-desc {
+  font-size: 13px;
+  color: #535252;
+  line-height: 1.7;
+  margin: 0;
+  font-weight: 400;
+}
+
+/* ── Receipt block ──────────────────────────────────────── */
+.psp-receipt {
+  background: #F0EDE6;
+  border: 1px solid rgba(1, 0, 13, 0.08);
+}
+
+.psp-receipt-header {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 10px;
-  transition: opacity 0.2s;
+  gap: 7px;
+  padding: 10px 16px;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: #535252;
+  border-bottom: 1px solid rgba(1, 0, 13, 0.08);
 }
-.bf-submit-btn:hover { opacity: 0.88; }
-.bf-submit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-@media (max-width: 768px) {
-  .booking-form-container { grid-template-columns: 1fr; }
-  .booking-form-nav { padding: 14px 20px; }
+.psp-receipt-rows {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 0;
+}
+
+.psp-detail-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 16px;
+  border-bottom: 1px solid rgba(1, 0, 13, 0.06);
+}
+
+.psp-detail-row:last-child { border-bottom: none; }
+
+.psp-detail-label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #909090;
+}
+
+.psp-detail-icon {
+  color: #909090;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.psp-detail-value {
+  font-size: 13px;
+  font-weight: 700;
+  color: #01000D;
+  letter-spacing: 0.02em;
+}
+
+/* ── Notice ─────────────────────────────────────────────── */
+.psp-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 13px 16px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.6;
+}
+
+.psp-notice svg { flex-shrink: 0; margin-top: 1px; }
+.psp-notice a   { color: inherit; font-weight: 700; }
+
+.psp-notice--info {
+  background: rgba(1, 0, 13, 0.04);
+  border: 1px solid rgba(1, 0, 13, 0.10);
+  color: #535252;
+}
+
+.psp-notice--warn {
+  background: rgba(217, 119, 6, 0.06);
+  border: 1px solid rgba(217, 119, 6, 0.2);
+  color: #92400e;
+}
+
+/* ── Actions ────────────────────────────────────────────── */
+.psp-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.psp-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  text-decoration: none;
+  padding: 15px 24px;
+  cursor: pointer;
+  border: none;
+  transition: background 0.2s, transform 0.2s;
+}
+
+.psp-btn-primary {
+  background: #0A0E1A;
+  color: #FAF9F6;
+}
+
+.psp-btn-primary:hover {
+  background: #222;
+  transform: translateY(-1px);
+}
+
+.psp-btn-outline {
+  background: transparent;
+  color: #01000D;
+  border: 1.5px solid rgba(1, 0, 13, 0.18);
+}
+
+.psp-btn-outline:hover {
+  background: rgba(1, 0, 13, 0.04);
+  border-color: rgba(1, 0, 13, 0.35);
+}
+
+/* ── Responsive ─────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .psp-container    { padding: 32px 5% 60px; }
+  .psp-card         { padding: 28px 22px 24px; }
+  .psp-success-header { flex-direction: column; gap: 14px; }
+  .psp-heading      { font-size: 20px; }
 }

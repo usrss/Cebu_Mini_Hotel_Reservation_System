@@ -1,345 +1,331 @@
-/* FrontDeskLayout.css — Luxury dark gold theme, mirrors AdminLayout.css */
-/* All classes prefixed fdl- to avoid collision with fd- (FrontDesk.css) */
+/* ============================================================
+   FrontDeskLayout.css — Cebu Mini Hotel
+   Modern Light Sidebar Layout — No borders, black text
+   fdl- prefix throughout
+   ============================================================ */
 
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=Raleway:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=DM+Serif+Display:ital@0;1&display=swap');
 
-/* ── Root layout ─────────────────────────────────────────── */
+:root {
+  --sidebar-w:         256px;
+  --sidebar-collapsed: 60px;
+}
+
+/* ── Root ────────────────────────────────────────────────────── */
 .fdl-root {
   display: flex;
   min-height: 100vh;
-  background: var(--navy);
-  font-family: 'Raleway', sans-serif;
-  color: var(--white);
+  background: #F5F6FA;
+  font-family: 'DM Sans', sans-serif;
+  color: #01000D;
+  -webkit-font-smoothing: antialiased;
 }
 
-/* ── Sidebar ─────────────────────────────────────────────── */
+/* ── Sidebar ─────────────────────────────────────────────────── */
 .fdl-sidebar {
   width: var(--sidebar-w);
   min-height: 100vh;
-  background: var(--navy-mid);
-  border-right: 1px solid var(--gold-border);
+  background: #FFFFFF;
+  box-shadow: 2px 0 16px rgba(15,17,23,0.06);
   display: flex;
   flex-direction: column;
   position: fixed;
-  top: 0; left: 0; bottom: 0;
+  top: 0;
+  left: 0;
+  bottom: 0;
   z-index: 300;
-  transition: width 0.25s ease;
+  transition: width 0.22s cubic-bezier(0.25,0,0.15,1);
   overflow: hidden;
 }
 
-.fdl-collapsed .fdl-sidebar { width: var(--sidebar-collapsed); }
+.fdl-collapsed .fdl-sidebar {
+  width: var(--sidebar-collapsed);
+}
 
-/* Brand */
-.fdl-brand {
+
+.fdl-brand-icon {
+  width: 32px;
+  height: 32px;
+  background: #01000D;
+  border-radius: 8px;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 0 16px;
-  height: 64px;
-  border-bottom: 1px solid var(--gold-border);
-  flex-shrink: 0;
-  position: relative;
-}
-.fdl-brand-icon {
-  width: 28px; height: 28px;
-  border: 1px solid var(--gold);
-  display: flex; align-items: center; justify-content: center;
-  color: var(--gold); font-size: 12px;
-  flex-shrink: 0;
-}
-.fdl-brand-name {
-  font-family: 'Playfair Display', serif;
-  font-size: 11px;
+  justify-content: center;
+  color: #FFFFFF;
+  font-size: 14px;
   font-weight: 700;
-  letter-spacing: 2px;
-  background: linear-gradient(90deg, #C9A84C, #E2C97E, #C9A84C);
-  background-size: 200% auto;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  animation: fdl-shimmer 4s linear infinite;
+  flex-shrink: 0;
+}
+
+.fdl-brand-name {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: #01000D;
   white-space: nowrap;
   flex: 1;
 }
-@keyframes fdl-shimmer { to { background-position: 200% center; } }
 
 .fdl-collapse-btn {
   margin-left: auto;
   background: none;
-  border: 1px solid var(--gold-border);
-  color: var(--gold);
-  width: 22px; height: 22px;
-  display: flex; align-items: center; justify-content: center;
+  border: none;
+  color: #01000D;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
   flex-shrink: 0;
-  transition: background 0.15s;
+  border-radius: 6px;
+  transition: background 150ms;
+  opacity: 0.5;
 }
-.fdl-collapse-btn:hover { background: var(--gold-dim); }
 
-/* Staff badge */
+.fdl-collapse-btn:hover {
+  background: #F0F1F5;
+  opacity: 1;
+}
+
+/* ── Staff badge ─────────────────────────────────────────────── */
 .fdl-staff-badge {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 14px 16px;
-  border-bottom: 1px solid var(--gold-border);
-  background: var(--gold-dim);
+  gap: 11px;
+  padding: 14px 18px;
+  background: #F5F6FA;
   flex-shrink: 0;
 }
+
 .fdl-staff-avatar {
-  width: 36px; height: 36px;
-  background: var(--gold-dim);
-  border: 1px solid var(--gold-border);
-  display: flex; align-items: center; justify-content: center;
-  font-family: 'Playfair Display', serif;
+  width: 36px;
+  height: 36px;
+  background: rgba(1,0,13,0.08);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font-size: 14px;
-  color: var(--gold);
+  font-weight: 700;
+  color: #01000D;
   flex-shrink: 0;
 }
+
 .fdl-staff-avatar-only {
-  width: 36px; height: 36px;
-  background: var(--gold-dim);
-  border: 1px solid var(--gold-border);
-  display: flex; align-items: center; justify-content: center;
-  font-family: 'Playfair Display', serif;
+  width: 36px;
+  height: 36px;
+  background: rgba(1,0,13,0.08);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font-size: 14px;
-  color: var(--gold);
+  font-weight: 700;
+  color: #01000D;
   margin: 14px auto;
   cursor: default;
 }
-.fdl-staff-info { flex: 1; min-width: 0; }
+
+.fdl-staff-info {
+  flex: 1;
+  min-width: 0;
+}
+
 .fdl-staff-name {
   display: block;
   font-size: 13px;
   font-weight: 600;
-  color: var(--white);
+  color: #01000D;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
 .fdl-staff-role {
   display: flex;
   align-items: center;
   gap: 4px;
   font-size: 10px;
   font-weight: 600;
-  letter-spacing: 1px;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--gold);
+  color: #52515E;
   margin-top: 2px;
 }
 
-/* Nav */
+/* ── Nav ─────────────────────────────────────────────────────── */
 .fdl-nav {
   flex: 1;
-  padding: 12px 0;
+  padding: 10px 10px;
   overflow-y: auto;
-  scrollbar-width: none;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: #E8E9EF transparent;
 }
-.fdl-nav::-webkit-scrollbar { display: none; }
+
+.fdl-nav::-webkit-scrollbar { width: 4px; }
+.fdl-nav::-webkit-scrollbar-track { background: transparent; }
+.fdl-nav::-webkit-scrollbar-thumb { background: #E8E9EF; border-radius: 2px; }
 
 .fdl-nav-label {
   font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 2px;
-  color: var(--white-dim);
-  padding: 6px 18px 4px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  color: #7A7987;
+  padding: 10px 8px 6px;
   white-space: nowrap;
   overflow: hidden;
+  text-transform: uppercase;
+  display: block;
 }
 
 .fdl-nav-item {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 11px 18px;
-  color: var(--white-dim);
+  gap: 10px;
+  padding: 9px 10px;
+  color: #52515E;
   text-decoration: none;
   font-size: 13px;
   font-weight: 500;
-  letter-spacing: 0.3px;
-  transition: all 0.15s;
+  border-radius: 8px;
+  transition: color 150ms, background 150ms;
   white-space: nowrap;
-  border-left: 2px solid transparent;
-  cursor: pointer;
+  border: none;
   background: none;
-  border-top: none;
-  border-right: none;
-  border-bottom: none;
   width: 100%;
-  font-family: 'Raleway', sans-serif;
+  font-family: 'DM Sans', sans-serif;
+  cursor: pointer;
+  margin-bottom: 1px;
 }
-.fdl-nav-item:hover {
-  color: var(--gold-l);
-  background: var(--gold-dim);
-  border-left-color: var(--gold-border);
-}
-.fdl-nav-active {
-  color: var(--gold) !important;
-  background: var(--gold-dim) !important;
-  border-left-color: var(--gold) !important;
-}
-.fdl-nav-active .fdl-nav-icon { color: var(--gold); }
-.fdl-nav-icon { flex-shrink: 0; color: var(--white-dim); transition: color 0.15s; }
-.fdl-nav-item:hover .fdl-nav-icon { color: var(--gold-l); }
-.fdl-nav-label-text { flex: 1; text-align: left; }
 
-/* Tooltip for collapsed state */
+.fdl-nav-item:hover {
+  color: #01000D;
+  background: #F0F1F5;
+}
+
+.fdl-nav-active {
+  color: #01000D !important;
+  background: rgba(1,0,13,0.06) !important;
+  font-weight: 600 !important;
+}
+
+.fdl-nav-icon {
+  flex-shrink: 0;
+  color: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+}
+
+.fdl-nav-label-text {
+  flex: 1;
+  text-align: left;
+}
+
 .fdl-nav-tooltip {
   position: absolute;
   left: calc(100% + 10px);
   top: 50%;
   transform: translateY(-50%);
-  background: var(--navy-card);
-  border: 1px solid var(--gold-border);
-  color: var(--white-dim);
-  font-size: 11px;
+  background: #01000D;
+  color: #FFFFFF;
+  font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0.5px;
-  padding: 5px 10px;
+  padding: 6px 12px;
   white-space: nowrap;
   pointer-events: none;
   opacity: 0;
-  transition: opacity 0.15s;
+  transition: opacity 150ms;
   z-index: 400;
+  border-radius: 6px;
 }
-.fdl-collapsed .fdl-nav-item:hover .fdl-nav-tooltip { opacity: 1; }
 
-/* ── Back-to-admin link ──────────────────────────────── */
+.fdl-collapsed .fdl-nav-item:hover .fdl-nav-tooltip {
+  opacity: 1;
+}
+
 .fdl-nav-divider {
   height: 1px;
-  background: var(--gold-border);
-  margin: 8px 18px;
-  opacity: 0.5;
+  background: #F0F1F5;
+  margin: 8px 8px;
 }
 
-/* Footer */
+/* ── Sidebar footer ──────────────────────────────────────────── */
 .fdl-sidebar-footer {
-  border-top: 1px solid var(--gold-border);
-  padding: 8px 0;
+  padding: 8px 10px;
   flex-shrink: 0;
 }
+
 .fdl-footer-btn {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 18px;
+  gap: 10px;
+  padding: 9px 10px;
   width: 100%;
   background: none;
   border: none;
-  color: var(--white-dim);
-  font-family: 'Raleway', sans-serif;
+  border-radius: 8px;
+  color: #52515E;
+  font-family: 'DM Sans', sans-serif;
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
   text-decoration: none;
-  transition: all 0.15s;
+  transition: color 150ms, background 150ms;
   white-space: nowrap;
 }
-.fdl-footer-btn:hover { color: var(--gold-l); background: var(--gold-dim); }
-.fdl-footer-btn--danger { color: rgba(248,113,113,0.7); }
-.fdl-footer-btn--danger:hover { color: #F87171; background: rgba(248,113,113,0.08); }
-.fdl-collapsed .fdl-footer-btn:hover .fdl-nav-tooltip { opacity: 1; }
 
-/* ── Main content ─────────────────────────────────────────── */
+.fdl-footer-btn:hover {
+  color: #01000D;
+  background: #F0F1F5;
+}
+
+.fdl-footer-btn--danger {
+  color: rgba(220,38,38,0.7);
+}
+
+.fdl-footer-btn--danger:hover {
+  color: #DC2626;
+  background: rgba(220,38,38,0.06);
+}
+
+.fdl-collapsed .fdl-footer-btn:hover .fdl-nav-tooltip {
+  opacity: 1;
+}
+
+/* ── Main content area ───────────────────────────────────────── */
 .fdl-main {
   flex: 1;
   margin-left: var(--sidebar-w);
-  transition: margin-left 0.25s ease;
+  transition: margin-left 0.22s cubic-bezier(0.25,0,0.15,1);
   display: flex;
   flex-direction: column;
   min-height: 100vh;
 }
-.fdl-collapsed .fdl-main { margin-left: var(--sidebar-collapsed); }
+
+.fdl-collapsed .fdl-main {
+  margin-left: var(--sidebar-collapsed);
+}
 
 .fdl-content {
   flex: 1;
   padding: 0;
 }
 
-/* ── Mobile topbar ────────────────────────────────────────── */
-.fdl-mobile-topbar {
-  display: none;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 20px;
-  height: 56px;
-  background: var(--navy-mid);
-  border-bottom: 1px solid var(--gold-border);
-  position: sticky;
-  top: 0;
-  z-index: 200;
-}
-.fdl-mobile-menu-btn {
-  background: none;
-  border: 1px solid var(--gold-border);
-  color: var(--gold);
-  width: 34px; height: 34px;
-  display: flex; align-items: center; justify-content: center;
-  cursor: pointer;
-}
-.fdl-mobile-brand {
-  font-family: 'Playfair Display', serif;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 2px;
-  background: linear-gradient(90deg, #C9A84C, #E2C97E);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-.fdl-mobile-avatar {
-  width: 32px; height: 32px;
-  background: var(--gold-dim);
-  border: 1px solid var(--gold-border);
-  display: flex; align-items: center; justify-content: center;
-  color: var(--gold);
-  font-family: 'Playfair Display', serif;
-  font-size: 13px;
-}
-
-/* Mobile overlay */
-.fdl-overlay {
-  display: none;
-  position: fixed;
-  inset: 0;
-  background: rgba(10,14,26,0.75);
-  z-index: 250;
-}
-
-/* ── Responsive ───────────────────────────────────────────── */
-@media (max-width: 900px) {
-  .fdl-mobile-topbar { display: flex; }
-  .fdl-overlay { display: block; }
-
-  .fdl-sidebar {
-    left: calc(-1 * var(--sidebar-w));
-    transition: left 0.25s ease, width 0.25s ease;
-  }
-  .fdl-mobile-open .fdl-sidebar {
-    left: 0;
-    width: var(--sidebar-w) !important;
-  }
-  .fdl-main { margin-left: 0 !important; }
-  .fdl-collapse-btn { display: none; }
-}
-
-
-/* ─────────────────────────────────────────────────────────────────────────────
-   APPEND these rules to the bottom of FrontDeskLayout.css
-   ───────────────────────────────────────────────────────────────────────────── */
-
-/* ── Desktop topbar — notification bell top-right ───────────────────────────── */
+/* ── Desktop topbar ──────────────────────────────────────────── */
 .fdl-topbar {
   display: flex;
   align-items: center;
   justify-content: flex-end;
   padding: 0 28px;
   height: 56px;
-  background: var(--navy-mid);
-  border-bottom: 1px solid var(--gold-border);
+  background: #FFFFFF;
+  box-shadow: 0 1px 0 #F0F1F5;
   position: sticky;
   top: 0;
   z-index: 100;
@@ -352,7 +338,87 @@
   gap: 12px;
 }
 
-/* Hide desktop topbar on mobile — mobile topbar takes over */
+/* ── Mobile topbar ───────────────────────────────────────────── */
+.fdl-mobile-topbar {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 18px;
+  height: 56px;
+  background: #FFFFFF;
+  box-shadow: 0 1px 0 #F0F1F5;
+  position: sticky;
+  top: 0;
+  z-index: 200;
+}
+
+.fdl-mobile-menu-btn {
+  background: #F0F1F5;
+  border: none;
+  border-radius: 8px;
+  color: #01000D;
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 150ms;
+}
+
+.fdl-mobile-menu-btn:hover {
+  background: #E8E9EF;
+}
+
+.fdl-mobile-brand {
+  font-size: 13px;
+  font-weight: 700;
+  color: #01000D;
+}
+
+.fdl-mobile-avatar {
+  width: 32px;
+  height: 32px;
+  background: rgba(1,0,13,0.08);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #01000D;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* Mobile overlay */
+.fdl-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(1,0,13,0.4);
+  z-index: 250;
+  backdrop-filter: blur(4px);
+}
+
+/* ── Responsive ──────────────────────────────────────────────── */
 @media (max-width: 900px) {
-  .fdl-topbar { display: none; }
+  .fdl-mobile-topbar { display: flex; }
+  .fdl-overlay       { display: block; }
+  .fdl-topbar        { display: none; }
+  .fdl-collapse-btn  { display: none; }
+
+  .fdl-sidebar {
+    left: calc(-1 * var(--sidebar-w));
+    transition: left 0.22s cubic-bezier(0.25,0,0.15,1);
+    box-shadow: none;
+  }
+
+  .fdl-mobile-open .fdl-sidebar {
+    left: 0;
+    width: var(--sidebar-w) !important;
+    box-shadow: 4px 0 24px rgba(1,0,13,0.15);
+  }
+
+  .fdl-main {
+    margin-left: 0 !important;
+  }
 }

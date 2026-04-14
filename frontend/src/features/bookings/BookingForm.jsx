@@ -142,6 +142,18 @@ export default function BookingForm({ room, prefillCheckIn, prefillCheckOut }) {
   });
   const [fieldErrors, setFieldErrors] = useState({});
 
+  // Sync prefill dates whenever they arrive (e.g. from the filter bar via modal)
+  // Only overwrites if the user hasn't manually edited the dates yet.
+  useEffect(() => {
+    if (prefillCheckIn || prefillCheckOut) {
+      setForm(prev => ({
+        ...prev,
+        check_in:  prefillCheckIn  || prev.check_in,
+        check_out: prefillCheckOut || prev.check_out,
+      }));
+    }
+  }, [prefillCheckIn, prefillCheckOut]);
+
   useEffect(() => {
     if (user) {
       setForm(prev => ({

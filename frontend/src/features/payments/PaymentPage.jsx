@@ -352,7 +352,7 @@ export default function PaymentPage() {
                 </button>
 
                 <p className="payment-security-note">
-                  🔒 Secured via {selectedMethod === 'paypal' ? 'PayPal' : 'PayMongo'}.
+                   Secured via {selectedMethod === 'paypal' ? 'PayPal' : 'PayMongo'}.
                   You will be redirected to complete checkout.
                 </p>
               </>

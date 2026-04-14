@@ -66,7 +66,6 @@ export default function MyActivityLogPage() {
                   <th>Time</th>
                   <th>Action</th>
                   <th>Description</th>
-                  <th>IP Address</th>
                 </tr>
               </thead>
               <tbody>
@@ -86,7 +85,7 @@ export default function MyActivityLogPage() {
                     <td style={{ maxWidth: 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {log.description}
                     </td>
-                    <td style={{ fontSize: 11 }}>{log.ip_address || '—'}</td>
+
                   </tr>
                 ))}
               </tbody>

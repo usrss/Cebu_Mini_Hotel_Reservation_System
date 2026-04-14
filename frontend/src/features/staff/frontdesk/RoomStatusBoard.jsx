@@ -1,11 +1,7 @@
 /**
- * src/features/staff/frontdesk/RoomStatusBoard.jsx
- *
- * Live grid of all hotel rooms showing current status.
- * Front Desk can filter by status. Read-only (status changes are
- * handled by housekeeping/maintenance through their own pages).
- *
- * RBAC: front_desk, admin, manager
+ * RoomStatusBoard.jsx — Redesigned light theme
+ * Removed: refresh button, border colors, gold color refs
+ * Added: real-time auto-refresh every 60s, accent strip on tiles only
  */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -14,12 +10,20 @@ import {
   frontDeskRoomsApi,
   ROOM_STATUS_CONFIG,
   ROOM_TYPE_LABELS,
-  formatPHP,
 } from './services/frontDeskApi';
 import './FrontDesk.css';
 import '../Staff.css';
 
 const STATUS_FILTERS = ['all', 'available', 'occupied', 'cleaning', 'maintenance', 'reserved'];
+
+// Clean status color map — no gold, only readable semantic colors
+const STATUS_COLORS = {
+  available:   { badge: 'var(--fd-green-bg)',  text: 'var(--fd-black)',  label: 'Available'   },
+  occupied:    { badge: 'var(--fd-accent-lt)', text: 'var(--fd-accent)', label: 'Occupied'    },
+  cleaning:    { badge: 'var(--fd-amber-bg)',  text: 'var(--fd-amber)',  label: 'Cleaning'    },
+  maintenance: { badge: 'var(--fd-red-bg)',    text: 'var(--fd-red)',    label: 'Maintenance' },
+  all:         { badge: 'var(--fd-surface-2)', text: 'var(--fd-text-muted)', label: 'All'   },
+};
 
 export default function RoomStatusBoard() {
   const navigate = useNavigate();
@@ -30,7 +34,6 @@ export default function RoomStatusBoard() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [typeFilter,   setTypeFilter]   = useState('');
   const [floorFilter,  setFloorFilter]  = useState('');
-  const [lastRefresh,  setLastRefresh]  = useState(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -38,7 +41,6 @@ export default function RoomStatusBoard() {
       const data = await frontDeskRoomsApi.list();
       const list = Array.isArray(data) ? data : (data.results ?? []);
       setRooms(list);
-      setLastRefresh(new Date());
     } catch (err) {
       setError(err.response?.data?.detail || err.message || 'Failed to load rooms.');
     } finally {
@@ -48,25 +50,20 @@ export default function RoomStatusBoard() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Auto-refresh every 60 seconds
+  // Real-time: auto-refresh every 60s, no manual refresh button
   useEffect(() => {
     const timer = setInterval(load, 60_000);
     return () => clearInterval(timer);
   }, [load]);
 
-  // Status counts for tabs
   const counts = STATUS_FILTERS.reduce((acc, s) => {
     acc[s] = s === 'all' ? rooms.length : rooms.filter((r) => r.status === s).length;
     return acc;
   }, {});
 
-  // Available floors from room data
   const floors = [...new Set(rooms.map((r) => r.floor))].sort((a, b) => a - b);
+  const types  = [...new Set(rooms.map((r) => r.room_type))].sort();
 
-  // Available room types
-  const types = [...new Set(rooms.map((r) => r.room_type))].sort();
-
-  // Filtered rooms
   const filtered = rooms.filter((r) => {
     if (statusFilter !== 'all' && r.status !== statusFilter) return false;
     if (typeFilter  && r.room_type !== typeFilter)  return false;
@@ -74,7 +71,6 @@ export default function RoomStatusBoard() {
     return true;
   });
 
-  // Group by floor for display
   const byFloor = filtered.reduce((acc, r) => {
     const key = `Floor ${r.floor}`;
     if (!acc[key]) acc[key] = [];
@@ -86,33 +82,25 @@ export default function RoomStatusBoard() {
     <div className="fd-page">
       <div className="fd-inner">
 
-        {/* Header */}
+        {/* Header — no eyebrow, no refresh button */}
         <div className="fd-toprow">
           <div className="fd-toprow-left">
-            <p className="fd-eyebrow">Front Desk</p>
             <h1>Room Status Board</h1>
-            <p>
-              {rooms.length} total rooms
-              {lastRefresh && ` · Updated ${lastRefresh.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' })}`}
-            </p>
-          </div>
-          <div style={{ display: 'flex', gap: 10 }}>
-            <button className="fd-btn" onClick={load}>↻ Refresh</button>
-            <button className="fd-btn" onClick={() => navigate('/staff/front-desk')}>← Back</button>
+            <p>{rooms.length} total rooms · updates automatically</p>
           </div>
         </div>
 
         {/* Status tabs */}
         <div className="fd-status-tabs" style={{ marginBottom: 16, flexWrap: 'wrap' }}>
           {STATUS_FILTERS.map((s) => {
-            const cfg   = ROOM_STATUS_CONFIG[s];
-            const label = s === 'all' ? 'All Rooms' : (cfg?.label || s);
+            const cfg   = STATUS_COLORS[s] || STATUS_COLORS.all;
+            const label = s === 'all' ? 'All Rooms' : cfg.label;
             return (
               <button
                 key={s}
                 className={`fd-status-tab${statusFilter === s ? ' active' : ''}`}
                 onClick={() => setStatusFilter(s)}
-                style={statusFilter === s && s !== 'all' ? { color: cfg?.color } : {}}
+                style={statusFilter === s && s !== 'all' ? { color: cfg.text, background: cfg.badge } : {}}
               >
                 {label}
                 <span className="fd-status-tab-count">{counts[s]}</span>
@@ -146,88 +134,91 @@ export default function RoomStatusBoard() {
           {(typeFilter || floorFilter) && (
             <button
               className="fd-btn"
-              style={{ padding: '6px 14px', fontSize: 9 }}
+              style={{ padding: '6px 14px', fontSize: 11 }}
               onClick={() => { setTypeFilter(''); setFloorFilter(''); }}
             >
               Clear
             </button>
           )}
-          <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--white-dim)' }}>
+          <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--fd-text-muted)' }}>
             Showing {filtered.length} of {rooms.length} rooms
           </span>
         </div>
 
         {/* Legend */}
-        <div style={{ display: 'flex', gap: 16, marginBottom: 20, flexWrap: 'wrap' }}>
-          {Object.entries(ROOM_STATUS_CONFIG).map(([key, cfg]) => (
-            <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
+        <div style={{ display: 'flex', gap: 14, marginBottom: 20, flexWrap: 'wrap' }}>
+          {Object.entries(STATUS_COLORS).filter(([k]) => k !== 'all').map(([key, cfg]) => (
+            <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12 }}>
               <div style={{
-                width: 10, height: 10, borderRadius: 2,
-                background: cfg.bg, border: `1px solid ${cfg.border}`,
+                width: 10, height: 10, borderRadius: '50%',
+                background: cfg.strip, flexShrink: 0,
               }} />
-              <span style={{ color: 'var(--white-dim)', letterSpacing: 0.5 }}>{cfg.label}</span>
+              <span style={{ color: 'var(--fd-text-sec)', fontWeight: 500 }}>{cfg.label}</span>
             </div>
           ))}
         </div>
 
         {/* Room grid */}
         {loading ? (
-          <div className="fd-loading"><div className="fd-spinner" /><p>Loading rooms…</p></div>
+          <div className="fd-loading"><div className="fd-spinner" /><p>Loading rooms</p></div>
         ) : error ? (
           <div className="fd-error"><p>{error}</p></div>
         ) : filtered.length === 0 ? (
-          <div className="fd-card" style={{ textAlign: 'center', color: 'var(--white-dim)', fontSize: 13 }}>
+          <div className="fd-card" style={{ textAlign: 'center', color: 'var(--fd-text-muted)', fontSize: 13 }}>
             No rooms match the current filters.
           </div>
         ) : (
-          Object.entries(byFloor).sort().map(([floorLabel, floorRooms]) => (
-            <div key={floorLabel} style={{ marginBottom: 28 }}>
-              <p style={{ fontSize: 10, fontWeight: 600, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--gold)', marginBottom: 12 }}>
-                {floorLabel}
-              </p>
-              <div className="fd-rooms-grid">
-                {floorRooms
-                  .sort((a, b) => a.room_number.localeCompare(b.room_number))
-                  .map((room) => {
-                    const cfg = ROOM_STATUS_CONFIG[room.status] || ROOM_STATUS_CONFIG.available;
-                    return (
-                      <div
-                        key={room.id}
-                        className="fd-room-tile"
-                        style={{
-                          borderColor: cfg.border,
-                          background:  cfg.bg,
-                        }}
-                      >
-                        {/* Top accent bar */}
-                        <div style={{
-                          position: 'absolute', top: 0, left: 0, right: 0, height: 3,
-                          background: cfg.color,
-                        }} />
+          Object.entries(byFloor).sort().map(([floorLabel, floorRooms]) => {
+            const cfg = STATUS_COLORS;
+            return (
+              <div key={floorLabel} style={{ marginBottom: 28 }}>
+                <p style={{
+                  fontSize: 10, fontWeight: 700, letterSpacing: '0.14em',
+                  textTransform: 'uppercase', color: 'var(--fd-text-muted)', marginBottom: 12,
+                }}>
+                  {floorLabel}
+                </p>
+                <div className="fd-rooms-grid">
+                  {floorRooms
+                    .sort((a, b) => a.room_number.localeCompare(b.room_number))
+                    .map((room) => {
+                      const sc = STATUS_COLORS[room.status] || STATUS_COLORS.available;
+                      return (
+                        <div key={room.id} className="fd-room-tile">
+                          {/* Top accent strip — no border color */}
+                          <div style={{
+                            position: 'absolute', top: 0, left: 0, right: 0,
+                            height: 3, background: sc.strip,
+                            borderRadius: '14px 14px 0 0',
+                          }} />
 
-                        <div className="fd-room-number" style={{ color: cfg.color }}>
-                          {room.room_number}
-                        </div>
-                        <div className="fd-room-type">
-                          {ROOM_TYPE_LABELS[room.room_type] || room.room_type}
-                        </div>
-                        <div className="fd-room-floor" style={{ color: 'var(--white-dim)', fontSize: 11, marginBottom: 8 }}>
-                          {room.bed_type} bed · {room.capacity} guest{room.capacity !== 1 ? 's' : ''}
-                        </div>
-                        <div className="fd-room-status-label" style={{ borderColor: cfg.border, color: cfg.color }}>
-                          {cfg.label}
-                        </div>
-                        {Number(room.discount_percentage) > 0 && (
-                          <div style={{ fontSize: 10, color: 'var(--amber)', marginTop: 6 }}>
-                            ↓ {room.discount_percentage}% off
+                          <div className="fd-room-number" style={{ marginTop: 6 }}>
+                            {room.room_number}
                           </div>
-                        )}
-                      </div>
-                    );
-                  })}
+                          <div className="fd-room-type">
+                            {ROOM_TYPE_LABELS[room.room_type] || room.room_type}
+                          </div>
+                          <div className="fd-room-floor">
+                            {room.bed_type} bed · {room.capacity} guest{room.capacity !== 1 ? 's' : ''}
+                          </div>
+                          <div
+                            className="fd-room-status-label"
+                            style={{ background: sc.badge, color: sc.text }}
+                          >
+                            {sc.label}
+                          </div>
+                          {Number(room.discount_percentage) > 0 && (
+                            <div style={{ fontSize: 10, color: 'var(--fd-accent)', marginTop: 6, fontWeight: 600 }}>
+                              {room.discount_percentage}% off
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
     </div>

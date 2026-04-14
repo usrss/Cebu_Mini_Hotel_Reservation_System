@@ -362,7 +362,6 @@ export default function WalkInBookingPage() {
             <h1>Walk-In Booking</h1>
             <p>Cash & card payments · No guest account required</p>
           </div>
-          <button className="fd-btn" onClick={() => navigate('/staff/front-desk')}>← Back</button>
         </div>
 
         {/* ════ STEP 1: BOOKING FORM ════ */}
@@ -519,7 +518,7 @@ export default function WalkInBookingPage() {
             >
               {formBusy
                 ? <><span className="fd-spinner-sm" /> Creating Booking…</>
-                : 'Continue to Payment →'
+                : 'Continue to Payment'
               }
             </button>
           </form>

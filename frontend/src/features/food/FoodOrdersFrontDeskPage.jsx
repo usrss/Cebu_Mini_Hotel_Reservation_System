@@ -1,177 +1,368 @@
 /**
- * FoodOrdersFrontDeskPage.jsx
- * Front Desk — master food orders view, grouped by room.
- *
- * ISSUES FIXED IN THIS REVISION
- * ─────────────────────────────────────────────────────────────────
- * ISSUE 1 — "Charge Pay Now" button is wrong logic ← CRITICAL
- *   pay_now orders are paid by the guest online via PayMongo before
- *   the order is even confirmed.  By the time an order appears in
- *   this list with payment_type=pay_now, it was ALREADY paid through
- *   PayMongo, or it was explicitly abandoned/cancelled.
- *
- *   The "Charge Pay Now" button called PATCH /food/orders/<pk>/mark-paid/
- *   which would double-mark an already-paid order, or mark an abandoned
- *   one as paid — both are wrong.
- *
- *   The ONLY legitimate "charge at desk" scenario is pay_checkout, and
- *   those are settled during the guest checkout flow (GuestCheckoutPage),
- *   not here.
- *
- *   Fix: removed the "Charge Pay Now" button entirely.  Front desk
- *   staff can see which pay_now orders are still unpaid (e.g. payment
- *   failed or was abandoned) as a signal to follow up with the guest,
- *   but they do not charge from this view.  A "Follow up" note badge
- *   replaces the button for visibility.
- *
- * ISSUE 2 — Room grouping bucketed null room_number as "Unknown"
- *   When booking__room is null the serializer returns room_number=null.
- *   Grouped them under the room_number string or a readable fallback.
- *
- * ISSUE 3 — KPI "At Checkout Total" included already-paid orders
- *   The filter was payment_type=pay_checkout + unpaid + not cancelled,
- *   which is correct.  But the RoomGroup checkoutTotal included ALL
- *   pay_checkout orders regardless of payment_status.  Fixed to also
- *   require payment_status=unpaid in the room-level calculation.
- *
- * ISSUE 4 — Room header "total" included cancelled order prices
- *   The total shown in the room header row included cancelled order
- *   amounts.  Guests should not be billed for cancelled orders.
- *   Fixed to exclude cancelled orders from the room total.
- *
- * ISSUE 5 — No order status filter
- *   Added a status filter bar so front desk can quickly see only
- *   pending, completed, or all orders.
- * ─────────────────────────────────────────────────────────────────
+ * FoodOrdersFrontDeskPage.jsx — Enhanced
+ * - Improved KPI stat cards with proper icons and layout
+ * - Room groups now open in a modal instead of inline dropdown
+ * - Matches FrontDeskDashboard light theme (DM Sans / DM Serif Display, fd- tokens)
+ * - No emoji, Lucide icons only. Real-time auto-poll every 30s.
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  RefreshCw, ChevronDown, ChevronUp, AlertCircle, X, CheckCircle,
+  UtensilsCrossed, AlertCircle, CheckCircle2, Clock,
+  X, ShoppingBag, CreditCard, TrendingUp, Hash,
+  Calendar, ChevronRight, Package,
 } from 'lucide-react';
 import api from '../../services/api';
+import '../staff/frontdesk/FrontDesk.css';
+import '../staff/Staff.css';
 
 const POLL_MS = 30_000;
 
-// ── helpers ───────────────────────────────────────────────────────────────────
 function safeMoney(val) {
   const n = parseFloat(val);
   return Number.isFinite(n) ? Math.max(0, n) : 0;
 }
 
-// ── Room Group ────────────────────────────────────────────────────────────────
-function RoomGroup({ roomNumber, orders, statusFilter }) {
-  const [open, setOpen] = useState(false);
+function formatPHP(val) {
+  return new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(safeMoney(val));
+}
 
-  // ISSUE 4 FIX: exclude cancelled from the room total shown to front desk
-  const activeOrders = orders.filter(o => o.order_status !== 'cancelled');
-  const total        = activeOrders.reduce((s, o) => s + safeMoney(o.total_price), 0);
+// ── Badges ────────────────────────────────────────────────────────────────────
+function OrderStatusBadge({ status }) {
+  const map = {
+    pending:   { cls: 'fd-badge-amber', label: 'Pending'   },
+    completed: { cls: 'fd-badge-green', label: 'Completed' },
+    cancelled: { cls: 'fd-badge-muted', label: 'Cancelled' },
+  };
+  const cfg = map[status] || { cls: 'fd-badge-muted', label: status };
+  return <span className={`fd-badge ${cfg.cls}`}>{cfg.label}</span>;
+}
 
-  // ISSUE 1 FIX: pay_now unpaid = abandoned/failed payment, not chargeable here
-  const abandonedPayNow = orders.filter(
-    o => o.payment_type === 'pay_now' && o.payment_status === 'unpaid' && o.order_status !== 'cancelled',
+function PaymentBadge({ status, type }) {
+  if (status === 'paid')   return <span className="fd-badge fd-badge-green">Paid</span>;
+  if (type === 'pay_now')  return <span className="fd-badge fd-badge-blue">Pay Now</span>;
+  return <span className="fd-badge fd-badge-amber">At Checkout</span>;
+}
+
+function StatCard({ icon, iconBg, iconColor, value, label, sub, subColor }) {
+  return (
+    <div
+      className="fd-stat-card"
+      style={{
+        cursor: 'default',
+        position: 'relative',
+        overflow: 'hidden'
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'flex-start',
+          justifyContent: 'space-between',
+          marginBottom: 14,
+          marginTop: 0
+        }}
+      >
+        <div
+          style={{
+            width: 40,
+            height: 40,
+            borderRadius: 10,
+            background: iconBg,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: iconColor,
+            flexShrink: 0,
+          }}
+        >
+          {icon}
+        </div>
+      </div>
+
+      <div
+        className="fd-stat-value"
+        style={{ color: 'var(--fd-text)', marginBottom: 4 }}
+      >
+        {value}
+      </div>
+
+      <div
+        className="fd-stat-label"
+        style={{ color: 'var(--fd-text)', marginBottom: sub ? 4 : 0 }}
+      >
+        {label}
+      </div>
+
+      {sub && (
+        <div
+          className="fd-stat-sub"
+          style={{ color: subColor || 'var(--fd-text-muted)' }}
+        >
+          {sub}
+        </div>
+      )}
+    </div>
   );
+}
 
-  // ISSUE 3 FIX: checkout total = pay_checkout + unpaid + not cancelled
+// ── Room Row Card (clickable, opens modal) ────────────────────────────────────
+function RoomCard({ roomNumber, orders, onClick }) {
+  const activeOrders   = orders.filter(o => o.order_status !== 'cancelled');
+  const total          = activeOrders.reduce((s, o) => s + safeMoney(o.total_price), 0);
   const unpaidCheckout = orders.filter(
-    o => o.payment_type === 'pay_checkout'
-      && o.payment_status === 'unpaid'
-      && o.order_status !== 'cancelled',
+    o => o.payment_type === 'pay_checkout' && o.payment_status === 'unpaid' && o.order_status !== 'cancelled',
   );
-  const checkoutTotal = unpaidCheckout.reduce((s, o) => s + safeMoney(o.total_price), 0);
+  const checkoutTotal  = unpaidCheckout.reduce((s, o) => s + safeMoney(o.total_price), 0);
+  const abandonedCount = orders.filter(
+    o => o.payment_type === 'pay_now' && o.payment_status === 'unpaid' && o.order_status !== 'cancelled',
+  ).length;
 
-  // Apply the status filter inside the expanded table
+  const pendingCount   = orders.filter(o => o.order_status === 'pending').length;
+  const completedCount = orders.filter(o => o.order_status === 'completed').length;
+
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        width: '100%',
+        background: 'var(--fd-surface)',
+        border: 'none',
+        borderRadius: 'var(--fd-radius-lg)',
+        padding: '18px 22px',
+        boxShadow: 'var(--fd-shadow-sm)',
+        cursor: 'pointer',
+        textAlign: 'left',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 18,
+        marginBottom: 10,
+        transition: 'box-shadow 170ms, transform 170ms',
+        fontFamily: "'DM Sans', sans-serif",
+        position: 'relative',
+        overflow: 'hidden',
+      }}
+      onMouseEnter={e => {
+        e.currentTarget.style.boxShadow = 'var(--fd-shadow-md)';
+        e.currentTarget.style.transform = 'translateY(-1px)';
+      }}
+      onMouseLeave={e => {
+        e.currentTarget.style.boxShadow = 'var(--fd-shadow-sm)';
+        e.currentTarget.style.transform = 'translateY(0)';
+      }}
+    >
+      {/* Left accent strip if has abandoned */}
+
+      {/* Room number pill */}
+      <div style={{
+        background: 'var(--fd-accent-lt)',
+        borderRadius: 'var(--fd-radius-md)',
+        padding: '10px 14px',
+        textAlign: 'center',
+        minWidth: 58,
+        flexShrink: 0,
+      }}>
+        <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--fd-text-muted)', marginBottom: 2 }}>
+          Room
+        </div>
+        <div style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, color: 'var(--fd-text)', lineHeight: 1 }}>
+          {roomNumber}
+        </div>
+      </div>
+
+      {/* Center info */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--fd-text)', marginBottom: 6 }}>
+          {activeOrders.length} order{activeOrders.length !== 1 ? 's' : ''} &middot; {formatPHP(total)}
+        </div>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+          {pendingCount > 0 && (
+            <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--fd-amber)', fontWeight: 500 }}>
+              <Clock size={11} />{pendingCount} pending
+            </span>
+          )}
+          {completedCount > 0 && (
+            <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--fd-text-muted)', fontWeight: 500 }}>
+              <CheckCircle2 size={11} />{completedCount} completed
+            </span>
+          )}
+          {abandonedCount > 0 && (
+            <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--fd-red)', fontWeight: 600 }}>
+              <AlertCircle size={11} />{abandonedCount} Pay Now unpaid
+            </span>
+          )}
+          {checkoutTotal > 0 && (
+            <span style={{ fontSize: 11, color: 'var(--fd-amber)', fontWeight: 500 }}>
+              {formatPHP(checkoutTotal)} due at checkout
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Right — order type pills */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 5, alignItems: 'flex-end', flexShrink: 0 }}>
+        {checkoutTotal > 0 && (
+          <span className="fd-badge fd-badge-amber" style={{ fontSize: 10 }}>
+            <CreditCard size={9} />At Checkout
+          </span>
+        )}
+        {abandonedCount > 0 && (
+          <span className="fd-badge fd-badge-red" style={{ fontSize: 10 }}>
+            <AlertCircle size={9} />Follow Up
+          </span>
+        )}
+      </div>
+
+      {/* Chevron */}
+      <ChevronRight size={16} style={{ color: 'var(--fd-text-muted)', flexShrink: 0 }} />
+    </button>
+  );
+}
+
+// ── Room Orders Modal ─────────────────────────────────────────────────────────
+function RoomOrdersModal({ open, onClose, roomNumber, orders, statusFilter }) {
+  const modalRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleKey = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  const activeOrders   = orders.filter(o => o.order_status !== 'cancelled');
+  const total          = activeOrders.reduce((s, o) => s + safeMoney(o.total_price), 0);
+  const unpaidCheckout = orders.filter(
+    o => o.payment_type === 'pay_checkout' && o.payment_status === 'unpaid' && o.order_status !== 'cancelled',
+  );
+  const checkoutTotal  = unpaidCheckout.reduce((s, o) => s + safeMoney(o.total_price), 0);
+  const abandonedCount = orders.filter(
+    o => o.payment_type === 'pay_now' && o.payment_status === 'unpaid' && o.order_status !== 'cancelled',
+  ).length;
+
   const displayOrders = statusFilter === 'all'
     ? orders
     : orders.filter(o => o.order_status === statusFilter);
 
   return (
-    <div style={{
-      border: '1px solid var(--gold-border)', marginBottom: 10,
-      position: 'relative', overflow: 'hidden',
-    }}>
-      <div style={{
-        position: 'absolute', top: 0, left: 0, right: 0, height: 1,
-        background: 'linear-gradient(90deg, var(--gold), transparent)',
-      }} />
-
-      {/* Room header row — click to expand */}
+    <div
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 700,
+        background: 'rgba(1,0,13,0.40)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: 20, backdropFilter: 'blur(4px)',
+        animation: 'fd-modal-bg-in 0.18s ease',
+      }}
+    >
       <div
-        role="button"
-        tabIndex={0}
-        onClick={() => setOpen(v => !v)}
-        onKeyDown={e => e.key === 'Enter' && setOpen(v => !v)}
+        ref={modalRef}
         style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          width: '100%', padding: '14px 20px',
-          background: 'var(--navy-card)', cursor: 'pointer',
-          fontFamily: "'Raleway', sans-serif", color: 'var(--white)',
-          userSelect: 'none',
+          background: 'var(--fd-surface)',
+          borderRadius: 20,
+          width: '100%',
+          maxWidth: 720,
+          maxHeight: '88vh',
+          display: 'flex',
+          flexDirection: 'column',
+          boxShadow: '0 12px 48px rgba(1,0,13,0.18), 0 2px 8px rgba(1,0,13,0.08)',
+          animation: 'fd-modal-in 0.22s cubic-bezier(0.16,1,0.3,1)',
+          overflow: 'hidden',
         }}
       >
-        {/* Left: room badge + summary */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+        {/* Modal Header */}
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 16,
+          padding: '20px 24px 18px',
+          borderBottom: '1px solid var(--fd-surface-2)',
+          background: 'var(--fd-surface)',
+          flexShrink: 0,
+        }}>
+          {/* Room pill */}
           <div style={{
-            background: 'var(--gold-dim)', border: '1px solid var(--gold-border)',
-            padding: '6px 12px', textAlign: 'center',
+            background: 'var(--fd-accent-lt)',
+            borderRadius: 'var(--fd-radius-md)',
+            padding: '8px 14px',
+            textAlign: 'center',
+            minWidth: 52,
+            flexShrink: 0,
           }}>
-            <div style={{ fontSize: 9, color: 'var(--gold)', fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase' }}>
+            <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--fd-text-muted)', marginBottom: 1 }}>
               Room
             </div>
-            <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 20, color: 'var(--white)', lineHeight: 1 }}>
+            <div style={{ fontFamily: "'DM Serif Display', serif", fontSize: 22, color: 'var(--fd-text)', lineHeight: 1 }}>
               {roomNumber}
             </div>
           </div>
-          <div style={{ textAlign: 'left' }}>
-            <div style={{ fontSize: 13, fontWeight: 600 }}>
-              {activeOrders.length} order{activeOrders.length !== 1 ? 's' : ''} · ₱{total.toFixed(2)} active total
+
+          <div style={{ flex: 1 }}>
+            <div style={{ fontFamily: "'DM Serif Display', serif", fontSize: 18, color: 'var(--fd-text)', marginBottom: 4 }}>
+              Food Orders
             </div>
-            <div style={{ fontSize: 11, color: 'var(--white-dim)', marginTop: 2, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-              {/* ISSUE 1 FIX: show abandoned pay_now as info, not a charge button */}
-              {abandonedPayNow.length > 0 && (
-                <span style={{ color: '#f87171', display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <AlertCircle size={11} />
-                  {abandonedPayNow.length} Pay Now unpaid — follow up with guest
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 12, color: 'var(--fd-text-muted)' }}>
+                {activeOrders.length} active · {formatPHP(total)}
+              </span>
+              {checkoutTotal > 0 && (
+                <span style={{ fontSize: 12, color: 'var(--fd-amber)', fontWeight: 500 }}>
+                  {formatPHP(checkoutTotal)} at checkout
                 </span>
               )}
-              {checkoutTotal > 0 && (
-                <span style={{ color: 'var(--amber)' }}>
-                  ₱{checkoutTotal.toFixed(2)} pending at checkout
+              {abandonedCount > 0 && (
+                <span style={{ fontSize: 12, color: 'var(--fd-red)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <AlertCircle size={11} />{abandonedCount} Pay Now unpaid
                 </span>
               )}
             </div>
           </div>
+
+          <button
+            onClick={onClose}
+            style={{
+              width: 32, height: 32, borderRadius: 8,
+              background: 'var(--fd-surface-2)', border: 'none',
+              cursor: 'pointer', display: 'flex', alignItems: 'center',
+              justifyContent: 'center', color: 'var(--fd-text-muted)',
+              transition: 'background 150ms',
+              flexShrink: 0,
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = 'var(--fd-surface-3)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'var(--fd-surface-2)'}
+          >
+            <X size={15} />
+          </button>
         </div>
 
-        {/* Right: chevron only — NO charge button */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          {open
-            ? <ChevronUp   size={16} style={{ color: 'var(--gold)' }} />
-            : <ChevronDown size={16} style={{ color: 'var(--gold)' }} />
-          }
-        </div>
-      </div>
+        {/* Abandoned notice */}
+        {abandonedCount > 0 && (
+          <div style={{ padding: '12px 24px 0', flexShrink: 0 }}>
+            <div className="fd-notice fd-notice-error" style={{ marginBottom: 0 }}>
+              <span className="fd-notice-icon"><AlertCircle size={14} /></span>
+              <span style={{ fontSize: 12 }}>
+                <strong>{abandonedCount}</strong> Pay Now order{abandonedCount !== 1 ? 's' : ''} unpaid — payment likely failed or was abandoned. Contact guest to retry or cancel.
+              </span>
+            </div>
+          </div>
+        )}
 
-      {/* Expanded order table */}
-      {open && (
-        <div style={{ borderTop: '1px solid var(--gold-border)' }}>
+        {/* Table */}
+        <div style={{ overflowY: 'auto', flex: 1 }}>
           {displayOrders.length === 0 ? (
-            <div style={{
-              padding: '20px 16px', fontSize: 12,
-              color: 'var(--white-dim)', textAlign: 'center',
-            }}>
+            <div style={{ padding: '48px 0', textAlign: 'center', fontSize: 13, color: 'var(--fd-text-faint)' }}>
               No orders match the current filter.
             </div>
           ) : (
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
-                <tr style={{ background: 'rgba(201,168,76,0.04)' }}>
-                  {['Item', 'Qty', 'Price', 'Order Status', 'Payment', 'Type', 'Placed'].map(h => (
+                <tr style={{ background: 'var(--fd-surface-2)', position: 'sticky', top: 0, zIndex: 1 }}>
+                  {['Item', 'Qty', 'Price', 'Order Status', 'Payment', 'Type', 'Time'].map(h => (
                     <th key={h} style={{
-                      padding: '8px 16px', textAlign: 'left',
-                      fontSize: 9, fontWeight: 700, letterSpacing: 2,
-                      textTransform: 'uppercase', color: 'var(--gold)',
-                      borderBottom: '1px solid var(--gold-border)',
+                      textAlign: 'left', padding: '11px 18px',
+                      fontSize: 10, fontWeight: 700, letterSpacing: '0.10em',
+                      textTransform: 'uppercase', color: 'var(--fd-text)',
+                      whiteSpace: 'nowrap',
                     }}>
                       {h}
                     </th>
@@ -179,73 +370,38 @@ function RoomGroup({ roomNumber, orders, statusFilter }) {
                 </tr>
               </thead>
               <tbody>
-                {displayOrders.map(order => (
+                {displayOrders.map((order, i) => (
                   <tr
                     key={order.id}
                     style={{
-                      borderBottom: '1px solid rgba(201,168,76,0.06)',
                       opacity: order.order_status === 'cancelled' ? 0.45 : 1,
+                      borderBottom: i < displayOrders.length - 1 ? '1px solid var(--fd-surface-2)' : 'none',
                     }}
                   >
-                    <td style={{ padding: '10px 16px', fontSize: 13, fontWeight: 600, color: 'var(--white)' }}>
-                      {order.food_item_name}
-                      {order.order_status === 'cancelled' && (
-                        <span style={{
-                          marginLeft: 8, fontSize: 9,
-                          color: 'var(--white-dim)', letterSpacing: 1, textTransform: 'uppercase',
-                        }}>
-                          cancelled
-                        </span>
-                      )}
+                    <td style={{ padding: '13px 18px', verticalAlign: 'middle' }}>
+                      <div style={{ fontWeight: 600, color: 'var(--fd-text)', marginBottom: 2 }}>
+                        {order.food_item_name}
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--fd-text-muted)' }}>#{order.id}</div>
                     </td>
-                    <td style={{ padding: '10px 16px', fontSize: 13, color: 'var(--white-dim)' }}>
+                    <td style={{ padding: '13px 18px', color: 'var(--fd-text-muted)', verticalAlign: 'middle' }}>
                       {order.quantity}
                     </td>
-                    <td style={{
-                      padding: '10px 16px',
-                      fontFamily: "'Playfair Display', serif",
-                      fontSize: 13, color: 'var(--white)',
-                    }}>
-                      ₱{safeMoney(order.total_price).toFixed(2)}
+                    <td style={{ padding: '13px 18px', fontWeight: 600, color: 'var(--fd-text)', verticalAlign: 'middle' }}>
+                      {formatPHP(order.total_price)}
                     </td>
-                    <td style={{ padding: '10px 16px' }}>
-                      <span style={{
-                        fontSize: 9, fontWeight: 700, letterSpacing: 1,
-                        textTransform: 'uppercase', padding: '3px 8px',
-                        color:      order.order_status === 'completed' ? '#4ade80'
-                                  : order.order_status === 'cancelled' ? 'rgba(248,246,240,0.4)'
-                                  : 'var(--amber)',
-                        background: order.order_status === 'completed' ? 'rgba(74,222,128,0.1)'
-                                  : order.order_status === 'cancelled' ? 'rgba(248,246,240,0.05)'
-                                  : 'rgba(201,168,76,0.1)',
-                        border: `1px solid ${
-                          order.order_status === 'completed' ? 'rgba(74,222,128,0.25)'
-                          : order.order_status === 'cancelled' ? 'rgba(248,246,240,0.12)'
-                          : 'rgba(201,168,76,0.3)'
-                        }`,
-                      }}>
-                        {order.order_status}
-                      </span>
+                    <td style={{ padding: '13px 18px', verticalAlign: 'middle' }}>
+                      <OrderStatusBadge status={order.order_status} />
                     </td>
-                    <td style={{ padding: '10px 16px' }}>
-                      <span style={{
-                        fontSize: 9, fontWeight: 700, letterSpacing: 1,
-                        textTransform: 'uppercase', padding: '3px 8px',
-                        color:      order.payment_status === 'paid' ? '#4ade80' : '#f87171',
-                        background: order.payment_status === 'paid' ? 'rgba(74,222,128,0.1)' : 'rgba(248,113,113,0.08)',
-                        border: `1px solid ${order.payment_status === 'paid' ? 'rgba(74,222,128,0.25)' : 'rgba(248,113,113,0.3)'}`,
-                      }}>
-                        {order.payment_status}
-                      </span>
+                    <td style={{ padding: '13px 18px', verticalAlign: 'middle' }}>
+                      <PaymentBadge status={order.payment_status} type={order.payment_type} />
                     </td>
-                    <td style={{ padding: '10px 16px', fontSize: 10, color: 'var(--white-dim)', letterSpacing: 0.5 }}>
+                    <td style={{ padding: '13px 18px', fontSize: 11, color: 'var(--fd-text-faint)', verticalAlign: 'middle' }}>
                       {order.payment_type === 'pay_now' ? 'Pay Now' : 'At Checkout'}
                     </td>
-                    <td style={{ padding: '10px 16px', fontSize: 10, color: 'rgba(248,246,240,0.35)' }}>
+                    <td style={{ padding: '13px 18px', fontSize: 11, color: 'var(--fd-text-faint)', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
                       {order.created_at
-                        ? new Date(order.created_at).toLocaleTimeString('en-PH', {
-                            hour: '2-digit', minute: '2-digit',
-                          })
+                        ? new Date(order.created_at).toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' })
                         : '—'}
                     </td>
                   </tr>
@@ -253,39 +409,64 @@ function RoomGroup({ roomNumber, orders, statusFilter }) {
               </tbody>
             </table>
           )}
-
-          {/* Checkout total footer — only if there are unpaid pay_checkout orders */}
-          {checkoutTotal > 0 && (
-            <div style={{
-              padding: '10px 16px',
-              background: 'rgba(201,168,76,0.04)',
-              borderTop: '1px solid var(--gold-border)',
-              display: 'flex', justifyContent: 'flex-end',
-            }}>
-              <span style={{ fontSize: 12, color: 'var(--white-dim)' }}>
-                To collect at checkout:{' '}
-                <strong style={{ color: 'var(--gold)' }}>₱{checkoutTotal.toFixed(2)}</strong>
-                <span style={{ marginLeft: 8, fontSize: 11, color: 'rgba(248,246,240,0.35)' }}>
-                  — settled during guest checkout
-                </span>
-              </span>
-            </div>
-          )}
         </div>
-      )}
+
+        {/* Modal Footer */}
+        {checkoutTotal > 0 && (
+          <div style={{
+            padding: '14px 24px',
+            borderTop: '1px solid var(--fd-surface-2)',
+            background: 'var(--fd-surface-2)',
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            flexShrink: 0,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--fd-text-muted)' }}>
+              <CheckCircle2 size={13} />
+              <span>Collect at checkout:</span>
+              <strong style={{ color: 'var(--fd-text)', fontSize: 14 }}>{formatPHP(checkoutTotal)}</strong>
+              <span style={{ color: 'var(--fd-text-faint)' }}>— settled on guest departure</span>
+            </div>
+            <button
+              onClick={onClose}
+              className="fd-btn"
+              style={{ padding: '8px 18px', fontSize: 12 }}
+            >
+              Close
+            </button>
+          </div>
+        )}
+
+        {checkoutTotal === 0 && (
+          <div style={{
+            padding: '14px 24px',
+            borderTop: '1px solid var(--fd-surface-2)',
+            display: 'flex', justifyContent: 'flex-end',
+            flexShrink: 0,
+          }}>
+            <button onClick={onClose} className="fd-btn" style={{ padding: '8px 18px', fontSize: 12 }}>
+              Close
+            </button>
+          </div>
+        )}
+      </div>
+
+      <style>{`
+        @keyframes fd-modal-bg-in { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes fd-modal-in {
+          from { opacity: 0; transform: translateY(-12px) scale(0.97); }
+          to   { opacity: 1; transform: none; }
+        }
+      `}</style>
     </div>
   );
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function FoodOrdersFrontDeskPage() {
-  const [orders,     setOrders]     = useState([]);
-  const [loading,    setLoading]    = useState(true);
-  const [lastUpdate, setLastUpdate] = useState(null);
-
-  // ISSUE 5 FIX: order status filter for the entire page
+  const [orders,       setOrders]       = useState([]);
+  const [loading,      setLoading]      = useState(true);
   const [statusFilter, setStatusFilter] = useState('all');
-
+  const [modalRoom,    setModalRoom]    = useState(null); // { roomNumber, orders }
   const timerRef = useRef(null);
 
   const load = useCallback(async (silent = false) => {
@@ -293,7 +474,6 @@ export default function FoodOrdersFrontDeskPage() {
     try {
       const res = await api.get('/food/orders/admin/');
       setOrders(res.data.results ?? res.data);
-      setLastUpdate(new Date());
     } catch {
       if (!silent) setOrders([]);
     } finally {
@@ -307,7 +487,6 @@ export default function FoodOrdersFrontDeskPage() {
     return () => clearInterval(timerRef.current);
   }, [load]);
 
-  // ISSUE 2 FIX: group by room_number, handle null gracefully
   const byRoom = orders.reduce((acc, o) => {
     const room = o.room_number ?? '—';
     if (!acc[room]) acc[room] = [];
@@ -315,21 +494,18 @@ export default function FoodOrdersFrontDeskPage() {
     return acc;
   }, {});
 
-  // KPI calculations
-  const pendingCount = orders.filter(o => o.order_status === 'pending').length;
-
-  // ISSUE 1 FIX: "Pay Now Unpaid" = abandoned/failed — shown as info, not charged
-  const abandonedPayNow = orders.filter(
+  // KPI aggregates
+  const pendingCount   = orders.filter(o => o.order_status === 'pending').length;
+  const completedCount = orders.filter(o => o.order_status === 'completed').length;
+  const totalOrders    = orders.filter(o => o.order_status !== 'cancelled').length;
+  const abandonedCount = orders.filter(
     o => o.payment_type === 'pay_now' && o.payment_status === 'unpaid' && o.order_status !== 'cancelled',
   ).length;
-
-  // ISSUE 3 FIX: at-checkout total = unpaid + not cancelled only
   const checkoutTotal = orders
-    .filter(
-      o => o.payment_type === 'pay_checkout'
-        && o.payment_status === 'unpaid'
-        && o.order_status !== 'cancelled',
-    )
+    .filter(o => o.payment_type === 'pay_checkout' && o.payment_status === 'unpaid' && o.order_status !== 'cancelled')
+    .reduce((s, o) => s + safeMoney(o.total_price), 0);
+  const totalRevenue = orders
+    .filter(o => o.payment_status === 'paid' && o.order_status !== 'cancelled')
     .reduce((s, o) => s + safeMoney(o.total_price), 0);
 
   const STATUS_FILTERS = [
@@ -339,167 +515,151 @@ export default function FoodOrdersFrontDeskPage() {
     { value: 'cancelled', label: 'Cancelled'   },
   ];
 
+  const roomEntries = Object.entries(byRoom).sort(([a], [b]) => String(a).localeCompare(String(b)));
+
+  // Filter room list by status
+  const filteredRoomEntries = statusFilter === 'all'
+    ? roomEntries
+    : roomEntries.filter(([, roomOrders]) =>
+        roomOrders.some(o => o.order_status === statusFilter)
+      );
+
   return (
-    <div style={{
-      padding: '44px 48px 80px', maxWidth: 1100, margin: '0 auto',
-      fontFamily: "'Raleway', sans-serif", color: 'var(--white)',
-    }}>
+    <div className="fd-page">
+      <div className="fd-inner">
 
-      {/* Header */}
-      <div style={{
-        display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
-        marginBottom: 32, flexWrap: 'wrap', gap: 16,
-      }}>
-        <div>
-          <p style={{
-            fontSize: 10, fontWeight: 700, letterSpacing: 3,
-            textTransform: 'uppercase', color: 'var(--gold)', margin: '0 0 8px',
-          }}>
-            Front Desk
-          </p>
-          <h1 style={{
-            fontFamily: "'Playfair Display', serif", fontSize: 28,
-            color: 'var(--white)', margin: '0 0 4px',
-          }}>
-            Food Orders
-          </h1>
-          <p style={{ fontSize: 13, color: 'var(--white-dim)', margin: 0 }}>
-            {Object.keys(byRoom).length} rooms with orders
-          </p>
-          <div style={{
-            width: 44, height: 1,
-            background: 'linear-gradient(90deg, var(--gold), transparent)',
-            marginTop: 16,
-          }} />
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {lastUpdate && (
-            <span style={{
-              fontSize: 11, color: 'rgba(248,246,240,0.3)',
-              display: 'flex', alignItems: 'center', gap: 5,
-            }}>
-              <RefreshCw size={11} />
-              {lastUpdate.toLocaleTimeString('en-PH', {
-                hour: '2-digit', minute: '2-digit', second: '2-digit',
-              })}
-            </span>
-          )}
-          <button
-            onClick={() => load()}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px',
-              background: 'var(--gold-dim)', border: '1px solid var(--gold-border)',
-              color: 'var(--gold)', fontFamily: "'Raleway', sans-serif",
-              fontSize: 12, cursor: 'pointer',
-            }}
-          >
-            <RefreshCw size={12} /> Refresh
-          </button>
-        </div>
-      </div>
-
-      {/* KPI strips */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 20 }}>
-        {[
-          {
-            label: 'Pending Orders',
-            value: pendingCount,
-            color: 'var(--amber)',
-          },
-          {
-            // ISSUE 1 FIX: re-labelled so staff understand this is not chargeable here
-            label: 'Pay Now — Unpaid (follow up)',
-            value: abandonedPayNow,
-            color: abandonedPayNow > 0 ? '#f87171' : 'var(--white-dim)',
-          },
-          {
-            label: 'At Checkout (to collect)',
-            value: `₱${checkoutTotal.toFixed(2)}`,
-            color: 'var(--gold)',
-          },
-        ].map(k => (
-          <div key={k.label} style={{
-            background: 'var(--navy-card)', border: '1px solid var(--gold-border)',
-            padding: '16px 18px', position: 'relative', overflow: 'hidden',
-          }}>
-            <div style={{
-              position: 'absolute', top: 0, left: 0, right: 0, height: 1,
-              background: 'linear-gradient(90deg, var(--gold), transparent)',
-            }} />
-            <div style={{
-              fontFamily: "'Playfair Display', serif",
-              fontSize: 22, color: k.color, lineHeight: 1,
-            }}>
-              {k.value}
-            </div>
-            <div style={{ fontSize: 10, color: 'var(--white-dim)', marginTop: 4, letterSpacing: 0.5 }}>
-              {k.label}
-            </div>
+        {/* Header */}
+        <div className="fd-toprow">
+          <div className="fd-toprow-left">
+            <p className="fd-eyebrow">Front Desk</p>
+            <h1>Food Orders</h1>
+            <p>{Object.keys(byRoom).length} room(s) with orders</p>
           </div>
-        ))}
+        </div>
+
+        {/* ── KPI Cards (4 columns) ── */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 24 }}>
+
+          {/* Total Active Orders */}
+          <StatCard
+            icon={<ShoppingBag size={19} />}
+            iconBg="var(--fd-accent-lt)"
+            iconColor="var(--fd-accent)"
+            value={totalOrders}
+            label="Active Orders"
+            sub={`${Object.keys(byRoom).length} rooms`}
+            accent="var(--fd-accent)"
+          />
+
+          {/* Pending */}
+          <StatCard
+            icon={<Clock size={19} />}
+            iconBg="var(--fd-amber-bg)"
+            iconColor="var(--fd-amber)"
+            value={pendingCount}
+            label="Pending Orders"
+            sub={pendingCount > 0 ? 'Awaiting preparation' : 'All caught up'}
+            subColor={pendingCount > 0 ? 'var(--fd-amber)' : 'var(--fd-text-muted)'}
+            accent="var(--fd-amber)"
+          />
+
+          {/* Pay Now Unpaid */}
+          <StatCard
+            icon={<AlertCircle size={19} />}
+            iconBg="var(--fd-red-bg)"
+            iconColor="var(--fd-red)"
+            value={abandonedCount}
+            label="Pay Now Unpaid"
+            sub={abandonedCount > 0 ? 'Follow up with guest' : 'No issues'}
+            subColor={abandonedCount > 0 ? 'var(--fd-red)' : 'var(--fd-text-muted)'}
+            accent={abandonedCount > 0 ? 'var(--fd-red)' : undefined}
+          />
+
+          {/* At Checkout */}
+          <StatCard
+            icon={<CreditCard size={19} />}
+            iconBg="rgba(29,78,216,0.09)"
+            iconColor="var(--fd-blue)"
+            value={
+              <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: checkoutTotal > 9999 ? 22 : 28, fontWeight: 400 }}>
+                {formatPHP(checkoutTotal)}
+              </span>
+            }
+            label="At Checkout"
+            sub="To collect on departure"
+            accent="var(--fd-blue)"
+          />
+        </div>
+
+        {/* ── Abandoned notice ── */}
+        {abandonedCount > 0 && (
+          <div className="fd-notice fd-notice-error" style={{ marginBottom: 20 }}>
+            <span className="fd-notice-icon"><AlertCircle size={14} /></span>
+            <span>
+              <strong>{abandonedCount}</strong> Pay Now order{abandonedCount !== 1 ? 's' : ''} have unpaid status — the guest's online payment likely failed or was abandoned.
+              These are <strong>not charged here</strong>. Contact the guest to retry, or cancel if the order won't be fulfilled.
+            </span>
+          </div>
+        )}
+
+        {/* ── Status filter tabs ── */}
+        <div className="fd-status-tabs" style={{ marginBottom: 20 }}>
+          {STATUS_FILTERS.map(f => (
+            <button
+              key={f.value}
+              className={`fd-status-tab${statusFilter === f.value ? ' active' : ''}`}
+              onClick={() => setStatusFilter(f.value)}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+
+        {/* ── Room Cards ── */}
+        {loading ? (
+          <div className="fd-loading"><div className="fd-spinner" /><p>Loading orders</p></div>
+        ) : filteredRoomEntries.length === 0 ? (
+          <div className="fd-card" style={{ textAlign: 'center', color: 'var(--fd-text-faint)', fontSize: 13, padding: '48px 0' }}>
+            {statusFilter === 'all' ? 'No food orders yet.' : `No ${statusFilter} orders found.`}
+          </div>
+        ) : (
+          <div>
+            {/* Column header */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: '80px 1fr auto 24px',
+              gap: 16,
+              padding: '0 22px 10px',
+              fontSize: 10, fontWeight: 700, letterSpacing: '0.10em',
+              textTransform: 'uppercase', color: 'var(--fd-text-muted)',
+            }}>
+              <span>Room</span>
+              <span>Summary</span>
+              <span>Status</span>
+              <span></span>
+            </div>
+
+            {filteredRoomEntries.map(([room, roomOrders]) => (
+              <RoomCard
+                key={room}
+                roomNumber={room}
+                orders={roomOrders}
+                onClick={() => setModalRoom({ roomNumber: room, orders: roomOrders })}
+              />
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* ISSUE 5 FIX: status filter bar */}
-      <div style={{
-        display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap',
-      }}>
-        {STATUS_FILTERS.map(f => (
-          <button
-            key={f.value}
-            onClick={() => setStatusFilter(f.value)}
-            style={{
-              padding: '6px 16px',
-              background: statusFilter === f.value ? 'var(--gold-dim)' : 'transparent',
-              border: `1px solid ${statusFilter === f.value ? 'var(--gold)' : 'var(--gold-border)'}`,
-              color: statusFilter === f.value ? 'var(--gold)' : 'var(--white-dim)',
-              fontFamily: "'Raleway', sans-serif",
-              fontSize: 11, fontWeight: 600, letterSpacing: 1,
-              cursor: 'pointer', textTransform: 'uppercase',
-            }}
-          >
-            {f.label}
-          </button>
-        ))}
-      </div>
-
-      {/* ISSUE 1 FIX: info notice when there are abandoned pay_now orders */}
-      {abandonedPayNow > 0 && (
-        <div style={{
-          display: 'flex', gap: 10, alignItems: 'flex-start',
-          background: 'rgba(248,113,113,0.06)', border: '1px solid rgba(248,113,113,0.2)',
-          padding: '10px 16px', marginBottom: 20, fontSize: 12,
-          color: '#f87171',
-        }}>
-          <AlertCircle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
-          <span>
-            <strong>{abandonedPayNow}</strong> Pay Now order{abandonedPayNow !== 1 ? 's' : ''} are
-            unpaid — the guest's online payment likely failed or was abandoned. These are{' '}
-            <strong>not charged here</strong>. Please contact the guest to retry payment, or cancel
-            the order if it will not be fulfilled.
-          </span>
-        </div>
-      )}
-
-      {/* Room groups */}
-      {loading ? (
-        <div style={{ textAlign: 'center', padding: '64px 0', color: 'var(--white-dim)', fontSize: 13 }}>
-          Loading orders…
-        </div>
-      ) : Object.keys(byRoom).length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '64px 0', color: 'var(--white-dim)', fontSize: 13 }}>
-          No food orders yet.
-        </div>
-      ) : (
-        Object.entries(byRoom)
-          .sort(([a], [b]) => String(a).localeCompare(String(b)))
-          .map(([room, roomOrders]) => (
-            <RoomGroup
-              key={room}
-              roomNumber={room}
-              orders={roomOrders}
-              statusFilter={statusFilter}
-            />
-          ))
+      {/* ── Room Orders Modal ── */}
+      {modalRoom && (
+        <RoomOrdersModal
+          open={!!modalRoom}
+          onClose={() => setModalRoom(null)}
+          roomNumber={modalRoom.roomNumber}
+          orders={modalRoom.orders}
+          statusFilter={statusFilter}
+        />
       )}
     </div>
   );

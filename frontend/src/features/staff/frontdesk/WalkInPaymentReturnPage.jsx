@@ -333,7 +333,7 @@ export default function WalkInPaymentReturnPage() {
                   className="fd-btn fd-btn-primary"
                   onClick={() => navigate('/staff/front-desk/walk-in')}
                 >
-                  ↩ New Walk-In Booking
+                   New Walk-In Booking
                 </button>
                 <button
                   className="fd-btn"

@@ -2,14 +2,8 @@
  * src/features/staff/checkin/BookingPreviewCard.jsx
  *
  * Displays booking details after reference lookup.
- * Uses real BookingDetailSerializer fields:
- *   booking.room_number, room_type, room_bed_type, room_floor
- *   booking.amount_paid  (SerializerMethodField — sum of paid Payments)
- *   booking.amount_due   (SerializerMethodField — total_price - amount_paid)
- *   booking.full_name, guests_count, check_in, check_out, nights
- *   booking.total_price, tax, service_fee, subtotal
- *   booking.status, status_display, payment_status, payment_status_display
- *   booking.has_credentials
+ * Visual refresh: editorial light theme (matches Dashboard).
+ * Logic unchanged.
  */
 
 import {
@@ -48,9 +42,9 @@ function paymentBadgeClass(paymentStatus) {
 export default function BookingPreviewCard({ booking, method }) {
   if (!booking) return null;
 
-  const remaining   = getRemainingBalance(booking);   // from amount_due
-  const amountPaid  = getAmountPaid(booking);         // from amount_paid
-  const hasBalance  = remaining > 0;
+  const remaining  = getRemainingBalance(booking);
+  const amountPaid = getAmountPaid(booking);
+  const hasBalance = remaining > 0;
 
   const checkInDate  = booking.check_in
     ? new Date(booking.check_in + 'T00:00:00').toLocaleDateString('en-PH', {
@@ -72,7 +66,7 @@ export default function BookingPreviewCard({ booking, method }) {
         <div>
           <h2 className="ci-guest-name">{booking.full_name || '—'}</h2>
           <p className="ci-ref-num">{booking.reference_number}</p>
-          <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 7, marginTop: 10, flexWrap: 'wrap' }}>
             <span className={`ci-badge ${statusBadgeClass(booking.status)}`}>
               {booking.status_display || BOOKING_STATUS_LABELS[booking.status] || booking.status}
             </span>
@@ -80,7 +74,7 @@ export default function BookingPreviewCard({ booking, method }) {
               {booking.payment_status_display || booking.payment_status}
             </span>
             {method && (
-              <span className="ci-badge ci-badge-blue">
+              <span className="ci-badge ci-badge-muted">
                 {method === 'qr_scan' ? '⬛ QR Scan' : '✎ Manual Entry'}
               </span>
             )}
@@ -157,19 +151,18 @@ export default function BookingPreviewCard({ booking, method }) {
           <span className="ci-payment-label">Amount Paid</span>
           <span className="ci-payment-value green">{formatPHP(amountPaid)}</span>
         </div>
-        {hasBalance && (
+        {hasBalance ? (
           <div className="ci-payment-row ci-payment-total">
-            <span className="ci-payment-label" style={{ fontWeight: 600 }}>
+            <span className="ci-payment-label" style={{ fontWeight: 700 }}>
               Remaining Balance
             </span>
             <span className="ci-payment-value amber" style={{ fontSize: 17 }}>
               {formatPHP(remaining)}
             </span>
           </div>
-        )}
-        {!hasBalance && (
+        ) : (
           <div className="ci-payment-row ci-payment-total">
-            <span className="ci-payment-label" style={{ fontWeight: 600 }}>
+            <span className="ci-payment-label" style={{ fontWeight: 700 }}>
               Balance Due
             </span>
             <span className="ci-payment-value green" style={{ fontSize: 17 }}>

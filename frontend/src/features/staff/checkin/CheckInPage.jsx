@@ -2,18 +2,13 @@
  * src/features/staff/checkin/CheckInPage.jsx
  *
  * Front Desk Check-In Verification Panel.
- * Corrected against real backend:
- *   - PIN is 4 digits (checkin_pin = CharField(max_length=4))
- *   - Remaining balance determined from booking.amount_due (not a status field)
- *   - payment_status on Booking: unpaid | paid | refunded | partially_refunded | failed
- *   - Deposit detection: getRemainingBalance(booking) > 0
+ * UI redesigned to match the Dashboard editorial light theme
+ * (Montserrat + Playfair Display, FAF9F6 background, dark text accents).
  *
- * Flow:
- *   Step 1 — Lookup  : scan QR or type reference → GET /bookings/lookup/
- *   Step 2 — PIN     : 4-digit PIN → POST /bookings/admin/<pk>/verify-pin/
- *   Step 3 — Payment : if has balance → collect or allow with balance
- *   Step 4 — Confirm : fully paid → POST /bookings/admin/<pk>/check-in/
- *   Step 5 — Success
+ * CHANGES:
+ *  - Stores and displays `warning` returned by canCheckIn() (late arrival banner)
+ *  - Clears warning on reset
+ *  - Full visual refresh — light palette, no dark navy/gold
  */
 
 import { useState, useRef, useCallback, useEffect } from 'react';
@@ -30,7 +25,6 @@ import {
 } from '../services/checkInApi';
 import './CheckIn.css';
 
-// ── Workflow steps ─────────────────────────────────────────────────────────────
 const STEP = {
   LOOKUP:  'lookup',
   PIN:     'pin',
@@ -41,8 +35,8 @@ const STEP = {
 
 // ── 4-digit PIN input ──────────────────────────────────────────────────────────
 function PinInput({ value, onChange, error }) {
-  const inputs = useRef([]);
-  const PIN_LENGTH = 4;  // checkin_pin is max_length=4
+  const inputs    = useRef([]);
+  const PIN_LENGTH = 4;
 
   function handleKey(e, i) {
     const char = e.key;
@@ -97,12 +91,11 @@ function StepBar({ currentStep, hasBalance }) {
     ),
     { key: STEP.SUCCESS, label: 'Done' },
   ];
-
   const ORDER = [STEP.LOOKUP, STEP.PIN, STEP.PAYMENT, STEP.CONFIRM, STEP.SUCCESS];
   const idx   = (s) => ORDER.indexOf(s);
 
   return (
-    <div className="ci-steps ci-no-print" style={{ marginBottom: 28 }}>
+    <div className="ci-steps ci-no-print">
       {steps.map((s, i) => {
         const done   = idx(currentStep) > idx(s.key);
         const active = currentStep === s.key;
@@ -122,33 +115,33 @@ function StepBar({ currentStep, hasBalance }) {
 
 // ── Main component ─────────────────────────────────────────────────────────────
 export default function CheckInPage() {
-  const location   = useLocation();
-  const [method,       setMethod]       = useState('manual');  // 'qr' | 'manual'
-  const [showScanner,  setShowScanner]  = useState(false);
+  const location = useLocation();
 
+  const [method,       setMethod]       = useState('qr');
+  const [showScanner,  setShowScanner]  = useState(false);
   const [step,         setStep]         = useState(STEP.LOOKUP);
   const [reference,    setReference]    = useState('');
   const [booking,      setBooking]      = useState(null);
   const [pin,          setPin]          = useState('');
   const [payMethod,    setPayMethod]    = useState('');
-  const [result,       setResult]       = useState(null);  // final checked-in booking
+  const [result,       setResult]       = useState(null);
+  const [checkInWarning, setCheckInWarning] = useState(null); // ← new
 
-  // Loading states
   const [lookupBusy,  setLookupBusy]   = useState(false);
   const [pinBusy,     setPinBusy]      = useState(false);
   const [payBusy,     setPayBusy]      = useState(false);
   const [confirmBusy, setConfirmBusy]  = useState(false);
 
-  // Error states
   const [lookupErr,   setLookupErr]    = useState(null);
   const [pinErr,      setPinErr]       = useState(null);
   const [payErr,      setPayErr]       = useState(null);
   const [confirmErr,  setConfirmErr]   = useState(null);
 
-  const remaining = getRemainingBalance(booking);
+
+  const remaining  = getRemainingBalance(booking);
   const hasBalance = remaining > 0;
 
-  // Auto-lookup if navigated here from TodayArrivalsPage with a reference pre-filled
+  // Auto-lookup when navigated here from TodayArrivalsPage
   useEffect(() => {
     const incoming = location?.state?.reference;
     if (incoming && step === STEP.LOOKUP) {
@@ -158,13 +151,13 @@ export default function CheckInPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Reset ──────────────────────────────────────────────────────────────────
   function reset() {
     setStep(STEP.LOOKUP);
     setReference(''); setBooking(null); setPin('');
     setPayMethod(''); setResult(null);
     setLookupErr(null); setPinErr(null);
     setPayErr(null); setConfirmErr(null);
+    setCheckInWarning(null); // ← clear warning on reset
   }
 
   // ── Step 1: Lookup ─────────────────────────────────────────────────────────
@@ -176,9 +169,15 @@ export default function CheckInPage() {
     try {
       const data  = await checkInApi.lookupByReference(ref);
       const check = canCheckIn(data);
-      if (!check.ok) { setLookupErr(check.reason); return; }
+
+      if (!check.ok) {
+        setLookupErr(check.reason);
+        return;
+      }
+
       setBooking(data);
       setReference(data.reference_number);
+      setCheckInWarning(check.warning || null); // ← store warning
       setStep(STEP.PIN);
     } catch (err) {
       if (err.response?.status === 404) {
@@ -188,7 +187,7 @@ export default function CheckInPage() {
           err.response?.data?.error ||
           err.response?.data?.detail ||
           err.message ||
-          'Failed to retrieve booking.'
+          'Failed to retrieve booking.',
         );
       }
     } finally {
@@ -213,10 +212,8 @@ export default function CheckInPage() {
         setPin('');
         return;
       }
-      // Decide next step based on remaining balance
       setStep(hasBalance ? STEP.PAYMENT : STEP.CONFIRM);
     } catch (err) {
-      // Backend returns 400 for wrong PIN
       const msg =
         err.response?.data?.error ||
         err.response?.data?.detail ||
@@ -228,7 +225,7 @@ export default function CheckInPage() {
     }
   }
 
-  // ── Step 3b: Collect payment then check-in ─────────────────────────────────
+  // ── Step 3: Collect payment ────────────────────────────────────────────────
   async function handleCollectPayment() {
     if (!payMethod) { setPayErr('Please select a payment method.'); return; }
     setPayBusy(true); setPayErr(null);
@@ -240,14 +237,14 @@ export default function CheckInPage() {
       setPayErr(
         err.response?.data?.error ||
         err.response?.data?.detail ||
-        'Payment collection failed. Please try again.'
+        'Payment collection failed. Please try again.',
       );
     } finally {
       setPayBusy(false);
     }
   }
 
-  // ── Step 3c: Check-in with outstanding balance ─────────────────────────────
+  // ── Step 3b: Check-in with balance ─────────────────────────────────────────
   async function handleCheckInWithBalance() {
     setConfirmBusy(true); setConfirmErr(null);
     try {
@@ -261,7 +258,7 @@ export default function CheckInPage() {
       setConfirmErr(
         err.response?.data?.error ||
         err.response?.data?.detail ||
-        'Check-in failed. Please try again.'
+        'Check-in failed. Please try again.',
       );
     } finally {
       setConfirmBusy(false);
@@ -282,27 +279,34 @@ export default function CheckInPage() {
       setConfirmErr(
         err.response?.data?.error ||
         err.response?.data?.detail ||
-        'Check-in confirmation failed. Please try again.'
+        'Check-in confirmation failed. Please try again.',
       );
     } finally {
       setConfirmBusy(false);
     }
   }
 
-  // ─── Render ────────────────────────────────────────────────────────────────
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className="ci-page">
       <div className="ci-inner">
 
         {/* Header */}
-        <div style={{ marginBottom: 32 }}>
-          <p className="sf-eyebrow" style={{ color: 'var(--gold)', fontSize: 10, letterSpacing: 3, textTransform: 'uppercase', fontWeight: 600, marginBottom: 8 }}>
+        <div style={{ marginBottom: 32, paddingBottom: 24, borderBottom: '1px solid rgba(1,0,13,0.08)' }}>
+          <span style={{
+            fontSize: 9, fontWeight: 900, letterSpacing: '0.32em',
+            textTransform: 'uppercase', color: '#909090', display: 'block', marginBottom: 8,
+          }}>
             Front Desk
-          </p>
-          <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: 32, color: 'var(--white)', margin: '0 0 6px' }}>
+          </span>
+          <h1 style={{
+            fontFamily: "'Playfair Display', serif",
+            fontSize: 'clamp(24px, 3vw, 34px)',
+            fontWeight: 700, color: '#01000D', margin: '0 0 6px', lineHeight: 1.1,
+          }}>
             Guest Check-In
           </h1>
-          <p style={{ fontSize: 14, color: 'var(--white-dim)', margin: 0 }}>
+          <p style={{ fontSize: 13, color: '#909090', margin: 0, fontWeight: 500 }}>
             Verify booking and process guest arrival
           </p>
         </div>
@@ -315,25 +319,6 @@ export default function CheckInPage() {
         {/* ════ STEP 1: LOOKUP ════ */}
         {step === STEP.LOOKUP && (
           <>
-            {/* Method tabs */}
-            <div className="ci-method-tabs ci-no-print">
-              {[
-                { key: 'qr',     icon: '⬛', label: 'Scan QR Code',   sub: 'Camera-based automatic scanning' },
-                { key: 'manual', icon: '✎',  label: 'Manual Entry',   sub: 'Type the reference number' },
-              ].map((m) => (
-                <button
-                  key={m.key}
-                  className={`ci-method-tab${method === m.key ? ' active' : ''}`}
-                  onClick={() => setMethod(m.key)}
-                >
-                  <div className="ci-method-icon">{m.icon}</div>
-                  <div>
-                    <p className="ci-method-label">{m.label}</p>
-                    <p className="ci-method-sub">{m.sub}</p>
-                  </div>
-                </button>
-              ))}
-            </div>
 
             <div className="ci-card">
               <div className="ci-card-label">
@@ -348,24 +333,23 @@ export default function CheckInPage() {
               )}
 
               {method === 'qr' && (
-                <div style={{ textAlign: 'center', paddingBottom: 16 }}>
-                  <p style={{ fontSize: 13, color: 'var(--white-dim)', marginBottom: 20 }}>
+                <div style={{ textAlign: 'center', paddingBottom: 20 }}>
+                  <p style={{ fontSize: 13, color: '#535252', marginBottom: 20, fontWeight: 500 }}>
                     Click the button below to open the camera and scan the guest's QR code.
                   </p>
                   <button
                     className="ci-btn ci-btn-primary"
-                    style={{ padding: '14px 32px', fontSize: 11 }}
+                    style={{ padding: '14px 32px', fontSize: 10 }}
                     onClick={() => setShowScanner(true)}
                   >
-                    ⬛ Open QR Scanner
+                     Open QR Scanner
                   </button>
-                  <p style={{ fontSize: 11, color: 'var(--white-dim)', marginTop: 16 }}>
+                  <p style={{ fontSize: 11, color: '#909090', marginTop: 16, fontWeight: 500 }}>
                     Or enter the reference number below
                   </p>
                 </div>
               )}
 
-              {/* Reference input — shown for both methods */}
               <div className="ci-ref-input-wrap">
                 <div className="ci-ref-input-group">
                   <label className="ci-label">
@@ -382,7 +366,7 @@ export default function CheckInPage() {
                 </div>
                 <button
                   className="ci-btn ci-btn-primary"
-                  style={{ padding: '12px 22px', alignSelf: 'flex-end' }}
+                  style={{ padding: '13px 22px', alignSelf: 'flex-end' }}
                   onClick={() => handleLookup()}
                   disabled={lookupBusy}
                 >
@@ -396,11 +380,22 @@ export default function CheckInPage() {
         {/* ════ STEP 2: PIN ════ */}
         {step === STEP.PIN && booking && (
           <>
+            {/* Late arrival warning — shown when canCheckIn returned a warning */}
+            {checkInWarning && (
+              <div className="ci-notice ci-notice-amber" style={{ marginBottom: 16 }}>
+                <span className="ci-notice-icon">⚠</span>
+                <div>
+                  <strong style={{ display: 'block', marginBottom: 3 }}>Late Arrival</strong>
+                  <span style={{ fontSize: 12 }}>{checkInWarning}</span>
+                </div>
+              </div>
+            )}
+
             <BookingPreviewCard booking={booking} method={method === 'qr' ? 'qr_scan' : 'manual_entry'} />
 
             <div className="ci-card">
               <div className="ci-card-label">PIN Verification</div>
-              <p style={{ fontSize: 13, color: 'var(--white-dim)', marginBottom: 20, textAlign: 'center' }}>
+              <p style={{ fontSize: 13, color: '#535252', marginBottom: 24, textAlign: 'center', fontWeight: 500 }}>
                 Ask the guest to provide their 4-digit booking PIN.
               </p>
 
@@ -413,7 +408,7 @@ export default function CheckInPage() {
 
               <PinInput value={pin} onChange={(v) => { setPin(v); setPinErr(null); }} error={!!pinErr} />
 
-              <div className="ci-actions" style={{ marginTop: 22, justifyContent: 'space-between' }}>
+              <div className="ci-actions" style={{ marginTop: 24, justifyContent: 'space-between' }}>
                 <button className="ci-btn" onClick={reset}>← Back</button>
                 <button
                   className="ci-btn ci-btn-primary"
@@ -428,7 +423,7 @@ export default function CheckInPage() {
           </>
         )}
 
-        {/* ════ STEP 3: PAYMENT (deposit / balance) ════ */}
+        {/* ════ STEP 3: PAYMENT ════ */}
         {step === STEP.PAYMENT && booking && (
           <>
             <BookingPreviewCard booking={booking} method={method === 'qr' ? 'qr_scan' : 'manual_entry'} />
@@ -437,7 +432,8 @@ export default function CheckInPage() {
               <div className="ci-card-label">Outstanding Balance</div>
 
               <div className="ci-notice ci-notice-amber" style={{ marginBottom: 22 }}>
-                <span className="ci-notice-icon">⚠</span>
+                <span className="ci-notice-icon">
+                    ⚠</span>
                 <div>
                   <strong>Remaining Balance: {formatPHP(remaining)}</strong>
                   <p style={{ margin: '4px 0 0', fontSize: 12 }}>
@@ -459,11 +455,15 @@ export default function CheckInPage() {
 
               {/* Option 1 — Collect now */}
               <div style={{ marginBottom: 24 }}>
-                <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--gold)', marginBottom: 12 }}>
+                <p style={{
+                  fontSize: 9, fontWeight: 900, letterSpacing: '0.18em',
+                  textTransform: 'uppercase', color: '#01000D', marginBottom: 12,
+                }}>
                   Option 1 — Collect Remaining Payment
                 </p>
-                <p style={{ fontSize: 13, color: 'var(--white-dim)', marginBottom: 14 }}>
-                  Select payment method to collect <strong style={{ color: 'var(--amber)' }}>{formatPHP(remaining)}</strong>:
+                <p style={{ fontSize: 13, color: '#535252', marginBottom: 14, fontWeight: 500 }}>
+                  Select payment method to collect{' '}
+                  <strong style={{ color: '#01000D' }}>{formatPHP(remaining)}</strong>:
                 </p>
                 <div className="ci-payment-methods">
                   {PAYMENT_METHODS.map((pm) => (
@@ -491,14 +491,17 @@ export default function CheckInPage() {
 
               {/* Divider */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '4px 0 20px' }}>
-                <div style={{ flex: 1, height: 1, background: 'var(--gold-border)' }} />
-                <span style={{ fontSize: 10, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--white-dim)' }}>or</span>
-                <div style={{ flex: 1, height: 1, background: 'var(--gold-border)' }} />
+                <div style={{ flex: 1, height: 1, background: 'rgba(1,0,13,0.10)' }} />
+                <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: '0.16em', textTransform: 'uppercase', color: '#909090' }}>or</span>
+                <div style={{ flex: 1, height: 1, background: 'rgba(1,0,13,0.10)' }} />
               </div>
 
               {/* Option 2 — Check-in with balance */}
               <div>
-                <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--white-dim)', marginBottom: 10 }}>
+                <p style={{
+                  fontSize: 9, fontWeight: 900, letterSpacing: '0.18em',
+                  textTransform: 'uppercase', color: '#909090', marginBottom: 10,
+                }}>
                   Option 2 — Check-In With Remaining Balance
                 </p>
                 <div className="ci-notice ci-notice-amber" style={{ marginBottom: 12 }}>
@@ -532,7 +535,7 @@ export default function CheckInPage() {
           </>
         )}
 
-        {/* ════ STEP 4: CONFIRM (fully paid) ════ */}
+        {/* ════ STEP 4: CONFIRM ════ */}
         {step === STEP.CONFIRM && booking && (
           <>
             <BookingPreviewCard booking={booking} method={method === 'qr' ? 'qr_scan' : 'manual_entry'} />
@@ -559,7 +562,7 @@ export default function CheckInPage() {
                 <button className="ci-btn" onClick={() => setStep(STEP.PIN)}>← Back</button>
                 <button
                   className="ci-btn ci-btn-success"
-                  style={{ padding: '14px 36px', fontSize: 12 }}
+                  style={{ padding: '14px 36px', fontSize: 11 }}
                   onClick={handleConfirmCheckIn}
                   disabled={confirmBusy}
                 >
@@ -584,14 +587,18 @@ export default function CheckInPage() {
 
               <dl className="ci-success-details">
                 {[
-                  ['Guest',      result.full_name],
-                  ['Reference',  result.reference_number],
-                  ['Room',       result.room_number],
-                  ['Room Type',  result.room_type],
-                  ['Check-In',   result.check_in ? new Date(result.check_in + 'T00:00:00').toLocaleDateString('en-PH') : '—'],
-                  ['Check-Out',  result.check_out ? new Date(result.check_out + 'T00:00:00').toLocaleDateString('en-PH') : '—'],
-                  ['Payment',    result.payment_status_display || result.payment_status],
-                  ['Method',     method === 'qr' ? 'QR Scan' : 'Manual Entry'],
+                  ['Guest',     result.full_name],
+                  ['Reference', result.reference_number],
+                  ['Room',      result.room_number],
+                  ['Room Type', result.room_type],
+                  ['Check-In',  result.check_in
+                    ? new Date(result.check_in + 'T00:00:00').toLocaleDateString('en-PH')
+                    : '—'],
+                  ['Check-Out', result.check_out
+                    ? new Date(result.check_out + 'T00:00:00').toLocaleDateString('en-PH')
+                    : '—'],
+                  ['Payment',   result.payment_status_display || result.payment_status],
+                  ['Method',    method === 'qr' ? 'QR Scan' : 'Manual Entry'],
                 ].map(([label, value]) => (
                   <div className="ci-success-detail-item" key={label}>
                     <dt>{label}</dt>
@@ -600,9 +607,10 @@ export default function CheckInPage() {
                 ))}
               </dl>
 
-              {/* Show warning if checked in with remaining balance */}
               {result.remaining_balance && parseFloat(result.remaining_balance) > 0 && (
-                <div className="ci-notice ci-notice-amber" style={{ textAlign: 'left', maxWidth: 420, margin: '0 auto 20px' }}>
+                <div className="ci-notice ci-notice-amber" style={{
+                  textAlign: 'left', maxWidth: 420, margin: '0 auto 20px',
+                }}>
                   <span className="ci-notice-icon">⚠</span>
                   <span style={{ fontSize: 12 }}>
                     Guest still has a remaining balance of{' '}
@@ -626,7 +634,6 @@ export default function CheckInPage() {
 
       </div>
 
-      {/* QR Scanner modal */}
       {showScanner && (
         <QRScannerModal onScan={handleQRScan} onClose={() => setShowScanner(false)} />
       )}

@@ -934,3 +934,172 @@
   .rdm-amenities-grid { grid-template-columns: 1fr; }
   .rdm-reviews-summary { flex-direction: column; gap: 20px; }
 }
+
+
+/* ============================================================
+   RoomListPage.css — ADDITIONS for enhanced filter validation
+   Append these rules to the existing RoomListPage.css
+   ============================================================ */
+
+/* ── Error state on filter segment ───────────────────── */
+.filter-segment.has-error .filter-segment-label {
+  color: #dc2626;
+}
+
+.filter-segment.has-error .filter-segment-value {
+  color: #dc2626;
+}
+
+.filter-segment.has-error {
+  border-bottom: 2px solid #dc2626;
+}
+
+/* ── Inline error text inside segment value ───────────── */
+.filter-error-inline {
+  font-size: 10px;
+  font-weight: 700;
+  color: #dc2626;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 120px;
+  display: inline-block;
+}
+
+/* ── Required indicator dot ───────────────────────────── */
+.filter-required-dot {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #dc2626;
+  margin-left: 3px;
+  vertical-align: middle;
+}
+
+/* ── Hint text inside dropdown ────────────────────────── */
+.filter-hint-text {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--rl-text-muted);
+  letter-spacing: 0.03em;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+
+.filter-hint-text svg {
+  flex-shrink: 0;
+  color: var(--rl-text-muted);
+}
+
+/* ── Field-level error inside dropdown ────────────────── */
+.filter-field-error {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  color: #dc2626;
+  margin-top: 6px;
+}
+
+/* ── Global validation bar below filter bar ───────────── */
+.filter-validation-bar {
+  max-width: 1280px;
+  margin: 8px auto 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: rgba(220, 38, 38, 0.06);
+  border: 1px solid rgba(220, 38, 38, 0.2);
+  font-family: 'Montserrat', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  color: #dc2626;
+  letter-spacing: 0.02em;
+  line-height: 1.5;
+}
+
+.filter-validation-bar svg {
+  flex-shrink: 0;
+}
+
+/* ── Partial hint (waiting for all 3 fields) ──────────── */
+.filter-partial-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 18px 22px;
+  background: var(--rl-white);
+  border: 1px solid var(--rl-border);
+  border-left: 3px solid var(--rl-navy);
+  margin-bottom: 24px;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 13px;
+  color: var(--rl-text-mid);
+  line-height: 1.6;
+}
+
+.filter-partial-hint svg {
+  flex-shrink: 0;
+  color: var(--rl-navy);
+  margin-top: 2px;
+}
+
+.filter-partial-hint strong {
+  color: var(--rl-text);
+}
+
+
+/* ============================================================
+   RoomListPage.css — ADDITIONS
+   Append these rules to the bottom of the existing RoomListPage.css
+   ============================================================ */
+
+/* ── Search button searching state ───────────────────── */
+.filter-search-btn--searching {
+  background: #535252 !important;
+  cursor: not-allowed;
+  opacity: 0.85;
+}
+
+.filter-search-spinner {
+  display: inline-block;
+  width: 15px;
+  height: 15px;
+  border: 2px solid rgba(250, 249, 246, 0.3);
+  border-top-color: #FAF9F6;
+  border-radius: 50%;
+  animation: rl-spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
+/* ── Availability mode indicator bar ─────────────────── */
+.filter-availability-bar {
+  max-width: 1280px;
+  margin: 8px auto 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: var(--rl-bg-warm);
+  border: 1px solid var(--rl-border-mid);
+  font-family: 'Montserrat', sans-serif;
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--rl-text-mid);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.filter-availability-bar svg {
+  flex-shrink: 0;
+  color: var(--rl-text-muted);
+}
