@@ -464,3 +464,72 @@ class PayPalService:
             resp.raise_for_status()
 
         return {"refund_id": resp.json()["id"]}
+
+
+# ────────────────────────────────────────────────────────────────────────────────
+# EMAIL NOTIFICATIONS
+# ────────────────────────────────────────────────────────────────────────────────
+
+def send_refund_confirmation_email(payment, refund_amount: Decimal, reason: str = "", notes: str = ""):
+    """
+    Send email to guest confirming their refund has been processed.
+    Called from RefundInitiateSerializer.update() after successful refund.
+    Returns True if email was sent successfully, False otherwise.
+    """
+    from django.core.mail import EmailMultiAlternatives
+    from django.utils import timezone
+
+    booking = payment.booking
+    guest_email = None
+    guest_name = "Guest"
+
+    # Get guest email and name
+    if booking.user:
+        guest_email = booking.user.email
+        guest_name = booking.user.get_full_name() or booking.user.first_name or booking.user.email
+    else:
+        guest_email = booking.email
+        guest_name = booking.full_name or "Guest"
+
+    if not guest_email:
+        logger.warning(f"No guest email found for booking {booking.reference_number}. Skipping refund email.")
+        return False
+
+    site_name = getattr(settings, "SITE_NAME", "Cebu Mini Hotel")
+    support_email = getattr(settings, "SUPPORT_EMAIL", "support@cebuminihotel.com")
+    from_email = getattr(settings, "DEFAULT_FROM_EMAIL", f"{site_name} <no-reply@cebuminihotel.com>")
+
+    # Simple text email
+    text_body = f"""
+{site_name} — Refund Confirmation
+
+Dear {guest_name},
+
+A refund of ₱{refund_amount:,.2f} has been processed for booking {booking.reference_number}.
+
+Refund Details:
+- Booking Reference: {booking.reference_number}
+- Original Payment: ₱{payment.amount:,.2f}
+- Refunded Amount: ₱{refund_amount:,.2f}
+- Reason: {reason or 'Customer request'}
+
+The refund should appear in your account within 5-10 business days.
+
+Thank you,
+{site_name} Team
+""".strip()
+
+    try:
+        subject = f"[{site_name}] Refund Confirmed — {booking.reference_number}"
+        msg = EmailMultiAlternatives(
+            subject=subject,
+            body=text_body,
+            from_email=from_email,
+            to=[guest_email],
+        )
+        msg.send(fail_silently=False)
+        logger.info(f"Refund email sent to {guest_email} for booking {booking.reference_number}")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to send refund email: {e}")
+        return False

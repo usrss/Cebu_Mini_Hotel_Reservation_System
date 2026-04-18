@@ -59,7 +59,12 @@ export default function GuestBookingHistory() {
   }, [id, ordering, page]);
 
   useEffect(() => {
-    guestApi.detail(id).then((g) => setGuestEmail(g.email)).catch(() => {});
+    guestApi.detail(id)
+      .then((g) => setGuestEmail(g.email))
+      .catch((err) => {
+        console.error('Failed to fetch guest detail:', err);
+        setGuestEmail('Guest');
+      });
     fetchBookings();
   }, [id, fetchBookings]);
 

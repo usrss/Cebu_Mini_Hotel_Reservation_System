@@ -434,14 +434,6 @@ export default function HousekeepingDashboard() {
           <div className="sf-toprow-left">
             <p className="sf-eyebrow">Housekeeping</p>
             <h1>Cleaning Dashboard</h1>
-            <p className="hk-refresh-note">
-              Last updated {lastRefresh.toLocaleTimeString('en-PH', {
-                hour: '2-digit', minute: '2-digit', second: '2-digit',
-              })}
-              <button className="hk-refresh-btn" onClick={() => loadTasks()} title="Refresh">
-                <RefreshCw size={12} />
-              </button>
-            </p>
           </div>
           <div className="hk-header-actions">
             {perms.canManageCleaning && (

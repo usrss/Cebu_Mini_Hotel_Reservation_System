@@ -202,6 +202,46 @@ class StaffDetailView(APIView):
         if profile.user == request.user:
             return Response({"error": "You cannot delete your own account."},
                             status=status.HTTP_400_BAD_REQUEST)
+
+        # Prevent hard deletion if this staff member has active dependencies.
+        active_shifts = Shift.objects.filter(
+            staff=profile,
+            status=Shift.ShiftStatus.IN_SHIFT,
+        ).count()
+        if active_shifts > 0:
+            return Response(
+                {
+                    "error": "Cannot hard-delete staff with an active shift in progress.",
+                    "dependencies": {"active_shifts": active_shifts},
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        open_tasks = CleaningTask.objects.filter(
+            assigned_to=profile,
+            status__in=[CleaningStatus.DIRTY, CleaningStatus.CLEANING],
+        ).count()
+        pending_assignments = MaintenanceTask.objects.filter(
+            assigned_to=profile,
+            status__in=[MaintenanceStatus.PENDING, MaintenanceStatus.IN_PROGRESS],
+        ).count()
+
+        has_other_deps = (open_tasks > 0) or (pending_assignments > 0)
+        force_hard_delete = str(request.data.get("force_hard_delete", "")).lower() in (
+            "1", "true", "yes", "on"
+        )
+        if has_other_deps and not force_hard_delete:
+            return Response(
+                {
+                    "error": "Staff has active dependencies; hard delete requires explicit confirmation.",
+                    "dependencies": {
+                        "open_tasks": open_tasks,
+                        "pending_assignments": pending_assignments,
+                    },
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+
         email = profile.user.email
         profile.user.delete()
         _log_action(request, "delete_staff", f"Deleted staff account: {email}")
@@ -312,6 +352,46 @@ class StaffReactivateView(APIView):
                     f"Reactivated staff account: {profile.user.email}",
                     target_user_id=profile.user_id)
         return Response({"detail": "Staff account reactivated."})
+
+
+class StaffDependenciesView(APIView):
+    """
+    GET /api/staff/members/<pk>/dependencies/
+
+    Dependency check for safe staff hard-deletion.
+    Returns counts of:
+      - active_shifts: shifts currently in progress
+      - open_tasks: housekeeping tasks not yet completed
+      - pending_assignments: maintenance tasks not yet completed/cancelled
+    """
+
+    permission_classes = [IsAdminStaff]
+
+    def get(self, request, pk):
+        profile = _get_profile_or_404(pk)
+        if not profile:
+            return Response({"error": "Staff member not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        active_shifts = Shift.objects.filter(
+            staff=profile,
+            status=Shift.ShiftStatus.IN_SHIFT,
+        ).count()
+
+        open_tasks = CleaningTask.objects.filter(
+            assigned_to=profile,
+            status__in=[CleaningStatus.DIRTY, CleaningStatus.CLEANING],
+        ).count()
+
+        pending_assignments = MaintenanceTask.objects.filter(
+            assigned_to=profile,
+            status__in=[MaintenanceStatus.PENDING, MaintenanceStatus.IN_PROGRESS],
+        ).count()
+
+        return Response({
+            "active_shifts": active_shifts,
+            "open_tasks": open_tasks,
+            "pending_assignments": pending_assignments,
+        })
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -460,6 +540,29 @@ class ShiftDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAdminOrManager]
     serializer_class   = ShiftSerializer
     queryset           = Shift.objects.select_related("staff__user")
+
+    def destroy(self, request, *args, **kwargs):
+        shift = self.get_object()
+
+        # Fix 12: only allow deletion for scheduled/cancelled shifts.
+        if shift.status == Shift.ShiftStatus.IN_SHIFT:
+            return Response(
+                {"error": "Cannot delete a shift that is currently in progress."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if shift.status == Shift.ShiftStatus.COMPLETED:
+            return Response(
+                {"error": "Completed shifts cannot be deleted as they are part of attendance records."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if shift.status not in {Shift.ShiftStatus.SCHEDULED, Shift.ShiftStatus.CANCELLED}:
+            return Response(
+                {"error": "Only scheduled or cancelled shifts can be deleted."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return super().destroy(request, *args, **kwargs)
 
 
 class MyShiftView(generics.ListAPIView):

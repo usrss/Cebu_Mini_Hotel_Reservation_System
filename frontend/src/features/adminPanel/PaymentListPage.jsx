@@ -8,7 +8,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { paymentApi } from '../../services/adminApi';
 import { useAdminRole } from '../hooks/useAdminRole';
-import { getStoredUser } from '../../services/api';
 import PaymentConfirmModal from './PaymentConfirmModal';
 import PaymentRefundModal from './PaymentRefundModal';
 import styles from './PaymentListPage.module.css';
@@ -37,29 +36,6 @@ function StatusBadge({ status, label }) {
 // Returns the correct payment detail route based on the current user's role.
 // front_desk has no separate detail page — detail is shown inline via selectedPayment state.
 // admin/manager navigate to the full admin payment detail page.
-function getPaymentDetailRoute(paymentId) {
-  const user = getStoredUser();
-  const role = user?.staff_profile?.effective_role ?? (user?.is_staff ? 'admin' : null);
-  if (role === 'front_desk') return null; // handled by inline detail panel
-  return `/admin/payments/${paymentId}`;
-}
-
-function isFrontDesk() {
-  const user = getStoredUser();
-  const role = user?.staff_profile?.effective_role ?? (user?.is_staff ? 'admin' : null);
-  return role === 'front_desk';
-}
-
-// Returns the correct revenue route based on role.
-function getRevenueRoute() {
-  const user = getStoredUser();
-  const role = user?.staff_profile?.effective_role ?? (user?.is_staff ? 'admin' : null);
-  if (role === 'front_desk') {
-    return '/staff/front-desk/payments';  // front desk has no separate revenue page
-  }
-  return '/admin/payments/revenue';
-}
-
 export default function PaymentListPage() {
   const navigate = useNavigate();
   const { canManagePayments, canRefund, role } = useAdminRole();
@@ -120,7 +96,7 @@ export default function PaymentListPage() {
         {['admin', 'manager'].includes(role) && (
           <button
             className={styles.revenueBtn}
-            onClick={() => navigate(getRevenueRoute())}
+            onClick={() => navigate(role === 'front_desk' ? '/staff/front-desk/payments' : '/admin/payments/revenue')}
           >
             Revenue Summary →
           </button>
@@ -185,9 +161,8 @@ export default function PaymentListPage() {
                   key={p.id}
                   className={styles.row}
                   onClick={() => {
-                    const dest = getPaymentDetailRoute(p.id);
-                    if (dest) navigate(dest);
-                    else setSelectedPayment(p);
+                    if (role === 'front_desk') setSelectedPayment(p);
+                    else navigate(`/admin/payments/${p.id}`);
                   }}
                 >
                   <td>
@@ -250,7 +225,7 @@ export default function PaymentListPage() {
       )}
 
       {/* Inline payment detail panel for front_desk role */}
-      {selectedPayment && isFrontDesk() && (
+      {selectedPayment && role === 'front_desk' && (
         <div style={{
           position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
           zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center',

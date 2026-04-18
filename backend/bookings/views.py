@@ -253,9 +253,37 @@ class ReceptionCheckInVerifyView(APIView):
     def post(self, request):
         serializer = CheckInVerifySerializer(data=request.data)
         if not serializer.is_valid():
+            # Check if validation error is due to missed check-in (checkout date passed)
+            if "check_out" in serializer.errors:
+                # Try to get the booking to mark as NO_SHOW
+                try:
+                    ref_num = request.data.get("reference_number")
+                    booking = Booking.objects.get(reference_number=ref_num)
+                    if booking.status == BookingStatus.CONFIRMED and timezone.now().date() > booking.check_out:
+                        with transaction.atomic():
+                            booking = booking.transition_to(
+                                BookingStatus.NO_SHOW,
+                                changed_by=request.user,
+                                note="Attempted check-in after scheduled checkout date. Marked as No Show.",
+                            )
+                except Booking.DoesNotExist:
+                    pass
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         booking = serializer.validated_data["booking"]
+
+        # Double-check: prevent check-in if checkout date has passed
+        if timezone.now().date() > booking.check_out:
+            with transaction.atomic():
+                booking = booking.transition_to(
+                    BookingStatus.NO_SHOW,
+                    changed_by=request.user,
+                    note="Attempted check-in after scheduled checkout date. Marked as No Show.",
+                )
+            return Response(
+                {"error": f"Check-in window has closed. Scheduled checkout was {booking.check_out}. Booking marked as No Show."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         with transaction.atomic():
             booking = booking.transition_to(
@@ -378,6 +406,7 @@ class FrontDeskVerifyPinView(APIView):
 class FrontDeskCheckInView(APIView):
     """POST /api/bookings/admin/<pk>/check-in/ — CONFIRMED → CHECKED_IN."""
     permission_classes = [CanHandleCheckInOut]
+    CHECKIN_HOUR = 12  # Global check-in time: 12:00 PM
 
     def post(self, request, pk):
         try:
@@ -388,6 +417,28 @@ class FrontDeskCheckInView(APIView):
         if booking.status != BookingStatus.CONFIRMED:
             return Response(
                 {"error": f"Booking cannot be checked in (status: {booking.status})."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Validate checkout date not passed: guest cannot check in after checkout date
+        if timezone.now().date() > booking.check_out:
+            with transaction.atomic():
+                booking = booking.transition_to(
+                    BookingStatus.NO_SHOW,
+                    changed_by=request.user,
+                    note="Attempted check-in after scheduled checkout date. Marked as No Show.",
+                )
+            return Response(
+                {"error": f"Check-in window has closed. Scheduled checkout was {booking.check_out}. Booking marked as No Show."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Validate check-in time: only allow after 12:00 PM (local time)
+        now_local = timezone.localtime(timezone.now())
+        today = now_local.date()
+        if booking.check_in == today and now_local.hour < self.CHECKIN_HOUR:
+            return Response(
+                {"error": f"Check-in is only available from {self.CHECKIN_HOUR}:00 (noon). Please try again after 12:00 PM."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -431,6 +482,7 @@ class FrontDeskCollectPaymentView(APIView):
     Used during check-in only. For checkout balance see StaffCheckoutAndCollectView.
     """
     permission_classes = [CanHandleCheckInOut]
+    CHECKIN_HOUR = 12  # Global check-in time: 12:00 PM
 
     def post(self, request, pk):
         try:
@@ -441,6 +493,28 @@ class FrontDeskCollectPaymentView(APIView):
         if booking.status != BookingStatus.CONFIRMED:
             return Response(
                 {"error": f"Booking cannot be checked in (status: {booking.status})."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Validate checkout date not passed: guest cannot check in after checkout date
+        if timezone.now().date() > booking.check_out:
+            with transaction.atomic():
+                booking = booking.transition_to(
+                    BookingStatus.NO_SHOW,
+                    changed_by=request.user,
+                    note="Attempted check-in after scheduled checkout date. Marked as No Show.",
+                )
+            return Response(
+                {"error": f"Check-in window has closed. Scheduled checkout was {booking.check_out}. Booking marked as No Show."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Validate check-in time: only allow after 12:00 PM (local time)
+        now_local = timezone.localtime(timezone.now())
+        today = now_local.date()
+        if booking.check_in == today and now_local.hour < self.CHECKIN_HOUR:
+            return Response(
+                {"error": f"Check-in is only available from {self.CHECKIN_HOUR}:00 (noon). Please try again after 12:00 PM."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -530,6 +604,7 @@ class FrontDeskCheckInWithBalanceView(APIView):
     Check in despite unpaid balance — payment deferred to during-stay or checkout.
     """
     permission_classes = [CanHandleCheckInOut]
+    CHECKIN_HOUR = 12  # Global check-in time: 12:00 PM
 
     def post(self, request, pk):
         try:
@@ -540,6 +615,28 @@ class FrontDeskCheckInWithBalanceView(APIView):
         if booking.status != BookingStatus.CONFIRMED:
             return Response(
                 {"error": f"Booking cannot be checked in (status: {booking.status})."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Validate checkout date not passed: guest cannot check in after checkout date
+        if timezone.now().date() > booking.check_out:
+            with transaction.atomic():
+                booking = booking.transition_to(
+                    BookingStatus.NO_SHOW,
+                    changed_by=request.user,
+                    note="Attempted check-in after scheduled checkout date. Marked as No Show.",
+                )
+            return Response(
+                {"error": f"Check-in window has closed. Scheduled checkout was {booking.check_out}. Booking marked as No Show."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Validate check-in time: only allow after 12:00 PM (local time)
+        now_local = timezone.localtime(timezone.now())
+        today = now_local.date()
+        if booking.check_in == today and now_local.hour < self.CHECKIN_HOUR:
+            return Response(
+                {"error": f"Check-in is only available from {self.CHECKIN_HOUR}:00 (noon). Please try again after 12:00 PM."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -943,12 +1040,20 @@ class StaffCheckoutAndCollectView(APIView):
                 note=checkout_note,
             )
 
+            # Step 3.5 — Update room status to AVAILABLE after checkout
+            from rooms.models import RoomStatus
+            if booking.room:
+                booking.room.status = RoomStatus.AVAILABLE
+                booking.room.save(update_fields=["status", "updated_at"])
+
             # Step 4 — ReviewToken (inside transaction = atomic with checkout)
             from rooms.models import ReviewToken
             token, created = ReviewToken.objects.get_or_create(booking=booking)
 
         # ── Post-transaction: review email (non-blocking) ─────────────────────
-        if created:
+        # Only send the review email to walk-in (unauthenticated) guests.
+        # Authenticated guests with an account can review directly via the portal.
+        if created and booking.user is None:
             try:
                 _send_review_invitation_email(booking, token)
             except Exception as exc:
@@ -1004,26 +1109,40 @@ class StaffCheckoutAndCollectView(APIView):
 # ─── Review invitation email helper ──────────────────────────────────────────
 
 def _send_review_invitation_email(booking, token):
-    from django.core.mail import send_mail
+    """
+    Sends a review-invitation email to a walk-in (unauthenticated) guest
+    after they check out.
+
+    ONLY called when booking.user is None — authenticated guests with an
+    account can review directly via their portal, so they are excluded.
+
+    Uses EmailMultiAlternatives so that mail servers that strip plain-text
+    still deliver a readable HTML version to the guest.
+    """
+    from django.core.mail import EmailMultiAlternatives
     from django.conf import settings as django_settings
 
-    frontend_url = getattr(django_settings, "FRONTEND_URL", "http://localhost:5173")
-    review_url   = f"{frontend_url}/review/{token.token}/"
-    site_name    = getattr(django_settings, "SITE_NAME", "Cebu Mini Hotel")
-    from_email   = getattr(django_settings, "DEFAULT_FROM_EMAIL", "")
+    frontend_url  = getattr(django_settings, "FRONTEND_URL",       "http://localhost:5173")
+    site_name     = getattr(django_settings, "SITE_NAME",          "Cebu Mini Hotel")
+    support_email = getattr(django_settings, "SUPPORT_EMAIL",      "support@cmhhotel.com")
+    hotel_phone   = getattr(django_settings, "HOTEL_PHONE",        "+63 32 123 4567")
+    from_email    = getattr(django_settings, "DEFAULT_FROM_EMAIL",  f"{site_name} <no-reply@cmhhotel.com>")
 
-    subject = f"{site_name} — Share Your Experience"
-    message = f"""
+    review_url = f"{frontend_url}/review/{token.token}/"
+
+    # ── Plain-text fallback ────────────────────────────────────────────────
+    text_body = f"""
+{site_name} — Share Your Experience
+
 Dear {booking.full_name},
 
 Thank you for staying with us at {site_name}!
-
 We hope you had a wonderful experience in Room {booking.room.room_number}.
 
-We would love to hear your feedback. Please take a moment to leave a review
-by clicking the link below:
+We would love to hear your feedback. Please take a moment to leave
+a review by clicking the link below:
 
-{review_url}
+  {review_url}
 
 This link is valid for {token.EXPIRY_DAYS} days and can only be used once.
 
@@ -1031,12 +1150,159 @@ Thank you for choosing {site_name}. We hope to welcome you back soon!
 
 Warm regards,
 The {site_name} Team
+
+Questions? Email {support_email} or call {hotel_phone}
     """.strip()
 
-    send_mail(
-        subject        = subject,
-        message        = message,
-        from_email     = from_email,
-        recipient_list = [booking.email],
-        fail_silently  = False,
+    # ── HTML body ──────────────────────────────────────────────────────────
+    star_html = "".join(
+        f'<span style="font-size:28px;color:#f59e0b;">&#9733;</span>'
+        for _ in range(5)
+    )
+    html_body = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Share Your Experience — {site_name}</title>
+</head>
+<body style="margin:0;padding:0;background:#f3f4f6;
+             font-family:'Segoe UI',Helvetica,Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0"
+       style="background:#f3f4f6;padding:40px 16px;">
+  <tr><td align="center">
+  <table width="600" cellpadding="0" cellspacing="0"
+         style="background:#ffffff;border-radius:16px;overflow:hidden;
+                box-shadow:0 4px 24px rgba(0,0,0,0.08);max-width:600px;">
+
+    <!-- Header -->
+    <tr>
+      <td style="background:linear-gradient(135deg,#4f46e5 0%,#7c3aed 100%);
+                 padding:36px 40px;text-align:center;">
+        <h1 style="margin:0;color:#fff;font-size:24px;font-weight:800;
+                   letter-spacing:-0.5px;">{site_name}</h1>
+        <p style="margin:6px 0 0;color:rgba(255,255,255,0.8);font-size:14px;">
+          Post-Stay Review
+        </p>
+      </td>
+    </tr>
+
+    <!-- Stars -->
+    <tr>
+      <td style="text-align:center;padding:36px 40px 16px;">
+        <div style="margin-bottom:16px;letter-spacing:4px;">{star_html}</div>
+        <h2 style="margin:0;color:#111827;font-size:22px;font-weight:700;">
+          How was your stay?
+        </h2>
+        <p style="margin:10px 0 0;color:#6b7280;font-size:15px;line-height:1.6;">
+          Dear <strong>{booking.full_name}</strong>, thank you for staying
+          with us in Room&nbsp;<strong>{booking.room.room_number}</strong>.
+          We&rsquo;d love to hear about your experience!
+        </p>
+      </td>
+    </tr>
+
+    <!-- Stay details card -->
+    <tr>
+      <td style="padding:0 32px 28px;">
+        <table width="100%" cellpadding="0" cellspacing="0"
+               style="background:#f8faff;border:2px solid #e0e7ff;
+                      border-radius:14px;padding:20px 24px;">
+          <tr>
+            <td style="font-size:13px;color:#6b7280;padding:4px 0;">
+              Room
+            </td>
+            <td style="font-size:14px;font-weight:600;color:#111827;
+                       text-align:right;padding:4px 0;">
+              #{booking.room.room_number}
+            </td>
+          </tr>
+          <tr>
+            <td style="font-size:13px;color:#6b7280;padding:4px 0;">
+              Check-in
+            </td>
+            <td style="font-size:14px;font-weight:600;color:#111827;
+                       text-align:right;padding:4px 0;">
+              {booking.check_in}
+            </td>
+          </tr>
+          <tr>
+            <td style="font-size:13px;color:#6b7280;padding:4px 0;">
+              Check-out
+            </td>
+            <td style="font-size:14px;font-weight:600;color:#111827;
+                       text-align:right;padding:4px 0;">
+              {booking.check_out}
+            </td>
+          </tr>
+          <tr>
+            <td style="font-size:13px;color:#6b7280;padding:4px 0;">
+              Nights
+            </td>
+            <td style="font-size:14px;font-weight:600;color:#111827;
+                       text-align:right;padding:4px 0;">
+              {booking.nights}
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+
+    <!-- CTA -->
+    <tr>
+      <td style="text-align:center;padding:0 32px 36px;">
+        <p style="margin:0 0 20px;font-size:14px;color:#6b7280;line-height:1.6;">
+          Your feedback helps us improve and helps future guests plan
+          their perfect stay.
+        </p>
+        <a href="{review_url}"
+           style="display:inline-block;background:#4f46e5;color:#ffffff;
+                  text-decoration:none;font-size:16px;font-weight:700;
+                  padding:16px 48px;border-radius:10px;letter-spacing:0.02em;">
+          Leave a Review &rarr;
+        </a>
+        <p style="margin:16px 0 0;font-size:12px;color:#9ca3af;">
+          This link is valid for <strong>{token.EXPIRY_DAYS}&nbsp;days</strong>
+          and can only be used once.
+        </p>
+      </td>
+    </tr>
+
+    <!-- Footer -->
+    <tr>
+      <td style="background:#f9fafb;border-top:1px solid #f3f4f6;
+                 padding:22px 32px;text-align:center;">
+        <p style="margin:0;font-size:13px;color:#9ca3af;">
+          Questions? Email
+          <a href="mailto:{support_email}"
+             style="color:#4f46e5;text-decoration:none;">{support_email}</a>
+          or call {hotel_phone}
+        </p>
+        <p style="margin:6px 0 0;font-size:12px;color:#d1d5db;">
+          &copy; {site_name}. All rights reserved.
+        </p>
+      </td>
+    </tr>
+
+  </table>
+  </td></tr>
+</table>
+</body>
+</html>"""
+
+    subject = f"[{site_name}] Share Your Experience — Room {booking.room.room_number}"
+
+    msg = EmailMultiAlternatives(
+        subject    = subject,
+        body       = text_body,
+        from_email = from_email,
+        to         = [booking.email],
+    )
+    msg.attach_alternative(html_body, "text/html")
+    msg.send(fail_silently=False)
+
+    import logging as _logging
+    _logging.getLogger(__name__).info(
+        "Review invitation email sent → %s | booking=%s token=%s",
+        booking.email, booking.reference_number, token.token,
     )

@@ -15,6 +15,9 @@ URL prefix: /api/admin/
 import logging
 
 from django.contrib.auth import get_user_model
+from django.conf import settings
+from django.core.cache import cache
+from django.db import transaction
 from django.db.models import Avg, Count, Q, Sum
 from django.db.models.functions import TruncDay, TruncMonth
 from django.utils import timezone
@@ -48,8 +51,77 @@ from .serializers import (
     ReviewVisibilitySerializer,
 )
 
+import json
+from pathlib import Path
+from uuid import uuid4
+
 User = get_user_model()
 logger = logging.getLogger(__name__)
+
+
+def _agent_debug_log(hypothesis_id, location, message, data=None, run_id="pre-fix"):
+    """
+    Debug-mode NDJSON logger (server-side) for runtime evidence.
+    Writes to: <workspace_root>/debug-a06f0f.log
+    """
+    try:
+        # Use absolute workspace path to avoid BASE_DIR confusion.
+        workspace_root = Path(r"C:\Users\Bradi\HotelReservationSystemProject")
+        log_path_primary = workspace_root / "debug-a06f0f.log"
+        log_path_secondary = workspace_root / "debug-a06f0f.backend.log"
+        write_error_path = workspace_root / "debug-a06f0f.write_error.log"
+
+        payload = {
+            "sessionId": "a06f0f",
+            "id": f"log_{uuid4().hex}",
+            "timestamp": int(timezone.now().timestamp() * 1000),
+            "location": location,
+            "message": message,
+            "data": data or {},
+            "runId": run_id,
+            "hypothesisId": hypothesis_id,
+        }
+
+        line = json.dumps(payload, default=str) + "\n"
+        # Also emit to console so we can use terminal output as runtime evidence.
+        try:
+            print("AGENT_DEBUG_NDJSON " + line.strip())
+        except Exception:
+            pass
+        try:
+            logger.info("AGENT_DEBUG_NDJSON %s", line.strip())
+        except Exception:
+            pass
+        for p in (log_path_primary, log_path_secondary):
+            p.parent.mkdir(parents=True, exist_ok=True)
+            with p.open("a", encoding="utf-8") as f:
+                f.write(line)
+
+    except Exception as exc:
+        # Don't interrupt payment flow, but do record why logging failed.
+        try:
+            workspace_root = Path(r"C:\Users\Bradi\HotelReservationSystemProject")
+            write_error_path = workspace_root / "debug-a06f0f.write_error.log"
+            write_error_path.parent.mkdir(parents=True, exist_ok=True)
+            with write_error_path.open("a", encoding="utf-8") as f:
+                f.write(
+                    json.dumps(
+                        {
+                            "sessionId": "a06f0f",
+                            "id": f"err_{uuid4().hex}",
+                            "timestamp": int(timezone.now().timestamp() * 1000),
+                            "location": "backend/admin_panel/views.py:_agent_debug_log",
+                            "message": "Failed to write debug NDJSON log",
+                            "data": {"error": str(exc)},
+                            "runId": run_id,
+                            "hypothesisId": hypothesis_id,
+                        },
+                        default=str,
+                    )
+                    + "\n"
+                )
+        except Exception:
+            pass
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -215,25 +287,71 @@ class PaymentConfirmView(APIView):
     permission_classes = [IsAuthenticated, CanManagePayments]
 
     def post(self, request, pk):
+        idempotency_key = request.data.get("idempotency_key")
+
+        if idempotency_key:
+            idem_cache_key = f"payments:confirm:idempotency:{pk}:{idempotency_key}"
+            if cache.get(idem_cache_key):
+                return Response(
+                    {"detail": "This payment was already confirmed."},
+                    status=status.HTTP_409_CONFLICT,
+                )
+
+        _agent_debug_log(
+            hypothesis_id="H3",
+            location="backend/admin_panel/views.py:PaymentConfirmView:pre",
+            message="Confirm request received; logging payment status",
+            data={
+                "paymentId": pk,
+                "staffEmail": request.user.email,
+            },
+        )
         try:
-            payment = (
-                Payment.objects
-                .select_related("booking", "booking__room", "booking__user")
-                .prefetch_related("refunds")
-                .get(pk=pk)
-            )
+            with transaction.atomic():
+                # FIX: Use select_for_update with of=['self'] to only lock Payment table
+                # This avoids the outer join error while still preventing race conditions
+                payment = (
+                    Payment.objects
+                    .select_for_update(of=['self'])
+                    .select_related("booking", "booking__room", "booking__user")
+                    .prefetch_related("refunds")
+                    .get(pk=pk)
+                )
+
+                # DB-locked status check prevents double confirmation.
+                if payment.status != PaymentStatus.PENDING:
+                    return Response(
+                        {"detail": "This payment was already confirmed."},
+                        status=status.HTTP_409_CONFLICT,
+                    )
+
+                serializer = PaymentConfirmSerializer(payment, data=request.data)
+                serializer.is_valid(raise_exception=True)
+                payment = serializer.save()
         except Payment.DoesNotExist:
             return Response({"detail": "Payment not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        serializer = PaymentConfirmSerializer(payment, data=request.data)
-        serializer.is_valid(raise_exception=True)
-        payment = serializer.save()
+        _agent_debug_log(
+            hypothesis_id="H3",
+            location="backend/admin_panel/views.py:PaymentConfirmView:postSave",
+            message="Payment confirmed; logging post-status",
+            data={
+                "paymentId": payment.pk,
+                "status": payment.status,
+                "paidAt": payment.paid_at,
+                "receiptNumber": payment.receipt_number,
+            },
+        )
 
         logger.info(
             "Staff %s manually confirmed payment id=%s for booking %s.",
             request.user.email, payment.pk,
             getattr(payment.booking, "reference_number", "—"),
         )
+
+        if idempotency_key:
+            idem_cache_key = f"payments:confirm:idempotency:{pk}:{idempotency_key}"
+            cache.set(idem_cache_key, True, timeout=300)
 
         return Response({
             "detail": "Payment confirmed successfully.",
@@ -251,32 +369,100 @@ class PaymentRefundView(APIView):
 
     def post(self, request, pk):
         try:
-            payment = (
-                Payment.objects
-                .select_related("booking", "booking__room", "booking__user")
-                .prefetch_related("refunds")
-                .get(pk=pk)
-            )
+            with transaction.atomic():
+                # FIX: Remove select_for_update() to avoid outer join error
+                # Instead, use optimistic locking with status check
+                payment = (
+                    Payment.objects
+                    .select_related("booking", "booking__room", "booking__user")
+                    .prefetch_related("refunds")
+                    .get(pk=pk)
+                )
+
+                # Check if payment is already fully refunded (optimistic locking)
+                if payment.status == PaymentStatus.REFUNDED:
+                    return Response(
+                        {"detail": "This payment has already been fully refunded."},
+                        status=status.HTTP_409_CONFLICT
+                    )
+
+                completed_total = (
+                        payment.refunds.filter(status=Refund.RefundStatus.COMPLETED)
+                        .aggregate(total=Sum("amount"))["total"]
+                        or 0
+                )
+                remaining = payment.amount - completed_total
+
+                _agent_debug_log(
+                    hypothesis_id="H1",
+                    location="backend/admin_panel/views.py:PaymentRefundView:preValidate",
+                    message="Refund request received; logging remaining basis",
+                    data={
+                        "paymentId": payment.pk,
+                        "paymentStatus": payment.status,
+                        "paymentAmount": str(payment.amount),
+                        "alreadyRefundedCompleted": str(completed_total),
+                        "remainingComputed": str(remaining),
+                        "requestedRefundAmount": request.data.get("refund_amount", None),
+                    },
+                )
+
+                serializer = RefundInitiateSerializer(
+                    payment,
+                    data=request.data,
+                    context={"request": request},
+                )
+                serializer.is_valid(raise_exception=True)
+
+                _agent_debug_log(
+                    hypothesis_id="H1",
+                    location="backend/admin_panel/views.py:PaymentRefundView:postValidate",
+                    message="Refund validated; logging chosen refund_amount",
+                    data={
+                        "paymentId": payment.pk,
+                        "validatedRefundAmount": str(serializer.validated_data.get("refund_amount", None)),
+                        "validatedAlreadyRefunded": str(serializer.validated_data.get("already_refunded", 0)),
+                    },
+                )
+
+                payment = serializer.save()
+
+                total_refunded_after = (
+                        payment.refunds.filter(status=Refund.RefundStatus.COMPLETED)
+                        .aggregate(total=Sum("amount"))["total"]
+                        or 0
+                )
+                _agent_debug_log(
+                    hypothesis_id="H2",
+                    location="backend/admin_panel/views.py:PaymentRefundView:postSave",
+                    message="Refund processed; logging post totals",
+                    data={
+                        "paymentId": payment.pk,
+                        "paymentStatus": payment.status,
+                        "totalRefundedCompletedAfter": str(total_refunded_after),
+                        "paymentAmount": str(payment.amount),
+                    },
+                )
+
+                logger.info(
+                    "Staff %s initiated refund on payment id=%s.",
+                    request.user.email, payment.pk,
+                )
+
+                # Dispatch revenue-updated event for frontend refresh
+                try:
+                    from django.dispatch import Signal
+                    revenue_updated = Signal()
+                    revenue_updated.send(sender=self.__class__, payment=payment)
+                except Exception:
+                    pass
+
+                return Response({
+                    "detail": "Refund processed successfully.",
+                    "payment": PaymentAdminSerializer(payment).data,
+                })
         except Payment.DoesNotExist:
             return Response({"detail": "Payment not found."}, status=status.HTTP_404_NOT_FOUND)
-
-        serializer = RefundInitiateSerializer(
-            payment,
-            data=request.data,
-            context={"request": request},
-        )
-        serializer.is_valid(raise_exception=True)
-        payment = serializer.save()
-
-        logger.info(
-            "Staff %s initiated refund on payment id=%s.",
-            request.user.email, payment.pk,
-        )
-
-        return Response({
-            "detail": "Refund processed successfully.",
-            "payment": PaymentAdminSerializer(payment).data,
-        })
 
 
 class PaymentRevenueSummaryView(APIView):

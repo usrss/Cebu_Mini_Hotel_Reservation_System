@@ -115,7 +115,7 @@ function AdminIcon() {
 const GUEST_TABS = [
   { label: 'Home',     path: '/dashboard',  icon: HomeIcon },
   { label: 'Rooms',    path: '/rooms',       icon: RoomsIcon },
-  { label: 'Bookings', path: '/bookings/my', icon: BookingsIcon },
+  { label: 'My Bookings', path: '/bookings/my', icon: BookingsIcon },
   { label: 'Food & Drinks', path: '/food',       icon: FoodIcon  },
 
 ];

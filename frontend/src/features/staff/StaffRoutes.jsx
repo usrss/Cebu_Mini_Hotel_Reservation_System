@@ -42,6 +42,7 @@ function LayoutForRole({ children }) {
 import FrontDeskDashboard   from './frontdesk/FrontDeskDashboard';
 import RoomStatusBoard      from './frontdesk/RoomStatusBoard';
 import TodayArrivalsPage    from './frontdesk/TodayArrivalsPage';
+import CurrentCheckInsPage  from './frontdesk/CurrentCheckInsPage';
 import WalkInBookingPage    from './frontdesk/WalkInBookingPage';
 import BookingExtensionPage from './frontdesk/BookingExtensionPage';
 import GuestCheckoutPage    from './frontdesk/GuestCheckoutPage';   // ← NEW
@@ -153,6 +154,18 @@ export const staffRoutes = [
       <ProtectedRoute allowedRoles={FRONT_DESK_ROLES}>
         <FrontDeskLayout>
           <TodayArrivalsPage />
+        </FrontDeskLayout>
+      </ProtectedRoute>
+    }
+  />,
+
+  <Route
+    key="front-desk-current-checkins"
+    path="/staff/front-desk/current-check-ins"
+    element={
+      <ProtectedRoute allowedRoles={FRONT_DESK_ROLES}>
+        <FrontDeskLayout>
+          <CurrentCheckInsPage />
         </FrontDeskLayout>
       </ProtectedRoute>
     }

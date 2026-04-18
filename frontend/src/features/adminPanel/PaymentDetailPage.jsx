@@ -5,7 +5,7 @@
  * Refund action: admin, manager only
  */
 
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { paymentApi } from '../../services/adminApi';
 import { useAdminRole } from '../hooks/useAdminRole';
@@ -39,6 +39,12 @@ export default function PaymentDetailPage() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [showRefund, setShowRefund]   = useState(false);
 
+  const refetchPayment = useCallback(async () => {
+    const fresh = await paymentApi.detail(id);
+    setPayment(fresh);
+    return fresh;
+  }, [id]);
+
   useEffect(() => {
     paymentApi.detail(id)
       .then(setPayment)
@@ -46,11 +52,30 @@ export default function PaymentDetailPage() {
       .finally(() => setLoading(false));
   }, [id]);
 
-  const handleActionSuccess = (updated) => {
+  const handleActionSuccess = async (updated) => {
+    const shouldDispatchRevenue = showRefund;
     setPayment(updated);
     setShowConfirm(false);
     setShowRefund(false);
+
+    try {
+      await refetchPayment();
+    } catch {
+      // if refresh fails, keep optimistic updated payment state.
+    }
+
+    if (shouldDispatchRevenue) {
+      window.dispatchEvent(new Event('revenue-updated'));
+    }
   };
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      // Poll to keep refunds/confirmations up-to-date in parallel sessions.
+      refetchPayment().catch(() => {});
+    }, 30_000);
+    return () => clearInterval(timer);
+  }, [refetchPayment]);
 
   if (!canManagePayments) return <div className={styles.stateError}>Access denied.</div>;
   if (loading)             return <div className={styles.state}>Loading…</div>;

@@ -33,7 +33,7 @@ const SECTIONS = [
 ];
 
 const PERIODS = ['Today', 'Week', 'Month', 'Year'];
-const PERIOD_MAP = { Today: 'today', Week: 'week', Month: 'month', Year: 'year' };
+const PERIOD_MAP = { Today: 'daily', Week: 'weekly', Month: 'monthly', Year: 'yearly' };
 // Map global period labels to food analytics period param
 const FOOD_PERIOD_MAP = { Today: 'daily', Week: 'weekly', Month: 'monthly', Year: 'yearly' };
 

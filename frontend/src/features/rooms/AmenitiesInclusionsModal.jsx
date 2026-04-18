@@ -2,37 +2,99 @@
  * AmenitiesInclusionsModal.jsx
  *
  * Standalone manager for Amenities and Inclusions.
- * Opened from AdminRoomsPage via a dedicated button.
- * Mirrors what Django admin provides under RoomAmenity / Inclusion.
- *
- * Props:
- *   type        — 'amenities' | 'inclusions'
- *   items       — current list fetched from backend
- *   onSave      — async (item) => { success, data, error }
- *   onDelete    — async (id)   => { success, error }
- *   onClose     — () => void
+ * Icons: Lucide icon components (no emojis).
+ * The `icon` field stored in DB is now a string key (e.g. "Wifi", "Coffee")
+ * which maps to the Lucide component. Existing emoji values gracefully fall back
+ * to a plain text render so old data is never broken.
  */
 
 import { useState, useEffect } from 'react';
-import { X, Plus, Edit2, Trash2, Check, AlertCircle, Star, Package } from 'lucide-react';
+import {
+  X, Plus, Edit2, Trash2, Check, Star, Package,
+  // Amenity icons
+  Wifi, Wind, Tv, Coffee, Bath, Bed, Lock, Phone,
+  Dumbbell, ParkingSquare, ShieldCheck, Sparkles,
+  AirVent, Shirt, Flame, Monitor, Lamp, Eye,
+  // Inclusion icons
+  UtensilsCrossed, Car, Plane, Waves, Heart,
+  Music, Trophy, Gift, Droplets, Sun, Flower2,
+  Wine, Sandwich, Bus,
+} from 'lucide-react';
 import './AmenitiesInclusionsModal.css';
 
-/* ── Constants ──────────────────────────────────────────────── */
-const AMENITY_CATEGORIES  = ['Room','Bathroom','Entertainment','Connectivity','Safety','Service','Other'];
-const INCLUSION_CATEGORIES = ['Food & Beverage','Transport','Activities','Wellness','Concierge','Other'];
+/* ── Icon registry ──────────────────────────────────────────── */
+// Keys are stored in DB as the `icon` string value.
+// Components render from this map; unknown keys render as text fallback.
 
-const AMENITY_ICONS  = ['🛏','🛁','📺','📶','❄️','☕','🍳','🅿️','🔑','💊','🧹','🎮','📞','🪟','🛋','🏊','✨'];
-const INCLUSION_ICONS = ['🍳','🍽','🚌','🚗','🛫','🏊','💆','🎭','🎾','🏌','🎁','🧴','✨','🌺','🍷'];
+const ICON_MAP = {
+  // Amenities
+  Wifi,
+  Wind,
+  AirVent,
+  Tv,
+  Coffee,
+  Bath,
+  Bed,
+  Lock,
+  Phone,
+  Dumbbell,
+  ParkingSquare,
+  ShieldCheck,
+  Sparkles,
+  Shirt,
+  Flame,
+  Monitor,
+  Lamp,
+  Eye,
+  // Inclusions
+  UtensilsCrossed,
+  Car,
+  Plane,
+  Waves,
+  Heart,
+  Music,
+  Trophy,
+  Gift,
+  Droplets,
+  Sun,
+  Flower2,
+  Wine,
+  Sandwich,
+  Bus,
+};
+
+// Renders a Lucide icon by string key, or falls back to a text character
+function IconRenderer({ name, size = 16, className }) {
+  if (!name) return null;
+  const Comp = ICON_MAP[name];
+  if (Comp) return <Comp size={size} className={className} />;
+  // Graceful fallback for old emoji values stored in DB
+  return <span style={{ fontSize: size - 2, lineHeight: 1 }}>{name}</span>;
+}
+
+/* ── Icon picker data ───────────────────────────────────────── */
+const AMENITY_ICON_KEYS = [
+  'Wifi', 'Wind', 'AirVent', 'Tv', 'Coffee', 'Bath', 'Bed',
+  'Lock', 'Phone', 'Dumbbell', 'ParkingSquare', 'ShieldCheck',
+  'Sparkles', 'Shirt', 'Flame', 'Monitor', 'Lamp', 'Eye',
+];
+
+const INCLUSION_ICON_KEYS = [
+  'UtensilsCrossed', 'Sandwich', 'Car', 'Bus', 'Plane',
+  'Waves', 'Heart', 'Music', 'Trophy', 'Gift',
+  'Droplets', 'Sun', 'Flower2', 'Wine', 'Coffee',
+];
+
+/* ── Category constants ─────────────────────────────────────── */
+const AMENITY_CATEGORIES   = ['Room','Bathroom','Entertainment','Connectivity','Safety','Service','Other'];
+const INCLUSION_CATEGORIES = ['Food & Beverage','Transport','Activities','Wellness','Concierge','Other'];
 
 const emptyAmenity   = () => ({ id: null, name: '', icon: '', category: 'Room' });
 const emptyInclusion = () => ({ id: null, name: '', icon: '', category: 'Food & Beverage', description: '', is_highlighted: false });
 
-/* ── Helpers ────────────────────────────────────────────────── */
-const cap = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
-
 /* ── ItemForm ───────────────────────────────────────────────── */
 function ItemForm({ type, initial, onSave, onCancel, saving }) {
-  const isAmenity = type === 'amenities';
+  const isAmenity  = type === 'amenities';
   const [form, setForm] = useState(initial);
   const [err,  setErr]  = useState({});
 
@@ -47,13 +109,15 @@ function ItemForm({ type, initial, onSave, onCancel, saving }) {
     return !Object.keys(e).length;
   };
 
-  const icons = isAmenity ? AMENITY_ICONS : INCLUSION_ICONS;
+  const iconKeys   = isAmenity ? AMENITY_ICON_KEYS : INCLUSION_ICON_KEYS;
   const categories = isAmenity ? AMENITY_CATEGORIES : INCLUSION_CATEGORIES;
 
   return (
     <div className="aim-item-form">
       <p className="aim-form-title">
-        {form.id ? `Edit ${isAmenity ? 'Amenity' : 'Inclusion'}` : `New ${isAmenity ? 'Amenity' : 'Inclusion'}`}
+        {form.id
+          ? `Edit ${isAmenity ? 'Amenity' : 'Inclusion'}`
+          : `New ${isAmenity ? 'Amenity' : 'Inclusion'}`}
       </p>
 
       {/* Name */}
@@ -71,38 +135,60 @@ function ItemForm({ type, initial, onSave, onCancel, saving }) {
       {/* Category */}
       <div className="aim-field">
         <label className="aim-label">Category</label>
-        <select className="aim-select" value={form.category || categories[0]}
-          onChange={(e) => set('category', e.target.value)}>
+        <select
+          className="aim-select"
+          value={form.category || categories[0]}
+          onChange={(e) => set('category', e.target.value)}
+        >
           {categories.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
       </div>
 
-      {/* Icon picker */}
+      {/* Icon picker — Lucide buttons */}
       <div className="aim-field">
         <label className="aim-label">Icon</label>
         <div className="aim-icon-grid">
-          {icons.map(ic => (
-            <button key={ic} type="button"
-              className={`aim-icon-btn${form.icon === ic ? ' aim-icon-btn--active' : ''}`}
-              onClick={() => set('icon', form.icon === ic ? '' : ic)}
-            >
-              {ic}
-            </button>
-          ))}
-          <input
-            className="aim-input aim-icon-custom"
-            placeholder="Custom…"
-            value={!icons.includes(form.icon) ? (form.icon || '') : ''}
-            onChange={(e) => set('icon', e.target.value)}
-          />
+          {iconKeys.map(key => {
+            const Comp = ICON_MAP[key];
+            const active = form.icon === key;
+            return (
+              <button
+                key={key}
+                type="button"
+                title={key}
+                className={`aim-icon-btn${active ? ' aim-icon-btn--active' : ''}`}
+                onClick={() => set('icon', active ? '' : key)}
+              >
+                {Comp && <Comp size={18} />}
+              </button>
+            );
+          })}
         </div>
+        {/* Selected preview */}
+        {form.icon && (
+          <div className="aim-icon-preview">
+            <IconRenderer name={form.icon} size={16} />
+            <span className="aim-icon-preview-label">{form.icon}</span>
+            <button
+              type="button"
+              className="aim-icon-clear"
+              onClick={() => set('icon', '')}
+            >
+              <X size={11} />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Description (inclusions only) */}
       {!isAmenity && (
         <div className="aim-field">
-          <label className="aim-label">Description <span className="aim-hint">(optional)</span></label>
-          <textarea className="aim-textarea" rows={2}
+          <label className="aim-label">
+            Description <span className="aim-hint">(optional)</span>
+          </label>
+          <textarea
+            className="aim-textarea"
+            rows={2}
             placeholder="Brief description for guests…"
             value={form.description || ''}
             onChange={(e) => set('description', e.target.value)}
@@ -113,8 +199,11 @@ function ItemForm({ type, initial, onSave, onCancel, saving }) {
       {/* Highlighted (inclusions only) */}
       {!isAmenity && (
         <label className="aim-check-label">
-          <input type="checkbox" checked={!!form.is_highlighted}
-            onChange={(e) => set('is_highlighted', e.target.checked)} />
+          <input
+            type="checkbox"
+            checked={!!form.is_highlighted}
+            onChange={(e) => set('is_highlighted', e.target.checked)}
+          />
           <span>Highlighted (shown prominently in listings)</span>
         </label>
       )}
@@ -123,7 +212,9 @@ function ItemForm({ type, initial, onSave, onCancel, saving }) {
         <button type="button" className="aim-btn aim-btn--ghost" onClick={onCancel}>
           Cancel
         </button>
-        <button type="button" className="aim-btn aim-btn--gold"
+        <button
+          type="button"
+          className="aim-btn aim-btn--gold"
           disabled={saving}
           onClick={() => { if (validate()) onSave(form); }}
         >
@@ -146,21 +237,20 @@ export default function AmenitiesInclusionsModal({
   onClose,
 }) {
   const isAmenity = type === 'amenities';
-  const [editing, setEditing] = useState(null);   // null | item
-  const [deleting, setDeleting] = useState(null); // id
-  const [saving, setSaving]   = useState(false);
-  const [search, setSearch]   = useState('');
+  const [editing,   setEditing]   = useState(null);
+  const [deleting,  setDeleting]  = useState(null);
+  const [saving,    setSaving]    = useState(false);
+  const [search,    setSearch]    = useState('');
   const [catFilter, setCatFilter] = useState('all');
 
   const categories = isAmenity ? AMENITY_CATEGORIES : INCLUSION_CATEGORIES;
 
   const filtered = items.filter(i => {
     const matchSearch = !search || i.name.toLowerCase().includes(search.toLowerCase());
-    const matchCat = catFilter === 'all' || i.category === catFilter;
+    const matchCat    = catFilter === 'all' || i.category === catFilter;
     return matchSearch && matchCat;
   });
 
-  /* group by category */
   const grouped = filtered.reduce((acc, i) => {
     const c = i.category || 'Other';
     if (!acc[c]) acc[c] = [];
@@ -186,19 +276,20 @@ export default function AmenitiesInclusionsModal({
     <div className="aim-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="aim-modal">
 
-        {/* ── Header ─────────────────────────── */}
+        {/* ── Header ── */}
         <div className="aim-header">
           <div>
             <p className="aim-eyebrow">Room Management</p>
             <h2 className="aim-title">
               {isAmenity
-                ? <><Star size={18} style={{ color: '#C9A84C', marginRight: 8 }} />Amenities Manager</>
-                : <><Package size={18} style={{ color: '#C9A84C', marginRight: 8 }} />Inclusions Manager</>
+                ? <><Star size={17} style={{ marginRight: 8 }} />Amenities Manager</>
+                : <><Package size={17} style={{ marginRight: 8 }} />Inclusions Manager</>
               }
             </h2>
           </div>
           <div className="aim-header-actions">
-            <button className="aim-add-btn"
+            <button
+              className="aim-add-btn"
               onClick={() => setEditing(isAmenity ? emptyAmenity() : emptyInclusion())}
             >
               <Plus size={14} />
@@ -208,12 +299,11 @@ export default function AmenitiesInclusionsModal({
           </div>
         </div>
 
-        {/* ── Body ───────────────────────────── */}
+        {/* ── Body ── */}
         <div className="aim-body">
 
-          {/* ── Left: list ───────────────────── */}
+          {/* Left: list */}
           <div className="aim-list-col">
-            {/* Filters */}
             <div className="aim-filters">
               <input
                 className="aim-search"
@@ -221,19 +311,20 @@ export default function AmenitiesInclusionsModal({
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
-              <select className="aim-cat-select" value={catFilter}
-                onChange={(e) => setCatFilter(e.target.value)}>
+              <select
+                className="aim-cat-select"
+                value={catFilter}
+                onChange={(e) => setCatFilter(e.target.value)}
+              >
                 <option value="all">All Categories</option>
                 {categories.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
 
-            {/* Count */}
             <div className="aim-count">
               {filtered.length} of {items.length} {isAmenity ? 'amenities' : 'inclusions'}
             </div>
 
-            {/* Groups */}
             <div className="aim-list">
               {filtered.length === 0 ? (
                 <div className="aim-empty">No items found</div>
@@ -246,7 +337,9 @@ export default function AmenitiesInclusionsModal({
                         key={item.id}
                         className={`aim-item${editing?.id === item.id ? ' aim-item--active' : ''}`}
                       >
-                        <span className="aim-item-icon">{item.icon || '·'}</span>
+                        <span className="aim-item-icon">
+                          <IconRenderer name={item.icon} size={15} />
+                        </span>
                         <div className="aim-item-info">
                           <span className="aim-item-name">{item.name}</span>
                           {!isAmenity && item.is_highlighted && (
@@ -254,15 +347,19 @@ export default function AmenitiesInclusionsModal({
                           )}
                         </div>
                         <div className="aim-item-actions">
-                          <button className="aim-action-btn"
+                          <button
+                            className="aim-action-btn"
                             onClick={() => setEditing({ ...item })}
-                            title="Edit">
+                            title="Edit"
+                          >
                             <Edit2 size={13} />
                           </button>
-                          <button className="aim-action-btn aim-action-btn--danger"
+                          <button
+                            className="aim-action-btn aim-action-btn--danger"
                             onClick={() => handleDelete(item.id)}
                             disabled={deleting === item.id}
-                            title="Delete">
+                            title="Delete"
+                          >
                             {deleting === item.id
                               ? <span className="aim-spinner" style={{ width: 12, height: 12 }} />
                               : <Trash2 size={13} />
@@ -277,7 +374,7 @@ export default function AmenitiesInclusionsModal({
             </div>
           </div>
 
-          {/* ── Right: form ──────────────────── */}
+          {/* Right: form */}
           <div className={`aim-form-col${editing ? ' aim-form-col--open' : ''}`}>
             {editing ? (
               <ItemForm

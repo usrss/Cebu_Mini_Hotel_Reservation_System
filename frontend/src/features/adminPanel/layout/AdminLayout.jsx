@@ -128,7 +128,7 @@ const NAV_STRUCTURE = [
     label: 'Hotel Settings',
     icon: <SlidersHorizontal size={18} />,
     to: '/admin/hotel-settings',
-    roles: ['admin', 'manager'],
+    roles: ['admin'],
   },
 
     {
@@ -137,7 +137,7 @@ const NAV_STRUCTURE = [
   label: 'Legal Documents',
   icon: <FileText size={18} />,
   to: '/admin/legal',
-  roles: ['admin', 'manager'],
+  roles: ['admin'],
 },
 ];
 

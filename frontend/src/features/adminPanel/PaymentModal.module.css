@@ -17,6 +17,78 @@
   font-family: 'DM Sans', 'Segoe UI', sans-serif;
 }
 
+/* Cash refund specific styles */
+.cashRefundBtn {
+  background: var(--amber, #f59e0b);
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.cashRefundBtn:hover:not(:disabled) {
+  background: #d97706;
+}
+
+.cashRefundBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.checkboxLabel {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 16px 0;
+  padding: 12px;
+  background: #fef3c7;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #92400e;
+  cursor: pointer;
+}
+
+.checkboxLabel input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  cursor: pointer;
+  accent-color: #f59e0b;
+}
+
+.infoNote {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 16px 0;
+  padding: 12px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #1e40af;
+}
+
+.fullAmountBtn {
+  background: none;
+  border: 1px solid var(--gold-border, #d4af37);
+  border-radius: 4px;
+  color: var(--gold, #d4af37);
+  cursor: pointer;
+  font-size: 11px;
+  margin-left: 12px;
+  padding: 2px 8px;
+  transition: all 0.2s;
+}
+
+.fullAmountBtn:hover {
+  background: rgba(212, 175, 55, 0.1);
+}
+
 .modalTitle { font-size: 1.25rem; font-weight: 700; color: #0f172a; margin: 0 0 0.375rem; }
 .modalSub { color: #64748b; font-size: 0.875rem; margin: 0 0 1.25rem; }
 

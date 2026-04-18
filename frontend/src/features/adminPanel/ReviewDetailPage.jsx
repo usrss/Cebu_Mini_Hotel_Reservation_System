@@ -30,11 +30,12 @@ function Field({ label, value }) {
 export default function ReviewDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { canManageReviews } = useAdminRole();
+  // FIX: destructure `loading` so we don't flash "Access denied" while role resolves.
+  const { canManageReviews, loading: roleLoading } = useAdminRole();
 
-  const [review, setReview]   = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError]     = useState(null);
+  const [review, setReview]     = useState(null);
+  const [loading, setLoading]   = useState(true);
+  const [error, setError]       = useState(null);
   const [toggling, setToggling] = useState(false);
 
   useEffect(() => {
@@ -58,10 +59,12 @@ export default function ReviewDetailPage() {
     }
   };
 
-  if (!canManageReviews) return <div className={styles.stateError}>Access denied.</div>;
-  if (loading)           return <div className={styles.state}>Loading…</div>;
-  if (error)             return <div className={styles.stateError}>{error}</div>;
-  if (!review)           return null;
+  // FIX: wait for role to resolve before showing access denied.
+  if (roleLoading)           return <div className={styles.state}>Loading…</div>;
+  if (!canManageReviews)     return <div className={styles.stateError}>Access denied.</div>;
+  if (loading)               return <div className={styles.state}>Loading…</div>;
+  if (error)                 return <div className={styles.stateError}>{error}</div>;
+  if (!review)               return null;
 
   return (
     <div className={styles.page}>

@@ -13,7 +13,7 @@ function CustomTooltip({ active, payload, label }) {
   );
 }
 
-const STAR_COLORS = ['#F87171','#FCD34D','#FCD34D','#6EE7B7','#C9A84C'];
+const STAR_COLORS = ['#F87171','#FCD34D','#FCD34D','#6EE7B7','#D97706'];
 
 export default function ReviewAnalytics({ stats }) {
   if (!stats) return <div className="an-loading"><div className="an-spinner" /><span>Loading…</span></div>;

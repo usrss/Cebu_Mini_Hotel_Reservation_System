@@ -8,8 +8,8 @@ import { analyticsApi } from '../../../services/adminApi';
 function CustomTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
   return (
-    <div style={{ background:'var(--navy-card)', border:'1px solid var(--gold-border)', padding:'10px 14px', fontFamily:'Raleway,sans-serif', fontSize:12 }}>
-      <p style={{ color:'var(--gold)', fontWeight:700, margin:'0 0 6px' }}>{label}</p>
+    <div style={{ background:'#FFFFFF', border:'none', borderRadius:10, padding:'10px 14px', fontFamily:"'DM Sans',sans-serif", fontSize:12, boxShadow:'0 4px 20px rgba(1,0,13,0.09)' }}>
+      <p style={{ color:'#52515E', fontWeight:700, margin:'0 0 6px' }}>{label}</p>
       {payload.map((p,i) => <p key={i} style={{ color:p.color, margin:'2px 0' }}>{p.name}: <strong>{p.value}</strong></p>)}
     </div>
   );
@@ -70,12 +70,12 @@ export default function RoomPerformance({ period }) {
           ) : top5.length ? (
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={top5} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(201,168,76,0.08)" horizontal={false} />
-                <XAxis type="number" tick={{ fill:'rgba(248,246,240,0.45)', fontSize:10 }} />
-                <YAxis type="category" dataKey="name" tick={{ fill:'rgba(248,246,240,0.45)', fontSize:10 }} width={80} />
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(1,0,13,0.05)" horizontal={false} />
+                <XAxis type="number" tick={{ fill:'#7A7987', fontSize:10 }} />
+                <YAxis type="category" dataKey="name" tick={{ fill:'#7A7987', fontSize:10 }} width={80} />
                 <Tooltip content={<CustomTooltip />} />
                 <Bar dataKey="value" name="Bookings" radius={[0,2,2,0]}>
-                  {top5.map((_,i) => <Cell key={i} fill="#C9A84C" fillOpacity={1 - i * 0.12} />)}
+                  {top5.map((_,i) => <Cell key={i} fill="#3B5BDB" fillOpacity={1 - i * 0.12} />)}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -91,11 +91,11 @@ export default function RoomPerformance({ period }) {
           ) : bot5.length ? (
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={bot5} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(201,168,76,0.08)" horizontal={false} />
-                <XAxis type="number" tick={{ fill:'rgba(248,246,240,0.45)', fontSize:10 }} />
-                <YAxis type="category" dataKey="name" tick={{ fill:'rgba(248,246,240,0.45)', fontSize:10 }} width={80} />
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(1,0,13,0.05)" horizontal={false} />
+                <XAxis type="number" tick={{ fill:'#7A7987', fontSize:10 }} />
+                <YAxis type="category" dataKey="name" tick={{ fill:'#7A7987', fontSize:10 }} width={80} />
                 <Tooltip content={<CustomTooltip />} />
-                <Bar dataKey="value" name="Bookings" fill="#F87171" radius={[0,2,2,0]} />
+                <Bar dataKey="value" name="Bookings" fill="#DC2626" radius={[0,2,2,0]} />
               </BarChart>
             </ResponsiveContainer>
           ) : <div className="an-empty">No data available.</div>}

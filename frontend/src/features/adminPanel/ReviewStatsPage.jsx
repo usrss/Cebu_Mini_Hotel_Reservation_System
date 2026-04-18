@@ -24,7 +24,8 @@ function StarBar({ star, count, total }) {
 
 export default function ReviewStatsPage() {
   const navigate = useNavigate();
-  const { canManageReviews } = useAdminRole();
+  // FIX: destructure `loading` so we don't flash "Access denied" while role resolves.
+  const { canManageReviews, loading: roleLoading } = useAdminRole();
 
   const [stats, setStats]     = useState(null);
   const [loading, setLoading] = useState(true);
@@ -37,6 +38,8 @@ export default function ReviewStatsPage() {
       .finally(() => setLoading(false));
   }, []);
 
+  // FIX: wait for role to resolve before showing access denied.
+  if (roleLoading)       return <div className={styles.state}>Loading…</div>;
   if (!canManageReviews) return <div className={styles.stateError}>Access denied.</div>;
   if (loading)           return <div className={styles.state}>Loading…</div>;
   if (error)             return <div className={styles.stateError}>{error}</div>;

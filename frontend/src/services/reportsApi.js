@@ -1,12 +1,5 @@
 /**
  * src/services/reportsApi.js
- *
- * API client for the custom report generation module.
- * Hits /api/reports/ endpoints (new reports Django app).
- *
- * Uses the shared axios instance from src/services/api.js which:
- *  - automatically attaches Bearer token from localStorage('accessToken')
- *  - handles 401 / token refresh transparently
  */
 
 import api from './api';
@@ -16,7 +9,6 @@ const BASE = '/reports';
 // ─── Meta ─────────────────────────────────────────────────────────────────────
 
 export const reportMetaApi = {
-  /** Returns available report types, metrics, group_by options, periods, formats. */
   get: () =>
     api.get(`${BASE}/meta/`).then((r) => r.data),
 };
@@ -24,27 +16,9 @@ export const reportMetaApi = {
 // ─── Ad-hoc run ───────────────────────────────────────────────────────────────
 
 export const reportRunApi = {
-  /**
-   * Run a one-off report.
-   * @param {object} body
-   *   {
-   *     report_type:   'revenue',
-   *     export_format: 'json' | 'csv' | 'pdf' | 'excel',
-   *     config: {
-   *       period:   'monthly',
-   *       metrics:  ['total_revenue'],
-   *       group_by: 'day',
-   *       filters:  { room_type: 'suite' }
-   *     },
-   *     template_id: null
-   *   }
-   * For json → returns { execution_id, data }
-   * For csv/pdf/excel → returns blob (set responseType: 'blob' manually)
-   */
   run: (body) =>
     api.post(`${BASE}/run/`, body).then((r) => r.data),
 
-  /** Run with blob response for file downloads. */
   download: (body) =>
     api.post(`${BASE}/run/`, body, { responseType: 'blob' }).then((r) => r.data),
 };
@@ -58,12 +32,71 @@ export const reportExecutionApi = {
   detail: (id) =>
     api.get(`${BASE}/executions/${id}/`).then((r) => r.data),
 
-  /** Re-download a previous execution result. format = csv | pdf | excel */
-  download: (id, format = 'csv') =>
-    api.get(`${BASE}/executions/${id}/download/`, {
-      params: { format },
-      responseType: 'blob',
-    }).then((r) => r.data),
+  /**
+   * Re-download a previous execution result.
+   * The backend endpoint is /api/reports/executions/{id}/download/?format={format}
+   */
+  download: async (id, format = 'csv') => {
+    try {
+      console.log(`Downloading execution ${id} as ${format}`);
+
+      const response = await api.get(`${BASE}/executions/${id}/download/`, {
+        params: { format },
+        responseType: 'blob',
+      });
+
+      // Check if we got a valid blob
+      if (!response.data || response.data.size === 0) {
+        throw new Error('Server returned an empty file');
+      }
+
+      // Check if the response is actually JSON error (some servers return error as JSON even with blob responseType)
+      if (response.data.type === 'application/json') {
+        const text = await response.data.text();
+        const json = JSON.parse(text);
+        throw new Error(json.detail || json.error || 'Server returned an error');
+      }
+
+      return response.data;
+    } catch (err) {
+      console.error('Download error:', err);
+
+      // Handle different error cases
+      if (err.response) {
+        // The request was made and the server responded with a status code
+        console.error('Response status:', err.response.status);
+        console.error('Response headers:', err.response.headers);
+
+        // If it's a blob, try to read the error message
+        if (err.response.data instanceof Blob) {
+          try {
+            const text = await err.response.data.text();
+            console.error('Error response body:', text);
+
+            // Try to parse as JSON
+            try {
+              const json = JSON.parse(text);
+              throw new Error(json.detail || json.error || `Server error: ${err.response.status}`);
+            } catch {
+              // Not JSON, just use the text
+              throw new Error(`Server error ${err.response.status}: ${text.substring(0, 100)}`);
+            }
+          } catch (readErr) {
+            throw new Error(`Failed to read error response: ${readErr.message}`);
+          }
+        }
+
+        // If we get here, rethrow with status
+        throw new Error(`Request failed with status ${err.response.status}`);
+      } else if (err.request) {
+        // The request was made but no response was received
+        throw new Error('No response received from server');
+      } else {
+        // Something happened in setting up the request
+        throw err;
+      }
+    }
+  },
 };
 
 // ─── Templates ────────────────────────────────────────────────────────────────
@@ -84,10 +117,6 @@ export const reportTemplateApi = {
   remove: (id) =>
     api.delete(`${BASE}/templates/${id}/`).then((r) => r.data),
 
-  /**
-   * Run a report from a saved template.
-   * Body (optional): { export_format, config_overrides }
-   */
   run: (id, body = {}) =>
     api.post(`${BASE}/templates/${id}/run/`, body).then((r) => r.data),
 
@@ -119,15 +148,10 @@ export const reportScheduleApi = {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-/**
- * Trigger a browser download from a Blob.
- * @param {Blob}   blob
- * @param {string} filename  e.g. "revenue_monthly.csv"
- */
 export function triggerBlobDownload(blob, filename) {
   const url = URL.createObjectURL(blob);
-  const a   = document.createElement('a');
-  a.href     = url;
+  const a = document.createElement('a');
+  a.href = url;
   a.download = filename;
   a.click();
   URL.revokeObjectURL(url);

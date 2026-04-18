@@ -335,6 +335,9 @@ class CheckInVerifySerializer(serializers.Serializer):
     reference_number = serializers.CharField()
     checkin_pin      = serializers.CharField(max_length=4, min_length=4)
 
+    # Global check-in time: 12:00 PM (noon)
+    CHECKIN_HOUR = 12
+
     def validate(self, data):
         try:
             booking = Booking.objects.select_related("room").get(
@@ -356,10 +359,23 @@ class CheckInVerifySerializer(serializers.Serializer):
         if booking.checkin_pin != data["checkin_pin"]:
             raise serializers.ValidationError({"checkin_pin": "Invalid PIN."})
 
-        today = timezone.now().date()
+        now_local = timezone.localtime(timezone.now())
+        today = now_local.date()
         if booking.check_in != today:
             raise serializers.ValidationError(
                 {"check_in": f"Check-in date is {booking.check_in}, not today ({today})."}
+            )
+
+        # Validate check-in time: only allow after 12:00 PM (local time)
+        if now_local.hour < self.CHECKIN_HOUR:
+            raise serializers.ValidationError(
+                {"time": f"Check-in is only available from {self.CHECKIN_HOUR}:00 (noon). Please try again later."}
+            )
+
+        # Validate check-out date: guest cannot check in after checkout date
+        if now_local.date() > booking.check_out:
+            raise serializers.ValidationError(
+                {"check_out": f"Check-in window has closed. Your scheduled checkout was {booking.check_out}. Booking marked as No Show."}
             )
 
         data["booking"] = booking

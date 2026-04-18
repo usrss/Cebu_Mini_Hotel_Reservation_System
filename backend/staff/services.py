@@ -26,6 +26,14 @@ from payments.models import Refund
 
 User = get_user_model()
 
+# Normalize short aliases → full names
+_PERIOD_ALIASES = {
+    'day': 'daily',
+    'week': 'weekly',
+    'month': 'monthly',
+    'year': 'yearly',
+}
+
 
 class ReportService:
 
@@ -37,11 +45,13 @@ class ReportService:
         start_str: str | None,
         end_str: str | None,
     ) -> tuple[date, date]:
+
         """
         Resolve start_date and end_date from a named period or explicit strings.
         Returns (start_date, end_date) as date objects.
         """
         today = timezone.now().date()
+        period = _PERIOD_ALIASES.get(period, period)
 
         if start_str and end_str:
             try:

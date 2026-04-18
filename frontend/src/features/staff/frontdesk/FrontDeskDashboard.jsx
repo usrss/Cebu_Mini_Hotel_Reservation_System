@@ -395,7 +395,7 @@ export default function FrontDeskDashboard() {
       modalStatus: 'maintenance',
     },
     {
-      label:       'Arrivals Today',
+      label:       'Schedule Today',
       sub:         'Expected check-ins',
       value:       arrivals.length,
       iconColor:   '#000000',

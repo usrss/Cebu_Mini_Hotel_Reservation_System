@@ -9,16 +9,19 @@
  *   - Line / bar chart of rows data (via Recharts)
  *   - Data table with all rows
  *   - Export buttons (CSV, PDF, Excel)
+ *
+ * FIX: download buttons now show a proper error message instead of a
+ * silent failure when the blob response contains an error body.
  */
 
 import { useState } from 'react';
 import {
-  X, Download, TrendingUp,
+  X, Download, TrendingUp, AlertTriangle,
 } from 'lucide-react';
 import {
   LineChart, Line, BarChart, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, Legend,
+  ResponsiveContainer,
 } from 'recharts';
 import {
   reportExecutionApi,
@@ -80,7 +83,7 @@ function pickXKey(rows) {
 
 // ─── Chart ────────────────────────────────────────────────────────────────────
 
-function ReportChart({ rows, reportType }) {
+function ReportChart({ rows }) {
   const [chartType, setChartType] = useState('line');
 
   const xKey = pickXKey(rows);
@@ -97,8 +100,7 @@ function ReportChart({ rows, reportType }) {
     return Number(v).toLocaleString('en-PH', { notation: 'compact' });
   };
 
-  const GOLD     = '#D4AF37';
-  const GOLD_DIM = 'rgba(212,175,55,0.15)';
+  const GOLD = '#D4AF37';
 
   const sharedProps = {
     data: rows,
@@ -160,7 +162,8 @@ function ReportChart({ rows, reportType }) {
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 export default function ReportResultPanel({ result, title, onClose }) {
-  const [downloading, setDownloading] = useState(null);
+  const [downloading,  setDownloading]  = useState(null);
+  const [downloadError, setDownloadError] = useState(null);
 
   const data        = result?.data || result;
   const executionId = result?.execution_id;
@@ -168,15 +171,46 @@ export default function ReportResultPanel({ result, title, onClose }) {
   const rows        = data?.rows    || [];
   const meta        = data?.meta    || {};
 
+  /**
+   * FIX: Properly parse error bodies from blob responses.
+   * When axios uses responseType:'blob', error.response.data is a Blob
+   * object — we need to read it as text to get the actual error message.
+   */
   const handleDownload = async (format) => {
     setDownloading(format);
+    setDownloadError(null);
     try {
-      if (executionId) {
-        const blob = await reportExecutionApi.download(executionId, format);
-        triggerBlobDownload(blob, `${meta.report_type || 'report'}_${format === 'excel' ? 'xlsx' : format}`);
+      if (!executionId) {
+        setDownloadError('No execution ID available for download.');
+        return;
       }
+      const blob = await reportExecutionApi.download(executionId, format);
+
+      if (!blob || blob.size === 0) {
+        setDownloadError('Server returned an empty file.');
+        return;
+      }
+
+      const ext      = format === 'excel' ? 'xlsx' : format;
+      const filename = `${meta.report_type || 'report'}_${meta.start_date || 'export'}.${ext}`;
+      triggerBlobDownload(blob, filename);
     } catch (err) {
-      alert(err.message || 'Download failed.');
+      let msg = err.message || 'Download failed.';
+
+      // Axios wraps blob error responses — read the blob to extract the message.
+      if (err.response?.data instanceof Blob) {
+        try {
+          const text = await err.response.data.text();
+          const json = JSON.parse(text);
+          msg = json.detail || json.error || text;
+        } catch {
+          msg = `Server error ${err.response?.status ?? ''}`.trim();
+        }
+      } else if (err.response?.data?.detail) {
+        msg = err.response.data.detail;
+      }
+
+      setDownloadError(`Download failed (${format.toUpperCase()}): ${msg}`);
     } finally {
       setDownloading(null);
     }
@@ -203,7 +237,7 @@ export default function ReportResultPanel({ result, title, onClose }) {
           )}
         </div>
 
-        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', flexWrap: 'wrap' }}>
           {executionId && (
             <>
               {['csv', 'pdf', 'excel'].map(fmt => (
@@ -211,8 +245,9 @@ export default function ReportResultPanel({ result, title, onClose }) {
                   key={fmt}
                   className="sf-btn crp-sm-btn"
                   onClick={() => handleDownload(fmt)}
-                  disabled={downloading === fmt}
+                  disabled={!!downloading}
                   type="button"
+                  title={`Download as ${fmt.toUpperCase()}`}
                 >
                   <Download size={11} />
                   {downloading === fmt ? '…' : fmt.toUpperCase()}
@@ -225,6 +260,13 @@ export default function ReportResultPanel({ result, title, onClose }) {
           </button>
         </div>
       </div>
+
+      {/* Download error */}
+      {downloadError && (
+        <div className="crp-error" style={{ margin: '0 20px 0' }}>
+          <AlertTriangle size={13} /> {downloadError}
+        </div>
+      )}
 
       {/* Summary cards */}
       {summaryEntries.length > 0 && (

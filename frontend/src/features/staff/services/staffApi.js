@@ -24,8 +24,8 @@ export const staffMembersApi = {
     api.post(`${BASE}/members/`, body).then((r) => r.data),
   update: (pk, body) =>
     api.patch(`${BASE}/members/${pk}/`, body).then((r) => r.data),
-  remove: (pk) =>
-    api.delete(`${BASE}/members/${pk}/`).then((r) => r.data),
+  remove: (pk, body = {}) =>
+    api.delete(`${BASE}/members/${pk}/`, { data: body }).then((r) => r.data),
   promote: (pk, body) =>
     api.post(`${BASE}/members/${pk}/promote/`, body).then((r) => r.data),
   assignTempRole: (pk, body) =>
@@ -288,7 +288,8 @@ export const staffApi = {
   detail:      (id)       => staffMembersApi.detail(id),
   create:      (body)     => staffMembersApi.create(body),
   update:      (id, body) => staffMembersApi.update(id, body),
-  delete:      (id)       => staffMembersApi.remove(id),
+  delete:      (id, body) => staffMembersApi.remove(id, body),
+  checkDependencies: (id) => api.get(`${BASE}/members/${id}/dependencies/`).then((r) => r.data),
   promote:     (id, body) => staffMembersApi.promote(id, body),
   assignTemp:  (id, body) => staffMembersApi.assignTempRole(id, body),
   removeTemp:  (id)       => staffMembersApi.removeTempRole(id),

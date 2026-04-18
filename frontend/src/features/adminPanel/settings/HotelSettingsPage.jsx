@@ -21,7 +21,8 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   Clock, Save, RotateCcw, CheckCircle2, AlertCircle,
   Info, MapPin, Phone, Mail, FileText, Link as LinkIcon,
-  Building2, ShieldCheck, Plus, Trash2, GripVertical,
+  Building2, ShieldCheck, Plus, Trash2,
+  KeyRound, Luggage,
 } from 'lucide-react';
 import { clearHotelSettingsCache } from '../../hooks/useHotelSettings';
 import { DEFAULT_CANCELLATION_TIERS } from '../../hooks/useHotelSettings';
@@ -104,7 +105,6 @@ function tiersEqual(a, b) {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
-// Validate tier list — returns array of error strings (empty = valid)
 function validateTiers(tiers) {
   const errors = [];
   if (!tiers.length) {
@@ -115,14 +115,12 @@ function validateTiers(tiers) {
     if (t.hours_before < 0) errors.push(`Tier ${i + 1}: hours must be ≥ 0.`);
     if (t.refund_pct < 0 || t.refund_pct > 100) errors.push(`Tier ${i + 1}: refund % must be 0–100.`);
   });
-  // Ensure there is exactly one catch-all (hours_before = 0)
   const catchAlls = tiers.filter(t => Number(t.hours_before) === 0);
   if (catchAlls.length === 0) errors.push('Add a catch-all tier with 0 hours (no-refund fallback).');
   if (catchAlls.length > 1)  errors.push('Only one tier can have 0 hours (the catch-all).');
   return errors;
 }
 
-// Strip _id before saving — backend doesn't need it
 function cleanTiers(tiers) {
   return [...tiers]
     .sort((a, b) => Number(b.hours_before) - Number(a.hours_before))
@@ -241,22 +239,15 @@ function CancellationTierEditor({ tiers, onChange, disabled }) {
     onChange(next);
   };
 
-  const addTier = () => {
-    onChange([...tiers, newTier()]);
-  };
+  const addTier = () => { onChange([...tiers, newTier()]); };
 
-  const removeTier = (idx) => {
-    onChange(tiers.filter((_, i) => i !== idx));
-  };
+  const removeTier = (idx) => { onChange(tiers.filter((_, i) => i !== idx)); };
 
-  // Sort descending for display (most generous first)
   const sorted = [...tiers].sort((a, b) => Number(b.hours_before) - Number(a.hours_before));
-  // Map display-index back to actual index in `tiers`
   const sortedWithIdx = sorted.map(t => ({ ...t, _origIdx: tiers.indexOf(t) }));
 
   return (
     <div className="hsp-tier-editor">
-      {/* Column headers */}
       <div className="hsp-tier-header-row">
         <span className="hsp-tier-col-label" style={{ flex: '0 0 120px' }}>Hours before</span>
         <span className="hsp-tier-col-label" style={{ flex: '0 0 100px' }}>Refund %</span>
@@ -271,11 +262,9 @@ function CancellationTierEditor({ tiers, onChange, disabled }) {
             key={tier._id ?? _origIdx}
             className={`hsp-tier-row${isCatchAll ? ' hsp-tier-row--catchall' : ''}`}
           >
-            {/* Hours before */}
             <div className="hsp-tier-input-wrap" style={{ flex: '0 0 120px' }}>
               <input
-                type="number"
-                min="0"
+                type="number" min="0"
                 className="hsp-tier-input"
                 value={tier.hours_before}
                 onChange={e => updateTier(_origIdx, 'hours_before', e.target.value)}
@@ -285,12 +274,9 @@ function CancellationTierEditor({ tiers, onChange, disabled }) {
               <span className="hsp-tier-unit">h</span>
             </div>
 
-            {/* Refund % */}
             <div className="hsp-tier-input-wrap" style={{ flex: '0 0 100px' }}>
               <input
-                type="number"
-                min="0"
-                max="100"
+                type="number" min="0" max="100"
                 className="hsp-tier-input"
                 value={tier.refund_pct}
                 onChange={e => updateTier(_origIdx, 'refund_pct', e.target.value)}
@@ -300,7 +286,6 @@ function CancellationTierEditor({ tiers, onChange, disabled }) {
               <span className="hsp-tier-unit">%</span>
             </div>
 
-            {/* Label */}
             <input
               type="text"
               className="hsp-tier-label-input"
@@ -311,7 +296,6 @@ function CancellationTierEditor({ tiers, onChange, disabled }) {
               placeholder={isCatchAll ? 'Same-day / no refund' : '48+ hours before check-in'}
             />
 
-            {/* Remove — catch-all is protected */}
             <button
               type="button"
               className="hsp-tier-remove"
@@ -334,7 +318,6 @@ function CancellationTierEditor({ tiers, onChange, disabled }) {
         <Plus size={13} /> Add tier
       </button>
 
-      {/* Validation errors */}
       {errors.length > 0 && (
         <div className="hsp-tier-errors">
           {errors.map((e, i) => (
@@ -345,7 +328,7 @@ function CancellationTierEditor({ tiers, onChange, disabled }) {
         </div>
       )}
 
-      {/* Live preview — mirrors BookingForm CancellationPolicyBlock */}
+      {/* Live preview */}
       <div className="hsp-policy-preview" style={{ marginTop: 16 }}>
         <p className="hsp-preview-label">Guest-facing preview (BookingForm)</p>
         {sortedWithIdx.map(({ _origIdx, ...tier }) => {
@@ -356,24 +339,16 @@ function CancellationTierEditor({ tiers, onChange, disabled }) {
               <div
                 className="hsp-tier-preview-badge"
                 style={{
-                  background: refundPct >= 80 ? 'rgba(5,150,105,0.10)' :
-                               refundPct >= 40 ? 'rgba(217,119,6,0.10)' :
-                               'rgba(1,0,13,0.05)',
-                  color: refundPct >= 80 ? '#059669' :
-                         refundPct >= 40 ? '#d97706' :
-                         '#909090',
-                  borderColor: refundPct >= 80 ? 'rgba(5,150,105,0.25)' :
-                               refundPct >= 40 ? 'rgba(217,119,6,0.25)' :
-                               'rgba(1,0,13,0.12)',
+                  background:  refundPct >= 80 ? 'rgba(5,150,105,0.10)' : refundPct >= 40 ? 'rgba(217,119,6,0.10)' : 'rgba(1,0,13,0.05)',
+                  color:       refundPct >= 80 ? '#059669'               : refundPct >= 40 ? '#d97706'              : '#909090',
+                  borderColor: refundPct >= 80 ? 'rgba(5,150,105,0.25)' : refundPct >= 40 ? 'rgba(217,119,6,0.25)' : 'rgba(1,0,13,0.12)',
                 }}
               >
                 {refundPct}%
               </div>
               <div className="hsp-tier-preview-text">
                 <span className="hsp-tier-preview-condition">
-                  {isCatchAll
-                    ? 'Same day / after check-in'
-                    : `≥ ${tier.hours_before}h before check-in`}
+                  {isCatchAll ? 'Same day / after check-in' : `≥ ${tier.hours_before}h before check-in`}
                 </span>
                 <span className="hsp-tier-preview-label">
                   {tier.label || (refundPct === 0 ? 'No refund' : `${refundPct}% refund`)}
@@ -395,7 +370,6 @@ export default function HotelSettingsPage() {
   const [saving,  setSaving]  = useState(false);
   const [toast,   setToast]   = useState(null);
 
-  // Tiers need their own _id for stable React keys
   const [tiers, setTiers] = useState(
     DEFAULT_CANCELLATION_TIERS.map((t, i) => ({ ...t, _id: i }))
   );
@@ -405,21 +379,20 @@ export default function HotelSettingsPage() {
   const savedWithTiers = { ...saved, cancellation_tiers: savedTiers };
   const isDirty = JSON.stringify(formWithTiers) !== JSON.stringify(savedWithTiers);
 
-  /* ── Load ─────────────────────────────────────────────────── */
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const data  = await fetchSettings();
       const clean = {
-        checkin_time:       data.checkin_time       || DEFAULTS.checkin_time,
-        checkout_time:      data.checkout_time      || DEFAULTS.checkout_time,
-        hotel_name:         data.hotel_name         || DEFAULTS.hotel_name,
-        hotel_address:      data.hotel_address      || DEFAULTS.hotel_address,
-        hotel_phone:        data.hotel_phone        || DEFAULTS.hotel_phone,
-        hotel_email:        data.hotel_email        || DEFAULTS.hotel_email,
-        hotel_description:  data.hotel_description  || DEFAULTS.hotel_description,
-        terms_url:          data.terms_url          || DEFAULTS.terms_url,
-        privacy_url:        data.privacy_url        || DEFAULTS.privacy_url,
+        checkin_time:      data.checkin_time      || DEFAULTS.checkin_time,
+        checkout_time:     data.checkout_time     || DEFAULTS.checkout_time,
+        hotel_name:        data.hotel_name        || DEFAULTS.hotel_name,
+        hotel_address:     data.hotel_address     || DEFAULTS.hotel_address,
+        hotel_phone:       data.hotel_phone       || DEFAULTS.hotel_phone,
+        hotel_email:       data.hotel_email       || DEFAULTS.hotel_email,
+        hotel_description: data.hotel_description || DEFAULTS.hotel_description,
+        terms_url:         data.terms_url         || DEFAULTS.terms_url,
+        privacy_url:       data.privacy_url       || DEFAULTS.privacy_url,
       };
 
       const rawTiers = Array.isArray(data.cancellation_tiers) && data.cancellation_tiers.length > 0
@@ -441,7 +414,6 @@ export default function HotelSettingsPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  /* ── Helpers ──────────────────────────────────────────────── */
   const showToast = (msg, type = 'success') => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3500);
@@ -449,10 +421,7 @@ export default function HotelSettingsPage() {
 
   const set = (key, val) => setForm(f => ({ ...f, [key]: val }));
 
-  const handleReset = () => {
-    setForm({ ...saved });
-    setTiers(savedTiers);
-  };
+  const handleReset = () => { setForm({ ...saved }); setTiers(savedTiers); };
 
   const handleSave = async () => {
     const tierErrors = validateTiers(tiers);
@@ -460,25 +429,21 @@ export default function HotelSettingsPage() {
       showToast('Fix cancellation tier errors before saving.', 'error');
       return;
     }
-
     setSaving(true);
     try {
-      const payload = {
-        ...form,
-        cancellation_tiers: cleanTiers(tiers),
-      };
+      const payload = { ...form, cancellation_tiers: cleanTiers(tiers) };
       const updated = await patchSettings(payload);
 
       const clean = {
-        checkin_time:       updated.checkin_time       || form.checkin_time,
-        checkout_time:      updated.checkout_time      || form.checkout_time,
-        hotel_name:         updated.hotel_name         || form.hotel_name,
-        hotel_address:      updated.hotel_address      || form.hotel_address,
-        hotel_phone:        updated.hotel_phone        || form.hotel_phone,
-        hotel_email:        updated.hotel_email        || form.hotel_email,
-        hotel_description:  updated.hotel_description  ?? form.hotel_description,
-        terms_url:          updated.terms_url          || form.terms_url,
-        privacy_url:        updated.privacy_url        || form.privacy_url,
+        checkin_time:      updated.checkin_time      || form.checkin_time,
+        checkout_time:     updated.checkout_time     || form.checkout_time,
+        hotel_name:        updated.hotel_name        || form.hotel_name,
+        hotel_address:     updated.hotel_address     || form.hotel_address,
+        hotel_phone:       updated.hotel_phone       || form.hotel_phone,
+        hotel_email:       updated.hotel_email       || form.hotel_email,
+        hotel_description: updated.hotel_description ?? form.hotel_description,
+        terms_url:         updated.terms_url         || form.terms_url,
+        privacy_url:       updated.privacy_url       || form.privacy_url,
       };
 
       const rawUpdatedTiers = Array.isArray(updated.cancellation_tiers) && updated.cancellation_tiers.length > 0
@@ -501,13 +466,12 @@ export default function HotelSettingsPage() {
     }
   };
 
-  /* ── Render ───────────────────────────────────────────────── */
   return (
     <div className="hsp-page">
 
       <Toast toast={toast} />
 
-      {/* ── Page header ──────────────────────────────────────── */}
+      {/* ── Page header ── */}
       <div className="hsp-header">
         <div className="hsp-header-left">
           <p className="hsp-eyebrow">Admin · Global Configuration</p>
@@ -536,7 +500,6 @@ export default function HotelSettingsPage() {
         </div>
       </div>
 
-      {/* ── Unsaved banner ───────────────────────────────────── */}
       {isDirty && (
         <div className="hsp-dirty-banner">
           <Info size={14} />
@@ -544,7 +507,6 @@ export default function HotelSettingsPage() {
         </div>
       )}
 
-      {/* ── Content ──────────────────────────────────────────── */}
       {loading ? (
         <div className="hsp-loading">
           <div className="hsp-spinner" />
@@ -553,7 +515,7 @@ export default function HotelSettingsPage() {
       ) : (
         <div className="hsp-content">
 
-          {/* ─── Section 1: Check-In / Check-Out ─────────────── */}
+          {/* ── Check-In / Check-Out ── */}
           <SectionLabel>Check-In &amp; Check-Out</SectionLabel>
 
           <SettingGroup
@@ -583,11 +545,14 @@ export default function HotelSettingsPage() {
               />
             </div>
 
+            {/* ── Preview card — Lucide icons instead of emojis ── */}
             <div className="hsp-preview-card">
               <p className="hsp-preview-label">Guest-facing preview</p>
               <div className="hsp-preview-row">
                 <div className="hsp-preview-item">
-                  <span className="hsp-preview-icon">🔑</span>
+                  <span className="hsp-preview-icon-wrap">
+                    <KeyRound size={20} strokeWidth={1.75} />
+                  </span>
                   <div>
                     <span className="hsp-preview-key">Check-In</span>
                     <span className="hsp-preview-val">{to12h(form.checkin_time)}</span>
@@ -595,7 +560,9 @@ export default function HotelSettingsPage() {
                 </div>
                 <div className="hsp-preview-sep" />
                 <div className="hsp-preview-item">
-                  <span className="hsp-preview-icon">🧳</span>
+                  <span className="hsp-preview-icon-wrap">
+                    <Luggage size={20} strokeWidth={1.75} />
+                  </span>
                   <div>
                     <span className="hsp-preview-key">Check-Out</span>
                     <span className="hsp-preview-val">{to12h(form.checkout_time)}</span>
@@ -615,7 +582,7 @@ export default function HotelSettingsPage() {
             </div>
           </SettingGroup>
 
-          {/* ─── Section 2: Hotel Information ────────────────── */}
+          {/* ── Hotel Information ── */}
           <SectionLabel>Hotel Information</SectionLabel>
 
           <SettingGroup
@@ -673,20 +640,19 @@ export default function HotelSettingsPage() {
             />
           </SettingGroup>
 
-          {/* ─── Section 3: Cancellation Policy ─────────────── */}
+          {/* ── Cancellation Policy ── */}
           <SectionLabel>Cancellation Policy</SectionLabel>
 
           <SettingGroup
             icon={<ShieldCheck size={18} />}
             title="Cancellation &amp; Refund Tiers"
-            description="Define refund eligibility windows. Each tier sets how far in advance a guest must cancel to receive a partial or full refund. The backend uses these exact tiers to calculate refund amounts — no more hardcoded values."
+            description="Define refund eligibility windows. Each tier sets how far in advance a guest must cancel to receive a partial or full refund. The backend uses these exact tiers to calculate refund amounts."
           >
             <div className="hsp-info-note" style={{ marginBottom: 4 }}>
               <Info size={13} />
               <span>
                 Tiers are evaluated top-to-bottom (most generous first). The tier with
-                <strong style={{ color: 'rgba(248,246,240,0.7)' }}> 0 hours</strong> is
-                the catch-all — it should always have 0% refund. The catch-all cannot be removed.
+                <strong> 0 hours</strong> is the catch-all — it should always have 0% refund and cannot be removed.
               </span>
             </div>
 
@@ -708,7 +674,7 @@ export default function HotelSettingsPage() {
             )}
           </SettingGroup>
 
-          {/* ─── Section 4: Legal Links ───────────────────────── */}
+          {/* ── Legal Links ── */}
           <SectionLabel>Legal</SectionLabel>
 
           <SettingGroup
@@ -738,21 +704,11 @@ export default function HotelSettingsPage() {
             <div className="hsp-legal-preview">
               <p className="hsp-preview-label">Footer link preview</p>
               <div className="hsp-legal-preview-links">
-                <a
-                  href={form.terms_url || '#'}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="hsp-legal-preview-link"
-                >
+                <a href={form.terms_url || '#'} target="_blank" rel="noopener noreferrer" className="hsp-legal-preview-link">
                   Terms &amp; Conditions ↗
                 </a>
                 <span className="hsp-legal-preview-sep">·</span>
-                <a
-                  href={form.privacy_url || '#'}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="hsp-legal-preview-link"
-                >
+                <a href={form.privacy_url || '#'} target="_blank" rel="noopener noreferrer" className="hsp-legal-preview-link">
                   Privacy Policy ↗
                 </a>
               </div>
@@ -774,7 +730,6 @@ export default function HotelSettingsPage() {
         </div>
       )}
 
-      {/* ── Sticky footer save bar (mobile) ──────────────────── */}
       {isDirty && (
         <div className="hsp-sticky-footer">
           <span className="hsp-sticky-msg">Unsaved changes</span>

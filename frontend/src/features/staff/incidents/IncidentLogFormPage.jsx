@@ -1,7 +1,6 @@
 /**
- * src/features/staff/incidents/IncidentLogFormPage.jsx
+ * IncidentLogFormPage.jsx — revised to match AdminDashboard light theme
  */
-
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
@@ -25,20 +24,20 @@ export default function IncidentLogFormPage() {
 
   const set = (field) => (e) => {
     const val = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
-    setForm((f) => ({ ...f, [field]: val }));
+    setForm(f => ({ ...f, [field]: val }));
   };
 
   useEffect(() => {
     if (!isEdit) return;
     incidentsApi.detail(pk)
-      .then((data) => setForm({
+      .then(data => setForm({
         incident_type: data.incident_type, severity: data.severity,
         location: data.location || '', description: data.description || '',
         involved_guests: data.involved_guests || '',
         resolved: data.resolved || false,
         resolution_notes: data.resolution_notes || '',
       }))
-      .catch((err) => setError(err.response?.data?.detail || err.message))
+      .catch(err => setError(err.response?.data?.detail || err.message))
       .finally(() => setLoading(false));
   }, [pk, isEdit]);
 
@@ -53,7 +52,13 @@ export default function IncidentLogFormPage() {
     } finally { setBusy(false); }
   };
 
-  if (loading) return <div className="sf-page"><div className="sf-loading"><div className="sf-spinner" /><p>Loading…</p></div></div>;
+  if (loading) {
+    return (
+      <div className="sf-page">
+        <div className="sf-loading"><div className="sf-spinner" /><p>Loading…</p></div>
+      </div>
+    );
+  }
 
   return (
     <div className="sf-page">
@@ -125,7 +130,7 @@ export default function IncidentLogFormPage() {
                 onClick={() => navigate('/staff/incidents')}>
                 Cancel
               </button>
-              <button type="submit" className="sf-btn sf-btn-danger" style={{ flex: 1, justifyContent: 'center' }} disabled={busy}>
+              <button type="submit" className="sf-btn sf-btn-primary" style={{ flex: 1, justifyContent: 'center' }} disabled={busy}>
                 {busy ? 'Saving…' : isEdit ? 'Save Changes' : 'Log Incident'}
               </button>
             </div>

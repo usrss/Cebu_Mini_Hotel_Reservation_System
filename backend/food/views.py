@@ -182,11 +182,11 @@ class GuestFoodOrderListView(generics.ListAPIView):
 
 class KitchenOrderListView(generics.ListAPIView):
     """
-    GET /api/food/orders/kitchen/?status=pending|completed
+    GET /api/food/orders/kitchen/?status=pending|preparing|completed
     Kitchen staff, admin, and manager can access.
 
     IMPORTANT: 'awaiting_payment' orders are EXCLUDED — kitchen only sees
-    orders where payment has been confirmed (order_status='pending').
+    orders where payment has been confirmed (order_status='pending' or 'preparing').
     """
     serializer_class   = FoodOrderSerializer
     permission_classes = [IsAuthenticated]
@@ -206,6 +206,8 @@ class KitchenOrderListView(generics.ListAPIView):
         status_param = self.request.query_params.get("status")
         if status_param == "pending":
             qs = qs.filter(order_status=OrderStatus.PENDING)
+        elif status_param == "preparing":
+            qs = qs.filter(order_status=OrderStatus.PREPARING)
         elif status_param == "completed":
             today = timezone.now().date()
             qs    = qs.filter(order_status=OrderStatus.COMPLETED, completed_at__date=today)
@@ -222,6 +224,46 @@ class FoodOrderCompleteView(APIView):
     """
     PATCH /api/food/orders/<pk>/complete/
     Kitchen staff, admin, or manager marks an order as completed.
+    Accepts both PENDING and PREPARING statuses.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, pk):
+        role = _get_role(request.user)
+        if role not in ("kitchen_staff", "admin", "manager"):
+            return Response(
+                {"error": "Not authorised."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        try:
+            order = FoodOrder.objects.select_related("food_item").get(pk=pk)
+        except FoodOrder.DoesNotExist:
+            return Response(
+                {"error": "Order not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if order.order_status not in (OrderStatus.PENDING, OrderStatus.PREPARING):
+            return Response(
+                {"error": "Order is not pending or preparing."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        profile            = getattr(request.user, "staff_profile", None)
+        order.order_status = OrderStatus.COMPLETED
+        order.completed_by = profile
+        order.completed_at = timezone.now()
+        order.save(update_fields=["order_status", "completed_by", "completed_at", "updated_at"])
+
+        return Response(FoodOrderSerializer(order, context={"request": request}).data)
+
+
+class FoodOrderPrepareView(APIView):
+    """
+    PATCH /api/food/orders/<pk>/prepare/
+    Kitchen staff, admin, or manager marks an order as preparing.
+    Only accepts PENDING status (PENDING → PREPARING).
     """
     permission_classes = [IsAuthenticated]
 
@@ -247,11 +289,8 @@ class FoodOrderCompleteView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        profile            = getattr(request.user, "staff_profile", None)
-        order.order_status = OrderStatus.COMPLETED
-        order.completed_by = profile
-        order.completed_at = timezone.now()
-        order.save(update_fields=["order_status", "completed_by", "completed_at", "updated_at"])
+        order.order_status = OrderStatus.PREPARING
+        order.save(update_fields=["order_status", "updated_at"])
 
         return Response(FoodOrderSerializer(order, context={"request": request}).data)
 

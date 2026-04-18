@@ -25,8 +25,6 @@ export default function FoodAndDrinks() {
   const [category,      setCategory]      = useState("all");
   const [modal,         setModal]         = useState(null);
   const [quantity,      setQuantity]      = useState(1);
-  const [paymentType,   setPaymentType]   = useState("pay_now");
-  const [foodPayMethod, setFoodPayMethod] = useState("card");
   const [notes,         setNotes]         = useState("");
   const [loading,       setLoading]       = useState(false);
   const [submitting,    setSubmitting]    = useState(false);
@@ -57,8 +55,6 @@ export default function FoodAndDrinks() {
   function openModal(item) {
     setModal(item);
     setQuantity(1);
-    setPaymentType("pay_now");
-    setFoodPayMethod("card");
     setNotes("");
     setError("");
   }
@@ -75,22 +71,9 @@ export default function FoodAndDrinks() {
       const res = await api.post("/food/orders/", {
         food_item_id: modal.id,
         quantity,
-        payment_type: paymentType,
+        payment_type: "pay_checkout",
         notes,
       });
-
-      const order = res.data.order;
-
-      if (paymentType === "pay_now") {
-        const payRes = await api.post("/food/orders/initiate-payment/", {
-          order_id:       order.id,
-          payment_method: foodPayMethod,
-        });
-        if (payRes.data.checkout_url) {
-          window.location.href = payRes.data.checkout_url;
-          return;
-        }
-      }
 
       setSuccess(`Order placed for ${modal.name}!`);
       closeModal();
@@ -103,6 +86,19 @@ export default function FoodAndDrinks() {
     }
   }
 
+  async function handleCancelOrder(orderId) {
+    if (!confirm("Are you sure you want to cancel this order?")) return;
+    
+    try {
+      await api.post(`/food/orders/${orderId}/cancel/`);
+      setSuccess("Order cancelled successfully.");
+      fetchMyOrders();
+      setTimeout(() => setSuccess(""), 4000);
+    } catch (err) {
+      setError(err.response?.data?.error || "Failed to cancel order.");
+    }
+  }
+
   const filtered = category === "all"
     ? menuItems
     : menuItems.filter(i => i.category === category);
@@ -111,15 +107,12 @@ export default function FoodAndDrinks() {
 
   return (
     <div className="fd-page">
-
       <Navbar />
 
-      <div className="fd-hero">
-        <div className="fd-hero__inner">
-          <p className="fd-hero__eyebrow">Room Service</p>
-          <h1 className="fd-hero__title">Food &amp; Drinks</h1>
-          <p className="fd-hero__subtitle">Order directly to your room, anytime</p>
-        </div>
+      <div className="fd-header">
+        <p className="fd-eyebrow">Room Service</p>
+        <h1 className="fd-page-title">Food &amp; Drinks</h1>
+        <p className="fd-page-subtitle">Order directly to your room, anytime</p>
       </div>
 
       <div className="fd-container">
@@ -239,10 +232,15 @@ export default function FoodAndDrinks() {
                       {PAYMENT_BADGE[order.payment_status].label}
                     </span>
                   )}
-                  <span className="fd-badge fd-badge--neutral">
-                    {order.payment_type === "pay_now" ? "Pay Now" : "Pay at Checkout"}
-                  </span>
                 </div>
+                {order.order_status !== "completed" && order.order_status !== "cancelled" && (
+                  <button
+                    className="fd-btn fd-btn--danger fd-btn--sm"
+                    onClick={() => handleCancelOrder(order.id)}
+                  >
+                    Cancel
+                  </button>
+                )}
               </div>
             ))}
           </div>
@@ -286,56 +284,6 @@ export default function FoodAndDrinks() {
                   >+</button>
                 </div>
               </div>
-
-              {/* Payment type */}
-              <div className="fd-field">
-                <label className="fd-label">Payment</label>
-                <div className="fd-radio-group">
-                  <label className="fd-radio-label">
-                    <input
-                      type="radio"
-                      value="pay_now"
-                      checked={paymentType === "pay_now"}
-                      onChange={() => setPaymentType("pay_now")}
-                    />
-                    Pay Now
-                  </label>
-                  <label className="fd-radio-label">
-                    <input
-                      type="radio"
-                      value="pay_checkout"
-                      checked={paymentType === "pay_checkout"}
-                      onChange={() => setPaymentType("pay_checkout")}
-                    />
-                    Pay at Checkout
-                  </label>
-                </div>
-              </div>
-
-              {/* Payment method — only when Pay Now */}
-              {paymentType === "pay_now" && (
-                <div className="fd-field">
-                  <label className="fd-label">Payment method</label>
-                  <div className="fd-radio-group fd-radio-group--wrap">
-                    {[
-                      { value: "card",          label: "Card"          },
-                      { value: "gcash",         label: "GCash"         },
-                      { value: "bank_transfer", label: "Bank Transfer" },
-                      { value: "paypal",        label: "PayPal"        },
-                    ].map(m => (
-                      <label key={m.value} className="fd-radio-label">
-                        <input
-                          type="radio"
-                          value={m.value}
-                          checked={foodPayMethod === m.value}
-                          onChange={() => setFoodPayMethod(m.value)}
-                        />
-                        {m.label}
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              )}
 
               {/* Notes */}
               <div className="fd-field">

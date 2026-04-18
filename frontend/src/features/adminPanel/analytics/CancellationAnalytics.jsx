@@ -35,7 +35,13 @@ export default function CancellationAnalytics({ period }) {
   const totalBooks  = summary.total_bookings     ?? rows.reduce((a,r) => a + (Number(r.total_bookings)||0), 0);
   const totalCancel = summary.cancelled_bookings ?? rows.reduce((a,r) => a + (Number(r.cancelled)||0), 0);
   const totalNoShow = summary.no_show_bookings   ?? rows.reduce((a,r) => a + (Number(r.no_show)||0), 0);
-  const cancelRate  = totalBooks > 0 ? ((totalCancel / totalBooks) * 100).toFixed(1) : null;
+  // Cancellation rate priority:
+  // 1) Backend-provided `summary.cancellation_rate` (preferred / authoritative)
+  // 2) Frontend computed fallback ONLY if backend summary doesn't include it.
+  const backendCancelRate = summary?.cancellation_rate;
+  const cancelRate = backendCancelRate != null
+    ? Number(backendCancelRate).toFixed(1)
+    : (totalBooks > 0 ? ((totalCancel / totalBooks) * 100).toFixed(1) : null);
 
   const trendData = rows.map(r => ({
     name:        String(r.date ?? r.period ?? '').slice(-5),

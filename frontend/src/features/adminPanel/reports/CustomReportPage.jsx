@@ -99,7 +99,7 @@ function SectionLabel({ children }) {
   return (
     <p style={{
       fontSize: 9, fontWeight: 700, letterSpacing: 2.5,
-      textTransform: 'uppercase', color: 'rgba(212,175,55,0.5)',
+      textTransform: 'uppercase', color: "#01000D",
       marginBottom: 8,
     }}>
       {children}
@@ -335,7 +335,7 @@ function BuildTab({ meta, onResult }) {
             <SectionLabel>
               Group By
               {validGroupBys.length < 5 && (
-                <span style={{ color: 'rgba(212,175,55,0.35)', fontWeight: 400, marginLeft: 6 }}>
+                <span style={{ color: "#101000D", fontWeight: 400, marginLeft: 6 }}>
                   · limited for {reportType}
                 </span>
               )}
@@ -663,10 +663,10 @@ function SchedulesTab() {
 
 // ─── History Tab ──────────────────────────────────────────────────────────────
 
-function HistoryTab({ onViewResult }) {
+function HistoryTab({ onViewResult, setActiveTab }) {
   const [executions,   setExecutions]   = useState([]);
   const [loading,      setLoading]      = useState(true);
-  const [downloading,  setDownloading]  = useState(null); // tracks which exec is downloading
+  const [downloading,  setDownloading]  = useState(null);
   const [dlError,      setDlError]      = useState(null);
 
   const load = useCallback(async () => {
@@ -684,37 +684,44 @@ function HistoryTab({ onViewResult }) {
     setDownloading(exec.id);
     setDlError(null);
 
-    // Use the format the execution was originally run with.
-    // If it was json (in-app), default to csv for the re-download.
+    // If execution failed, show error and don't attempt download
+    if (exec.status === 'failed') {
+      setDlError(`Cannot download: Report generation failed. ${exec.error_message || ''}`);
+      setDownloading(null);
+      return;
+    }
+
+    // Always regenerate fresh instead of downloading stored file (avoids 404 issues)
     const fmt = exec.export_format === 'json' ? 'csv' : exec.export_format;
 
     try {
-      const blob = await reportExecutionApi.download(exec.id, fmt);
+      const blob = await reportRunApi.download({
+        report_type: exec.report_type,
+        config: exec.config_snapshot || {},
+        export_format: fmt
+      });
 
-      // Validate we actually got a file and not an error response
       if (!blob || blob.size === 0) {
-        setDlError(`Execution #${exec.id}: empty file returned.`);
+        setDlError(`Generated file is empty`);
         return;
       }
 
       const ext = fmt === 'excel' ? 'xlsx' : fmt;
       triggerBlobDownload(blob, `${exec.report_type}_${exec.id}.${ext}`);
     } catch (err) {
-      // When responseType is 'blob', axios puts the error body inside a Blob.
-      // We need to read it as text to get the actual error message.
-      let msg = err.message || 'Download failed.';
+      let msg = err.message || 'Generation failed.';
       if (err.response?.data instanceof Blob) {
         try {
           const text = await err.response.data.text();
           const json = JSON.parse(text);
           msg = json.detail || json.error || text;
         } catch {
-          msg = `Server error ${err.response.status}`;
+          msg = `Server error ${err.response?.status}`;
         }
       } else if (err.response?.data?.detail) {
         msg = err.response.data.detail;
       }
-      setDlError(`Execution #${exec.id}: ${msg}`);
+      setDlError(`Failed: ${msg}`);
     } finally {
       setDownloading(null);
     }
@@ -725,6 +732,26 @@ function HistoryTab({ onViewResult }) {
       const detail = await reportExecutionApi.detail(exec.id);
       onViewResult(detail);
     } catch {}
+  };
+
+  const handleRetry = async (exec) => {
+    setDownloading(exec.id);
+    setDlError(null);
+
+    try {
+      const result = await reportRunApi.run({
+        report_type: exec.report_type,
+        config: exec.config_snapshot || {},
+        export_format: 'json'
+      });
+      onViewResult(result);
+      setActiveTab('build');
+    } catch (err) {
+      const msg = err.response?.data?.detail || err.message || 'Retry failed';
+      setDlError(`Retry failed: ${msg}`);
+    } finally {
+      setDownloading(null);
+    }
   };
 
   if (loading) return <div className="crp-loading">Loading history…</div>;
@@ -750,8 +777,7 @@ function HistoryTab({ onViewResult }) {
             <th>Status</th>
             <th>Triggered By</th>
             <th>Run At</th>
-            <th>Duration</th>
-            <th></th>
+            <th>Download</th>
           </tr>
         </thead>
         <tbody>
@@ -768,27 +794,45 @@ function HistoryTab({ onViewResult }) {
               <td style={{ textTransform: 'uppercase', fontSize: 10 }}>
                 {e.export_format}
               </td>
-              <td><StatusBadge status={e.status} /></td>
-              <td style={{ fontSize: 11, color: 'var(--white-dim)' }}>
+              <td>
+                <StatusBadge status={e.status} />
+                {e.status === 'failed' && e.error_message && (
+                  <span
+                    style={{
+                      fontSize: 9,
+                      color: 'var(--red)',
+                      display: 'block',
+                      maxWidth: 200,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      marginTop: 4
+                    }}
+                    title={e.error_message}
+                  >
+                    {e.error_message.substring(0, 50)}...
+                  </span>
+                )}
+              </td>
+              <td style={{ fontSize: 11, color: "#101000D" }}>
                 {e.triggered_by_email || '—'}
               </td>
-              <td style={{ fontSize: 11, color: 'var(--white-dim)' }}>
+              <td style={{ fontSize: 11, color: "#101000D" }}>
                 {timeAgo(e.started_at)}
-              </td>
-              <td style={{ fontSize: 11 }}>
-                {e.duration_seconds != null ? `${e.duration_seconds}s` : '—'}
               </td>
               <td>
                 <div style={{ display: 'flex', gap: 6 }}>
                   {e.status === 'success' && (
                     <>
-                      <button
-                        className="crp-icon-btn"
-                        title="View result"
-                        onClick={() => handleView(e)}
-                      >
-                        <ChevronRight size={13} />
-                      </button>
+                      {e.export_format === 'json' && e.result_data && (
+                        <button
+                          className="crp-icon-btn"
+                          title="View result"
+                          onClick={() => handleView(e)}
+                        >
+                          <ChevronRight size={13} />
+                        </button>
+                      )}
                       <button
                         className="crp-icon-btn"
                         title={`Download ${e.export_format === 'json' ? 'CSV' : e.export_format.toUpperCase()}`}
@@ -801,6 +845,19 @@ function HistoryTab({ onViewResult }) {
                         }
                       </button>
                     </>
+                  )}
+                  {e.status === 'failed' && e.config_snapshot && (
+                    <button
+                      className="crp-icon-btn"
+                      title="Retry this report"
+                      onClick={() => handleRetry(e)}
+                      disabled={downloading === e.id}
+                    >
+                      {downloading === e.id
+                        ? <RefreshCw size={13} className="crp-spin" />
+                        : <RefreshCw size={13} />
+                      }
+                    </button>
                   )}
                 </div>
               </td>
@@ -874,7 +931,12 @@ export default function CustomReportPage() {
             <TemplatesTab onRunResult={(r, title) => { handleResult(r, title); setActiveTab('build'); }} />
           )}
           {activeTab === 'schedules' && <SchedulesTab />}
-          {activeTab === 'history'   && <HistoryTab onViewResult={handleViewHistoryResult} />}
+          {activeTab === 'history'   && (
+            <HistoryTab
+              onViewResult={handleViewHistoryResult}
+              setActiveTab={setActiveTab}
+            />
+          )}
         </div>
 
         {/* Result panel — rendered below the builder when a JSON result is available */}

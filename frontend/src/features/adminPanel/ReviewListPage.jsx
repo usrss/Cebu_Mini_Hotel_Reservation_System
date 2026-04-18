@@ -19,7 +19,9 @@ function Stars({ rating }) {
 
 export default function ReviewListPage() {
   const navigate = useNavigate();
-  const { canManageReviews } = useAdminRole();
+  // FIX: destructure `loading` so we don't show "Access denied" while the
+  // role is still being resolved from localStorage / the API.
+  const { canManageReviews, loading: roleLoading } = useAdminRole();
 
   const [reviews, setReviews]       = useState([]);
   const [loading, setLoading]       = useState(true);
@@ -66,6 +68,9 @@ export default function ReviewListPage() {
     }
   };
 
+  // FIX: show nothing (or a neutral loader) while the role is resolving —
+  // never flash "Access denied" before we actually know the user's role.
+  if (roleLoading) return <div className={styles.state}>Loading…</div>;
   if (!canManageReviews) return <div className={styles.forbidden}>Access denied.</div>;
 
   return (

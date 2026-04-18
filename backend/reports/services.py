@@ -162,6 +162,7 @@ class EnhancedReportService:
 
         summary_full = {
             "total":         qs.count(),
+            "pending_payment": qs.filter(status=BookingStatus.PENDING_PAYMENT).count(),
             "confirmed":     qs.filter(status=BookingStatus.CONFIRMED).count(),
             "checked_in":    qs.filter(status=BookingStatus.CHECKED_IN).count(),
             "checked_out":   qs.filter(status=BookingStatus.CHECKED_OUT).count(),
@@ -343,6 +344,8 @@ class EnhancedReportService:
             "total_room_nights": total_room_nights,
             "occupied_nights":   occupied_nights,
             "occupancy_rate":    occupancy_rate,
+            # Period-average daily occupancy rate (percent).
+            "avg_occupancy_rate": occupancy_rate,
         }
 
         # By room type

@@ -16,6 +16,7 @@ urlpatterns = [
     # Review endpoints - NEW
     path("reviews/", views.RoomReviewCreateView.as_view(), name="review-create"),
     path("reviews/pending/", views.GuestPendingReviewsView.as_view(), name="review-pending"),
+    path("reviews/<int:review_id>/helpful/", views.ReviewHelpfulnessVoteView.as_view(), name="review-helpfulness"),
 
     # Admin Endpoints
     path("admin/", views.AdminRoomListCreateView.as_view(), name="admin-room-list-create"),

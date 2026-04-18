@@ -5,7 +5,7 @@ import {
 } from 'recharts';
 import { analyticsApi } from '../../../services/adminApi';
 
-const DONUT_COLORS = ['#6EE7B7','#C9A84C','#93C5FD','#FCD34D','#C4B5FD'];
+const DONUT_COLORS = ['#6EE7B7','#3B5BDB','#93C5FD','#FCD34D','#C4B5FD'];
 const PERIODS = ['daily','weekly','monthly'];
 
 function StatBox({ label, value, color }) {
@@ -46,12 +46,15 @@ export default function BookingAnalytics({ dashboard, period }) {
 
   const b = dashboard?.bookings;
 
-  const donutData = b ? [
-    { name: 'Confirmed',       value: b.confirmed        ?? 0 },
-    { name: 'Checked In',      value: b.checked_in       ?? 0 },
-    { name: 'Checked Out',     value: b.checked_out_today ?? 0 },
-    { name: 'Pending Payment', value: b.pending_payment  ?? 0 },
-    { name: 'Created Today',   value: b.created_today    ?? 0 },
+  const summary = report?.summary ?? {};
+
+  const donutData = summary ? [
+    { name: 'Confirmed',       value: summary.confirmed        ?? 0 },
+    { name: 'Checked In',      value: summary.checked_in       ?? 0 },
+    { name: 'Pending Payment', value: summary.pending_payment  ?? 0 },
+    { name: 'Cancelled',       value: summary.cancelled        ?? 0 },
+    { name: 'No Show',         value: summary.no_show          ?? 0 },
+    { name: 'Checked Out',     value: summary.checked_out      ?? 0 },
   ].filter(d => d.value > 0) : [];
 
   const trendData = (report?.rows ?? []).map(r => ({
@@ -78,7 +81,13 @@ export default function BookingAnalytics({ dashboard, period }) {
         <StatBox label="Checked In"      value={b?.checked_in}      color="var(--c-booking)" />
         <StatBox label="Confirmed"       value={b?.confirmed}       color="#6EE7B7" />
         <StatBox label="Pending Payment" value={b?.pending_payment} color="#FCD34D" />
-        <StatBox label="Created Today"   value={b?.created_today}   color="#93C5FD" />
+        <StatBox label="Checked Out"     value={summary.checked_out ?? b?.checked_out_today} color="#60A5FA" />
+      </div>
+
+      {/* Today's Activity (NOT part of status distribution donut) */}
+      <div className="an-grid-2">
+        <StatBox label="Today's Activity — Created"     value={b?.created_today}     color="#93C5FD" />
+        <StatBox label="Today's Activity — Checked Out" value={b?.checked_out_today} color="#6EE7B7" />
       </div>
 
       {/* Donut + Trend side by side */}

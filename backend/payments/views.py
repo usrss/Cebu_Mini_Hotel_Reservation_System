@@ -102,7 +102,14 @@ class InitiatePaymentView(APIView):
                 payment.checkout_session_id = checkout_session_id
                 payment.save(update_fields=["checkout_url", "checkout_session_id", "updated_at"])
 
-            if checkout_url and provider in (PaymentProvider.PAYMONGO, PaymentProvider.PAYPAL):
+            # Only send "Complete Your Payment" email for DEPOSIT payments.
+            # Full-payment guests are already paying the full amount in the
+            # checkout session itself — no separate reminder needed.
+            if (
+                checkout_url
+                and provider in (PaymentProvider.PAYMONGO, PaymentProvider.PAYPAL)
+                and payment_type != PaymentType.FULL_PAYMENT
+            ):
                 try:
                     from payments.signals import send_payment_link_email
                     send_payment_link_email(

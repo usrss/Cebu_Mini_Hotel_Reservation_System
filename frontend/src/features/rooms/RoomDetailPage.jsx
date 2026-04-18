@@ -14,6 +14,7 @@ import { useRooms, useAvailability } from '../hooks/useRooms';
 import Navbar from '../../components/UIComponents/Navbar';
 import Footer from '../../components/UIComponents/Footer';
 import BookingForm from '../bookings/BookingForm';
+import ReviewHelpfulness from './ReviewHelpfulness';
 import './RoomListPage.css';
 
 const Room360Viewer = lazy(() => import('./Room360Viewer'));
@@ -104,6 +105,33 @@ function RoomDetailModal({ room: listRoom, onClose, prefillCheckIn, prefillCheck
   const [activeImg, setActiveImg] = useState(0);
   const [show360,   setShow360]   = useState(false);
   const [showAllReviews, setShowAllReviews] = useState(false);
+
+  /** Vote on review helpfulness (thumbs up / down / remove) */
+  const handleHelpfulnessVote = async (reviewId, isHelpful) => {
+    try {
+      if (isHelpful === null) {
+        // Remove vote
+        const res = await fetch(`${API_BASE}/rooms/reviews/${reviewId}/helpful/`, {
+          method: 'DELETE',
+          headers: authHeaders(),
+        });
+        if (!res.ok) throw new Error('Failed to remove vote');
+        return await res.json();
+      } else {
+        // Cast or change vote
+        const res = await fetch(`${API_BASE}/rooms/reviews/${reviewId}/helpful/`, {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify({ is_helpful: isHelpful }),
+        });
+        if (!res.ok) throw new Error('Failed to vote');
+        return await res.json();
+      }
+    } catch (err) {
+      console.error('Helpfulness vote error:', err);
+      return null;
+    }
+  };
 
   useEffect(() => {
     setFetching(true);
@@ -309,6 +337,13 @@ function RoomDetailModal({ room: listRoom, onClose, prefillCheckIn, prefillCheck
                               <div className="rdm-review-stars"><StarIcons rating={r.rating} size={12} /></div>
                               {r.review_text && <p className="rdm-review-text">{r.review_text}</p>}
                               {r.is_verified && <span className="rdm-verified-badge">Verified Stay</span>}
+                              <ReviewHelpfulness
+                                reviewId={r.id}
+                                helpfulCount={r.helpful_count || 0}
+                                notHelpfulCount={r.not_helpful_count || 0}
+                                userVote={r.user_vote || null}
+                                onVote={handleHelpfulnessVote}
+                              />
                             </div>
                           </div>
                         ))}

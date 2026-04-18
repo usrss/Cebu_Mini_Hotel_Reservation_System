@@ -118,11 +118,67 @@ export default function StaffManagement() {
   const inactive = staff.filter(s => !s.is_active).length;
 
   const handleDelete = async (s) => {
-    if (!window.confirm(`Delete ${s.user?.full_name ?? s.user?.email}? This cannot be undone.`)) return;
-    setDeleteLoading(true);
-    try { await staffApi.delete(s.id); await loadStaff(); }
-    catch { alert('Failed to delete staff member.'); }
-    finally { setDeleteLoading(false); }
+    try {
+      const deps = await staffApi.checkDependencies(s.id);
+
+      if (deps.active_shifts > 0) {
+        alert('Cannot hard-delete staff: there is an active shift in progress.');
+        return;
+      }
+
+      const hasOtherDeps = deps.open_tasks > 0 || deps.pending_assignments > 0;
+
+      if (hasOtherDeps) {
+        const warning =
+          `This staff member has active dependencies and cannot be hard-deleted without additional confirmation.\n\n` +
+          `Open housekeeping tasks: ${deps.open_tasks}\n` +
+          `Pending maintenance assignments: ${deps.pending_assignments}\n\n` +
+          `Recommended: Deactivate instead.\n` +
+          `OK = Deactivate (recommended)\n` +
+          `Cancel = Hard delete (second explicit confirmation required)`;
+
+        const deactivateRecommended = window.confirm(warning);
+        if (deactivateRecommended) {
+          setDeleteLoading(true);
+          try {
+            await staffApi.deactivate(s.id, { reason: 'Deactivated due to open dependencies.' });
+            await loadStaff();
+          } finally {
+            setDeleteLoading(false);
+          }
+          return;
+        }
+
+        const hardConfirm = window.confirm(
+          `Hard delete will permanently remove this staff member and may impact:\n` +
+          `- ${deps.open_tasks} open housekeeping tasks\n` +
+          `- ${deps.pending_assignments} pending maintenance assignments\n\n` +
+          `Are you sure?`
+        );
+        if (!hardConfirm) return;
+
+        setDeleteLoading(true);
+        try {
+          await staffApi.delete(s.id, { force_hard_delete: true });
+          await loadStaff();
+        } finally {
+          setDeleteLoading(false);
+        }
+        return;
+      }
+
+      if (!window.confirm(`Delete ${s.user?.full_name ?? s.user?.email}? This cannot be undone.`)) return;
+      setDeleteLoading(true);
+      try {
+        await staffApi.delete(s.id);
+        await loadStaff();
+      } finally {
+        setDeleteLoading(false);
+      }
+    } catch {
+      alert('Failed to delete staff member.');
+      setDeleteLoading(false);
+    }
   };
 
   const handleReactivate = async (s) => {

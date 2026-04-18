@@ -53,6 +53,7 @@ class OrderStatus(models.TextChoices):
     AWAITING_PAYMENT = "awaiting_payment", "Awaiting Payment"
     # ─────────────────────────────────────────────────────────────────────────
     PENDING   = "pending",   "Pending"       # kitchen can see & prepare
+    PREPARING = "preparing", "Preparing"      # kitchen staff is actively preparing
     COMPLETED = "completed", "Completed"
     CANCELLED = "cancelled", "Cancelled"
 

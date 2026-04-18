@@ -10,9 +10,9 @@ import { staffApi } from '../../staff/services/staffApi';
 import ShiftFormModal from './ShiftFormModal';
 
 const ROLE_COLORS = {
-  admin:'#C9A84C', manager:'#60A5FA', receptionist:'#C4B5FD',
-  front_desk:'#6EE7B7', housekeeping:'#FCD34D',
-  maintenance:'#FB923C', security:'#F87171',
+  admin:'#01000D', manager:'#3B5BDB', receptionist:'#7C3AED',
+  front_desk:'#0D9488', housekeeping:'#D97706',
+  maintenance:'#B45309', security:'#DC2626',
 };
 const ROLE_LABELS = {
   admin:'Admin', manager:'Manager', receptionist:'Receptionist',
@@ -55,9 +55,25 @@ export default function ShiftCalendar({ staff }) {
   useEffect(() => { loadShifts(); }, [loadShifts]);
 
   const handleDelete = async (s) => {
+    if (s.status === 'in_shift') {
+      alert('Cannot delete a shift that is currently in progress.');
+      return;
+    }
+    if (s.status === 'completed') {
+      alert('Completed shifts cannot be deleted as they are part of attendance records.');
+      return;
+    }
+    if (!['scheduled', 'cancelled'].includes(s.status)) {
+      alert('Only scheduled or cancelled shifts can be deleted.');
+      return;
+    }
     if (!window.confirm(`Delete "${s.label || 'this shift'}"?`)) return;
-    try { await staffApi.deleteShift(s.id); await loadShifts(); }
-    catch { alert('Failed to delete.'); }
+    try {
+      await staffApi.deleteShift(s.id);
+      await loadShifts();
+    } catch {
+      alert('Failed to delete.');
+    }
   };
 
   const filtered = roleFilter
@@ -72,7 +88,7 @@ export default function ShiftCalendar({ staff }) {
   const shiftColor = (s) => {
     const m    = staff.find(m => m.id === (s.staff ?? s.staff_id));
     const role = m?.effective_role ?? m?.role ?? 'admin';
-    return ROLE_COLORS[role] ?? '#C9A84C';
+    return ROLE_COLORS[role] ?? '#01000D';
   };
 
   const shiftTopPct = (s) => {
@@ -135,7 +151,7 @@ export default function ShiftCalendar({ staff }) {
               onClick={() => setCursor(new Date())}>Today</button>
           </div>
           <div style={{ display:'flex', alignItems:'center', gap:10, flexWrap:'wrap' }}>
-            <select style={{ background:'var(--navy-mid)', border:'1px solid var(--gold-border)', color:'var(--white-dim)', fontFamily:'Raleway,sans-serif', fontSize:11, padding:'6px 10px', outline:'none' }}
+            <select style={{ background:'#F2F3F7', border:'none', borderRadius:8, color:'#01000D', fontFamily:"'DM Sans',sans-serif", fontSize:11, padding:'6px 10px', outline:'none', boxShadow:'0 1px 2px rgba(1,0,13,0.06)' }}
               value={roleFilter} onChange={e => setRoleFilter(e.target.value)}>
               <option value="">All Roles</option>
               {Object.entries(ROLE_LABELS).map(([v,l]) => <option key={v} value={v}>{l}</option>)}
@@ -156,9 +172,9 @@ export default function ShiftCalendar({ staff }) {
         </div>
 
         {/* Role legend */}
-        <div style={{ display:'flex', gap:12, padding:'8px 16px', borderBottom:'1px solid var(--gold-border)', flexWrap:'wrap' }}>
+        <div style={{ display:'flex', gap:12, padding:'8px 16px', borderBottom:'1px solid #E4E6ED', flexWrap:'wrap' }}>
           {Object.entries(ROLE_COLORS).map(([role, color]) => (
-            <div key={role} style={{ display:'flex', alignItems:'center', gap:5, fontSize:10, color:'var(--white-dim)' }}>
+            <div key={role} style={{ display:'flex', alignItems:'center', gap:5, fontSize:10, color:'#52515E' }}>
               <span style={{ width:10, height:10, borderRadius:2, background:color, flexShrink:0 }} />
               {ROLE_LABELS[role]}
             </div>
@@ -173,7 +189,7 @@ export default function ShiftCalendar({ staff }) {
           <div style={{ overflowX:'auto' }}>
             <div style={{ display:'grid', gridTemplateColumns:'70px repeat(7, 1fr)', minWidth:600 }}>
               {/* Header row */}
-              <div style={{ borderRight:'1px solid var(--gold-border)', borderBottom:'1px solid var(--gold-border)' }} />
+              <div style={{ borderRight:'1px solid #F2F3F7', borderBottom:'1px solid #F2F3F7' }} />
               {weekDays.map((d, i) => (
                 <div key={i} className="sm-week-day-header">
                   <div className="sm-week-day-name">{DAYS[d.getDay()]}</div>
@@ -192,7 +208,7 @@ export default function ShiftCalendar({ staff }) {
               {weekDays.map((day, di) => {
                 const dayShifts = shiftsForDay(day);
                 return (
-                  <div key={di} style={{ position:'relative', borderRight:'1px solid rgba(201,168,76,0.06)' }}>
+                  <div key={di} style={{ position:'relative', borderRight:'1px solid rgba(1,0,13,0.04)' }}>
                     {HOURS.map((_, hi) => (
                       <div key={hi} className="sm-week-cell"
                         onClick={() => { const dt=new Date(day); dt.setHours(hi,0,0,0); openCreate(dt); }} />
@@ -222,7 +238,7 @@ export default function ShiftCalendar({ staff }) {
 
           /* ── MONTH ── */
           <div>
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', borderTop:'1px solid var(--gold-border)' }}>
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', borderTop:'1px solid #E4E6ED' }}>
               {DAYS.map(d => <div key={d} className="sm-month-day-header">{d}</div>)}
             </div>
             <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)' }}>

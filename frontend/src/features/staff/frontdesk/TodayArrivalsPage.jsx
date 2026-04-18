@@ -219,11 +219,17 @@ export default function TodayArrivalsPage() {
   const [overdue,    setOverdue]    = useState([]);
   const [loading,    setLoading]    = useState(true);
   const [error,      setError]      = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
+      // Calculate yesterday for overdue filter
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayISO = yesterday.toISOString().split('T')[0];
+
       const [confirmedData, checkedInTodayData, depData, overdueData] = await Promise.allSettled([
         frontDeskBookingsApi.todayArrivals(today),
         api.get('/bookings/admin/', {
@@ -231,7 +237,7 @@ export default function TodayArrivalsPage() {
         }).then(r => Array.isArray(r.data) ? r.data : (r.data.results ?? [])),
         frontDeskBookingsApi.todayDepartures(today),
         api.get('/bookings/admin/', {
-          params: { check_out_before: today, status: 'checked_in' },
+          params: { check_out_to: yesterdayISO, status: 'checked_in' },
         }).then(r => Array.isArray(r.data) ? r.data : (r.data.results ?? [])),
       ]);
 
@@ -261,6 +267,22 @@ export default function TodayArrivalsPage() {
       setLoading(false);
     }
   }, [today]);
+
+  // Filter function based on search query
+  const filterBookings = (bookings) => {
+    if (!searchQuery.trim()) return bookings;
+    
+    const query = searchQuery.toLowerCase().trim();
+    return bookings.filter(booking => 
+      booking.full_name.toLowerCase().includes(query) ||
+      (booking.reference_number && booking.reference_number.toLowerCase().includes(query))
+    );
+  };
+
+  // Filter arrivals and departures
+  const filteredArrivals = filterBookings(arrivals);
+  const filteredDepartures = filterBookings(departures);
+  const filteredOverdue = filterBookings(overdue);
 
   // Real-time auto-refresh every 90s — no manual button needed
   useEffect(() => {
@@ -335,6 +357,20 @@ export default function TodayArrivalsPage() {
           </div>
         )}
 
+        {/* Search Bar */}
+        {!loading && (
+          <div className="fd-filter-bar">
+            <input
+              type="text"
+              className="fd-input"
+              placeholder="Search by guest name or reference number..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              style={{ flex: 1, minWidth: 300 }}
+            />
+          </div>
+        )}
+
         {/* Tabs */}
         <div className="fd-tabs">
           <button
@@ -342,14 +378,14 @@ export default function TodayArrivalsPage() {
             onClick={() => setActiveTab('arrivals')}
           >
             Expected Check-Ins
-            <span className="fd-tab-count">{arrivals.length}</span>
+            <span className="fd-tab-count">{filteredArrivals.length}</span>
           </button>
           <button
             className={`fd-tab${activeTab === 'departures' ? ' active' : ''}`}
             onClick={() => setActiveTab('departures')}
           >
             Expected Check-Outs
-            <span className="fd-tab-count">{departures.length}</span>
+            <span className="fd-tab-count">{filteredDepartures.length}</span>
           </button>
           {overdue.length > 0 && (
             <button
@@ -358,7 +394,7 @@ export default function TodayArrivalsPage() {
               style={activeTab === 'overdue' ? { color: 'var(--fd-red)', background: 'var(--fd-red-bg)' } : {}}
             >
               Overdue
-              <span className="fd-tab-count">{overdue.length}</span>
+              <span className="fd-tab-count">{filteredOverdue.length}</span>
             </button>
           )}
         </div>
@@ -377,8 +413,10 @@ export default function TodayArrivalsPage() {
                 {activeTab === 'arrivals' && (
                   arrivals.length === 0 ? (
                     <tr><td colSpan={8} className="fd-table-empty">No arrivals today.</td></tr>
+                  ) : filteredArrivals.length === 0 ? (
+                    <tr><td colSpan={8} className="fd-table-empty">No results matching your search.</td></tr>
                   ) : (
-                    [...arrivals]
+                    [...filteredArrivals]
                       .sort((a, b) => {
                         if (a.status === 'confirmed' && b.status !== 'confirmed') return -1;
                         if (a.status !== 'confirmed' && b.status === 'confirmed') return 1;
@@ -398,8 +436,10 @@ export default function TodayArrivalsPage() {
                 {activeTab === 'departures' && (
                   departures.length === 0 ? (
                     <tr><td colSpan={8} className="fd-table-empty">No departures today.</td></tr>
+                  ) : filteredDepartures.length === 0 ? (
+                    <tr><td colSpan={8} className="fd-table-empty">No results matching your search.</td></tr>
                   ) : (
-                    [...departures]
+                    [...filteredDepartures]
                       .sort((a, b) => {
                         if (a.status === 'checked_in' && b.status !== 'checked_in') return -1;
                         if (a.status !== 'checked_in' && b.status === 'checked_in') return 1;
@@ -418,8 +458,10 @@ export default function TodayArrivalsPage() {
                 {activeTab === 'overdue' && (
                   overdue.length === 0 ? (
                     <tr><td colSpan={8} className="fd-table-empty">No overdue checkouts.</td></tr>
+                  ) : filteredOverdue.length === 0 ? (
+                    <tr><td colSpan={8} className="fd-table-empty">No results matching your search.</td></tr>
                   ) : (
-                    overdue.map(booking => (
+                    filteredOverdue.map(booking => (
                       <OverdueRow
                         key={booking.id}
                         booking={booking}

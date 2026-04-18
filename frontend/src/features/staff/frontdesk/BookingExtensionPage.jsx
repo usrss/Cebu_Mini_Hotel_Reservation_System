@@ -18,8 +18,8 @@
  * Route: /staff/front-desk/extend
  */
 
-import { useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useCallback, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Search, X, CalendarRange, CreditCard, Banknote,
   CheckCircle2, AlertCircle, Info, Printer, Plus,
@@ -275,6 +275,7 @@ function PaymentModal({ booking, previewData, newCheckOut, onConfirm, onClose, b
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function BookingExtensionPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const today    = todayISO();
 
   const [step, setStep] = useState(STEP.SEARCH);
@@ -300,6 +301,24 @@ export default function BookingExtensionPage() {
   // Success
   const [confirmed,       setConfirmed]       = useState(null);
   const [confirmedMethod, setConfirmedMethod] = useState(null);
+
+  // Auto-load booking from state if navigated from CurrentCheckInsPage
+  useEffect(() => {
+    if (location.state?.bookingId) {
+      const loadBooking = async () => {
+        try {
+          const res = await api.get(`/bookings/admin/${location.state.bookingId}/`);
+          if (res.data) {
+            setSelectedBooking(res.data);
+            setStep(STEP.EXTEND);
+          }
+        } catch (err) {
+          setSearchError('Failed to load booking details.');
+        }
+      };
+      loadBooking();
+    }
+  }, [location.state?.bookingId]);
 
   // ── Search ────────────────────────────────────────────────────────────────
   const handleSearch = useCallback(async () => {

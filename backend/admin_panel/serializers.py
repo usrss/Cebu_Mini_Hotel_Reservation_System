@@ -24,7 +24,11 @@ from rest_framework import serializers
 from bookings.models import Booking, BookingStatus
 from payments.models import Payment, PaymentStatus, Refund
 from rooms.models import RoomReview
-
+import logging
+logger = logging.getLogger(__name__)
+from payments.services import PayMongoService, PayPalService, send_refund_confirmation_email
+from decimal import Decimal
+from django.conf import settings
 User = get_user_model()
 
 
@@ -284,7 +288,31 @@ class RefundInitiateSerializer(serializers.Serializer):
     )
     reason = serializers.CharField(
         max_length=500, required=False, allow_blank=True, default="",
+        help_text="Reason code for PayMongo: duplicate, fraudulent, requested_by_customer, other",
     )
+    notes = serializers.CharField(
+        max_length=500, required=False, allow_blank=True, default="",
+        help_text="Additional notes about the refund (stored internally)",
+    )
+
+    def validate_reason(self, value):
+        """Ensure reason is one of PayMongo's accepted values."""
+        if not value:
+            return "requested_by_customer"  # default
+
+        valid_reasons = ["duplicate", "fraudulent", "requested_by_customer", "other"]
+        if value not in valid_reasons:
+            # Map common text to valid reasons
+            lower = value.lower()
+            if "duplicate" in lower or "double" in lower:
+                return "duplicate"
+            elif "fraud" in lower or "scam" in lower:
+                return "fraudulent"
+            elif "customer" in lower or "guest" in lower or "request" in lower:
+                return "requested_by_customer"
+            else:
+                return "other"
+        return value
 
     def validate(self, attrs):
         payment = self.instance
@@ -295,9 +323,9 @@ class RefundInitiateSerializer(serializers.Serializer):
             )
 
         already_refunded = (
-            payment.refunds
-            .filter(status=Refund.RefundStatus.COMPLETED)
-            .aggregate(total=Sum("amount"))["total"] or 0
+                payment.refunds
+                .filter(status=Refund.RefundStatus.COMPLETED)
+                .aggregate(total=Sum("amount"))["total"] or 0
         )
         remaining = payment.amount - already_refunded
 
@@ -311,63 +339,83 @@ class RefundInitiateSerializer(serializers.Serializer):
                 f"amount ({remaining})."
             )
 
-        attrs["refund_amount"]    = refund_amount
+        attrs["refund_amount"] = refund_amount
         attrs["already_refunded"] = already_refunded
         return attrs
 
     def update(self, instance, validated_data):
-        """
-        1. Create Refund(status=PENDING).
-        2. Call payment provider (PayMongo / PayPal / skip for cash/manual).
-        3. Mark Refund COMPLETED or FAILED based on provider response.
-        4. If fully refunded, flip Payment.status → REFUNDED.
-        """
-        from payments.services import PayMongoService, PayPalService
-
         refund_amount = validated_data["refund_amount"]
-        reason        = validated_data.get("reason", "")
-        actor         = self.context["request"].user
+        reason = validated_data.get("reason", "requested_by_customer")
+        notes = validated_data.get("notes", "")
+        cash_refund = validated_data.get("cash_refund", False)
+        actor = self.context["request"].user
 
         # Step 1 — persist refund as PENDING
         refund = Refund.objects.create(
-            payment      = instance,
-            amount       = refund_amount,
-            reason       = reason,
-            status       = Refund.RefundStatus.PENDING,
-            initiated_by = actor,
+            payment=instance,
+            amount=refund_amount,
+            reason=notes or reason,
+            status=Refund.RefundStatus.PENDING,
+            initiated_by=actor,
         )
 
-        # Step 2 — call provider
+        # Step 2 — call provider OR handle manual
         try:
-            provider = instance.provider  # "paymongo" | "paypal" | "manual"
+            provider = instance.provider
+
             if provider == "paymongo":
                 result = PayMongoService.create_refund(instance, refund_amount, reason)
                 refund.provider_refund_id = result.get("refund_id", "")
             elif provider == "paypal":
                 result = PayPalService.create_refund(instance, refund_amount, reason)
                 refund.provider_refund_id = result.get("refund_id", "")
-            # manual / cash → no provider call needed
+            else:
+                # Manual/cash refund - just mark as completed
+                # Could add additional logic here (e.g., require manager approval)
+                pass
 
             refund.status = Refund.RefundStatus.COMPLETED
             refund.save(update_fields=["status", "provider_refund_id", "updated_at"])
 
-        except Exception:
+            # Step 2b — Send refund confirmation email to guest (skip for walk-ins without email?)
+            if instance.booking.email or (instance.booking.user and instance.booking.user.email):
+                try:
+                    send_refund_confirmation_email(
+                        payment=instance,
+                        refund_amount=refund_amount,
+                        reason=reason,
+                        notes=notes
+                    )
+                except Exception as email_err:
+                    logger.warning(
+                        "Refund processed but email failed for payment %s: %s",
+                        instance.pk, email_err
+                    )
+
+        except Exception as e:
             refund.status = Refund.RefundStatus.FAILED
             refund.save(update_fields=["status", "updated_at"])
             raise serializers.ValidationError(
-                "Refund submitted but the provider returned an error. "
+                f"Refund submitted but the provider returned an error: {str(e)}. "
                 "Status set to FAILED — check the provider dashboard."
             )
 
         # Step 3 — flip Payment.status if fully refunded
         total_refunded = (
-            instance.refunds
-            .filter(status=Refund.RefundStatus.COMPLETED)
-            .aggregate(total=Sum("amount"))["total"] or 0
+                instance.refunds
+                .filter(status=Refund.RefundStatus.COMPLETED)
+                .aggregate(total=Sum("amount"))["total"] or 0
         )
         if total_refunded >= instance.amount:
             instance.status = PaymentStatus.REFUNDED
             instance.save(update_fields=["status", "updated_at"])
+
+        # Step 4 — Log manual refund for audit
+        if provider not in ["paymongo", "paypal"]:
+            logger.info(
+                "Manual refund issued by %s for payment %s: amount=%s, reason=%s",
+                actor.email, instance.pk, refund_amount, reason
+            )
 
         return instance
 

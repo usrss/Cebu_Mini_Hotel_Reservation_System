@@ -65,13 +65,12 @@ const NAV_ITEMS = [
     to: '/staff/front-desk/walk-in',
   },
 
-
-{
-  key: 'extend',
-  label: 'Extend Stay',
-  icon: <CalendarRange size={18} />,
-  to: '/staff/front-desk/extend',
-},
+  {
+    key: 'current-checkins',
+    label: 'Current Check-Ins',
+    icon: <CalendarRange size={18} />,
+    to: '/staff/front-desk/current-check-ins',
+  },
   {
     key: 'payments',
     label: 'Payments',

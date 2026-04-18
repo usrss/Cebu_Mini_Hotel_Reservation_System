@@ -17,6 +17,18 @@ export const kitchenApi = {
     return res.data.results ?? res.data;
   },
 
+  /** Preparing orders */
+  getPreparing: async () => {
+    const res = await api.get('/food/orders/kitchen/?status=preparing');
+    return res.data.results ?? res.data;
+  },
+
+  /** Mark a single order as preparing */
+  markPreparing: async (orderId) => {
+    const res = await api.patch(`/food/orders/${orderId}/prepare/`);
+    return res.data;
+  },
+
   /** Mark a single order as completed */
   markCompleted: async (orderId) => {
     const res = await api.patch(`/food/orders/${orderId}/complete/`);

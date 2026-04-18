@@ -29,12 +29,14 @@ urlpatterns = [
     #
     # /orders/               POST — pay_checkout orders only (pay_now → initiate-payment)
     # /orders/<pk>/cancel/   PATCH — guest cancels unpaid pay_now order
-    # /orders/<pk>/complete/ PATCH — kitchen marks order completed
+    # /orders/<pk>/prepare/  PATCH — kitchen marks order preparing (PENDING → PREPARING)
+    # /orders/<pk>/complete/ PATCH — kitchen marks order completed (PENDING/PREPARING → COMPLETED)
     # /orders/<pk>/mark-paid/ PATCH — front desk marks order paid at desk
     # /orders/<pk>/verify-payment/ GET — frontend polls after PayMongo redirect
     #
     path('orders/',                          views.FoodOrderCreateView.as_view(),          name='food-order-create'),
     path('orders/<int:pk>/cancel/',          views.FoodOrderCancelView.as_view(),          name='food-order-cancel'),
+    path('orders/<int:pk>/prepare/',         views.FoodOrderPrepareView.as_view(),         name='food-order-prepare'),
     path('orders/<int:pk>/complete/',        views.FoodOrderCompleteView.as_view(),        name='food-order-complete'),
     path('orders/<int:pk>/mark-paid/',       views.FoodOrderMarkPaidView.as_view(),        name='food-order-mark-paid'),
     path('orders/<int:pk>/verify-payment/',  views.FoodOrderVerifyPaymentView.as_view(),   name='food-verify-payment'),

@@ -6,14 +6,12 @@ import RoomImageModal from './RoomImageModal';
 import AmenitiesInclusionsModal from './AmenitiesInclusionsModal';
 import './AdminRoomsPage.css';
 
-// ── "reserved" removed from STATUS_OPTIONS ────────────────────────────────────
 const STATUS_OPTIONS = ['available', 'occupied', 'maintenance', 'cleaning'];
 
 export default function AdminRoomsPage() {
   const {
     rooms, loading, error, submitting,
     createRoom, updateRoom, updateStatus, deleteRoom, uploadImages,
-    // If your hook exposes these, wire them up; otherwise provide stubs:
     amenities       = [],
     inclusions      = [],
     createAmenity,
@@ -24,14 +22,14 @@ export default function AdminRoomsPage() {
     deleteInclusion,
   } = useAdminRooms();
 
-  const [search,       setSearch]       = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [modal,        setModal]        = useState({ open: false, room: null });
-  const [imageModal,   setImageModal]   = useState({ open: false, room: null });
-  const [amenitiesModal, setAmenitiesModal] = useState(false);
+  const [search,          setSearch]          = useState('');
+  const [statusFilter,    setStatusFilter]    = useState('all');
+  const [modal,           setModal]           = useState({ open: false, room: null });
+  const [imageModal,      setImageModal]      = useState({ open: false, room: null });
+  const [amenitiesModal,  setAmenitiesModal]  = useState(false);
   const [inclusionsModal, setInclusionsModal] = useState(false);
-  const [deletingId,   setDeletingId]   = useState(null);
-  const [toast,        setToast]        = useState(null);
+  const [deletingId,      setDeletingId]      = useState(null);
+  const [toast,           setToast]           = useState(null);
 
   const showToast = (msg, type = 'success') => {
     setToast({ msg, type });
@@ -80,7 +78,6 @@ export default function AdminRoomsPage() {
     return result;
   };
 
-  /* ── Amenity CRUD handlers ──────────────────────────────── */
   const handleSaveAmenity = async (item) => {
     const fn = item.id ? updateAmenity : createAmenity;
     const result = await fn(item);
@@ -94,7 +91,6 @@ export default function AdminRoomsPage() {
     else showToast('Failed to delete amenity', 'error');
   };
 
-  /* ── Inclusion CRUD handlers ────────────────────────────── */
   const handleSaveInclusion = async (item) => {
     const fn = item.id ? updateInclusion : createInclusion;
     const result = await fn(item);
@@ -111,38 +107,36 @@ export default function AdminRoomsPage() {
   return (
     <div className="ar-page">
 
-      {/* Toast */}
       {toast && (
-        <div className={`ar-toast ar-toast--${toast.type}`}>
-          {toast.msg}
-        </div>
+        <div className={`ar-toast ar-toast--${toast.type}`}>{toast.msg}</div>
       )}
-
-      {/* Header */}
-      <header className="ar-header">
-        <div className="ar-header-left">
-          <h1>Room Management</h1>
-          <p>{rooms.length} total rooms · {rooms.filter(r => r.status === 'available').length} available</p>
-        </div>
-        <div className="ar-header-actions">
-          {/* Amenities manager */}
-          <button className="ar-mgr-btn" onClick={() => setAmenitiesModal(true)}>
-            <Star size={14} /> Amenities
-          </button>
-          {/* Inclusions manager */}
-          <button className="ar-mgr-btn" onClick={() => setInclusionsModal(true)}>
-            <Package size={14} /> Inclusions
-          </button>
-          {/* Add room */}
-          <button className="ar-add-btn" onClick={() => setModal({ open: true, room: null })}>
-            <Plus size={16} /> Add Room
-          </button>
-        </div>
-      </header>
 
       <div className="ar-body">
 
-        {/* Stats — no "reserved" card */}
+        {/* Page header */}
+        <div className="ar-page-header">
+          <div>
+            <span className="ar-eyebrow">Admin Panel</span>
+            <h1 className="ar-title">Room Management</h1>
+            <p className="ar-subtitle">
+              {rooms.length} total rooms · {rooms.filter(r => r.status === 'available').length} available
+            </p>
+            <div className="ar-divider" />
+          </div>
+          <div className="ar-header-actions">
+            <button className="ar-mgr-btn" onClick={() => setAmenitiesModal(true)}>
+              <Star size={14} /> Amenities
+            </button>
+            <button className="ar-mgr-btn" onClick={() => setInclusionsModal(true)}>
+              <Package size={14} /> Inclusions
+            </button>
+            <button className="ar-add-btn" onClick={() => setModal({ open: true, room: null })}>
+              <Plus size={15} /> Add Room
+            </button>
+          </div>
+        </div>
+
+        {/* Stats */}
         <div className="ar-stats">
           {['all', ...STATUS_OPTIONS].map((s) => {
             const count = s === 'all' ? rooms.length : rooms.filter(r => r.status === s).length;
@@ -163,7 +157,7 @@ export default function AdminRoomsPage() {
         {/* Toolbar */}
         <div className="ar-toolbar">
           <div className="ar-search-wrap">
-            <Search size={16} className="ar-search-icon" />
+            <Search size={15} className="ar-search-icon" />
             <input
               className="ar-search"
               placeholder="Search by room number or type..."
@@ -220,16 +214,14 @@ export default function AdminRoomsPage() {
                         {room.view_type && room.view_type !== 'none' && (
                           <div className="ar-room-view">{room.view_type} view</div>
                         )}
-                        {!room.is_active && (
-                          <div className="ar-inactive-tag">Inactive</div>
-                        )}
+                        {!room.is_active && <div className="ar-inactive-tag">Inactive</div>}
                       </td>
                       <td className="ar-type">{room.room_type}</td>
                       <td>{room.floor}</td>
                       <td style={{ textTransform: 'capitalize' }}>{room.bed_type}</td>
                       <td>
-                        <div className="ar-capacity-main">{room.max_adults}A + {room.max_children}C</div>
-                        <div className="ar-capacity-sub">Max: {room.capacity}</div>
+                        <div style={{ color: '#01000D', fontWeight: 500 }}>{room.max_adults}A + {room.max_children}C</div>
+                        <div style={{ fontSize: 11, color: '#7A7987', marginTop: 2 }}>Max: {room.capacity}</div>
                       </td>
                       <td>
                         {Number(room.discount_percentage) > 0 ? (
@@ -243,14 +235,13 @@ export default function AdminRoomsPage() {
                         )}
                       </td>
                       <td>
-                        {/* STATUS_OPTIONS no longer includes "reserved" */}
                         <select
                           value={room.status}
                           onChange={(e) => handleStatusChange(room.id, e.target.value)}
-                          className={`ar-status-select ar-status--${room.status}`}
+                          className="ar-status-select"
                         >
                           {STATUS_OPTIONS.map(s => (
-                            <option key={s} value={s}>{s}</option>
+                            <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
                           ))}
                         </select>
                       </td>
@@ -270,7 +261,7 @@ export default function AdminRoomsPage() {
                             onClick={() => setModal({ open: true, room })}
                             title="Edit room"
                           >
-                            <Edit2 size={15} />
+                            <Edit2 size={14} />
                           </button>
                           <button
                             className="ar-action-btn ar-action-btn--danger"
@@ -280,7 +271,7 @@ export default function AdminRoomsPage() {
                           >
                             {deletingId === room.id
                               ? <div className="ar-spinner" style={{ width: 14, height: 14 }} />
-                              : <Trash2 size={15} />
+                              : <Trash2 size={14} />
                             }
                           </button>
                         </div>
@@ -294,7 +285,6 @@ export default function AdminRoomsPage() {
         )}
       </div>
 
-      {/* ── Room form modal (with amenities/inclusions/seasonal tabs) ── */}
       {modal.open && (
         <RoomFormModal
           room={modal.room}
@@ -306,7 +296,6 @@ export default function AdminRoomsPage() {
         />
       )}
 
-      {/* ── Image modal ──────────────────────────────────────────────── */}
       {imageModal.open && (
         <RoomImageModal
           room={imageModal.room}
@@ -315,7 +304,6 @@ export default function AdminRoomsPage() {
         />
       )}
 
-      {/* ── Amenities manager ────────────────────────────────────────── */}
       {amenitiesModal && (
         <AmenitiesInclusionsModal
           type="amenities"
@@ -326,7 +314,6 @@ export default function AdminRoomsPage() {
         />
       )}
 
-      {/* ── Inclusions manager ───────────────────────────────────────── */}
       {inclusionsModal && (
         <AmenitiesInclusionsModal
           type="inclusions"

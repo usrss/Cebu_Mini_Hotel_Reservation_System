@@ -136,6 +136,22 @@ export const frontDeskPaymentsApi = {
     api.post('/payments/initiate/', body).then((r) => r.data),
 };
 
+// ─── Food Orders ───────────────────────────────────────────────────────────────
+
+export const frontDeskFoodApi = {
+  /**
+   * GET /food/orders/?booking=<pk>
+   * Get all food orders for a specific booking.
+   */
+  ordersByBooking: (bookingId) =>
+    api.get('/food/orders/', {
+      params: { booking: bookingId },
+    }).then((r) => {
+      const data = r.data;
+      return Array.isArray(data) ? data : (data.results ?? []);
+    }),
+};
+
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
 export function todayISO() {

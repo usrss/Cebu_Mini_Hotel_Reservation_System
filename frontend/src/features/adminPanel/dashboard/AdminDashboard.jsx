@@ -170,6 +170,13 @@ export default function AdminDashboard() {
     return () => clearInterval(timerRef.current);
   }, [load]);
 
+  // Refresh business KPIs after financial changes (refunds).
+  useEffect(() => {
+    const handler = () => load(true);
+    window.addEventListener('revenue-updated', handler);
+    return () => window.removeEventListener('revenue-updated', handler);
+  }, [load]);
+
   // ── Derived values ─────────────────────────────────────────────────────────
   const d              = dash;
   const totalRooms     = d?.rooms?.total         ?? 0;
@@ -219,14 +226,8 @@ export default function AdminDashboard() {
               weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
             })}
           </p>
-          <div className="ad-divider" />
+
         </div>
-        {lastUpdate && (
-          <div className="ad-refresh-note">
-            <RefreshCw size={11} />
-            Updated {lastUpdate.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-          </div>
-        )}
       </div>
 
       {/* ── Operational KPIs ───────────────────────────────────────────────── */}
@@ -333,116 +334,6 @@ export default function AdminDashboard() {
             { name: 'New',         value: createdToday,  color: 'var(--gold)'  },
           ]}
         />
-      </div>
-
-      {/* ── Two column: activity + quick actions ───────────────────────────── */}
-      <div className="ad-bottom-grid">
-
-        {/* Recent activity */}
-        <div className="ad-card">
-          <div className="ad-card-header">
-            <p className="ad-card-eyebrow">Live Feed</p>
-            <h2 className="ad-card-title">Recent Activity</h2>
-          </div>
-          {recentActivity.length === 0 ? (
-            <p className="ad-empty">No recent activity.</p>
-          ) : (
-            <div className="ad-activity-list">
-              {recentActivity.slice(0, 12).map((log) => (
-                <ActivityItem key={log.id} log={log} />
-              ))}
-            </div>
-          )}
-          <button
-            className="ad-view-all"
-            onClick={() => navigate('/staff/activity-logs')}
-          >
-            View full log <ArrowRight size={12} />
-          </button>
-        </div>
-
-        {/* Quick actions */}
-        <div className="ad-card">
-          <div className="ad-card-header">
-            <p className="ad-card-eyebrow">Shortcuts</p>
-            <h2 className="ad-card-title">Quick Actions</h2>
-          </div>
-          <div className="ad-quick-list">
-
-            {pendingReqs > 0 && (
-              <QuickAction
-                icon={<AlertTriangle size={16} />}
-                label={`${pendingReqs} Maintenance Request${pendingReqs !== 1 ? 's' : ''} Pending`}
-                desc="Review and convert to tasks"
-                to="/staff/maintenance-requests"
-                color="var(--red)"
-              />
-            )}
-            {cleaningDirty > 0 && (
-              <QuickAction
-                icon={<AlertTriangle size={16} />}
-                label={`${cleaningDirty} Room${cleaningDirty !== 1 ? 's' : ''} Need Cleaning`}
-                desc="Assign or monitor housekeeping"
-                to="/staff/cleaning"
-                color="var(--amber)"
-              />
-            )}
-            {checkoutToday > 0 && (
-              <QuickAction
-                icon={<Clock size={16} />}
-                label={`${checkoutToday} Check-Out${checkoutToday !== 1 ? 's' : ''} Today`}
-                desc="Rooms need to be turned over"
-                to="/staff/cleaning"
-                color="#60A5FA"
-              />
-            )}
-
-            <QuickAction
-              icon={<ClipboardList size={16} />}
-              label="Housekeeping Dashboard"
-              desc="View all cleaning tasks and status"
-              to="/staff/cleaning"
-              color="var(--gold)"
-            />
-            <QuickAction
-              icon={<Wrench size={16} />}
-              label="Maintenance Tasks"
-              desc="Active repairs and assignments"
-              to="/staff/maintenance"
-              color="var(--gold)"
-            />
-            <QuickAction
-              icon={<Shield size={16} />}
-              label="Incident Logs"
-              desc="Security reports and incidents"
-              to="/staff/incidents"
-              color="var(--gold)"
-            />
-            {isAdmin && (
-              <QuickAction
-                icon={<Users size={16} />}
-                label="Staff Management"
-                desc="Accounts, roles, shifts"
-                to="/staff/members"
-                color="var(--gold)"
-              />
-            )}
-            <QuickAction
-              icon={<TrendingUp size={16} />}
-              label="Analytics"
-              desc="Revenue, occupancy, booking trends"
-              to="/admin/analytics"
-              color="var(--gold)"
-            />
-            <QuickAction
-              icon={<CheckCircle2 size={16} />}
-              label="Staff Reports"
-              desc="Performance and activity reports"
-              to="/staff/reports"
-              color="var(--gold)"
-            />
-          </div>
-        </div>
       </div>
 
     </div>

@@ -43,8 +43,8 @@ function TrendBar({ items, groupBy }) {
 
 export default function RevenueSummaryPage() {
   const navigate = useNavigate();
-  const { canManageReviews, role } = useAdminRole();
-  // revenue is admin/manager only — reuse same set
+  // FIX: destructure `loading` so we don't flash "Access denied" while role resolves.
+  const { role, loading: roleLoading } = useAdminRole();
   const canView = ['admin', 'manager'].includes(role);
 
   const [data, setData]       = useState(null);
@@ -73,7 +73,16 @@ export default function RevenueSummaryPage() {
     else setGroupBy('day');
   }, [period]);
 
-  if (!canView) return <div className={styles.forbidden}>Access denied.</div>;
+  // Keep revenue KPIs accurate without full page reload.
+  useEffect(() => {
+    const handler = () => fetchRevenue();
+    window.addEventListener('revenue-updated', handler);
+    return () => window.removeEventListener('revenue-updated', handler);
+  }, [fetchRevenue]);
+
+  // FIX: wait for role to resolve before showing access denied.
+  if (roleLoading) return <div className={styles.state}>Loading…</div>;
+  if (!canView)    return <div className={styles.forbidden}>Access denied.</div>;
 
   return (
     <div className={styles.page}>
@@ -118,6 +127,7 @@ export default function RevenueSummaryPage() {
               <span className={styles.kpiLabel}>Pending</span>
               <span className={`${styles.kpiValue} ${styles.amber}`}>{fmt(data.pending_amount)}</span>
               <span className={styles.kpiSub}>{data.pending_count} pending</span>
+              <span className={styles.kpiSub}>Not yet confirmed — excluded from net revenue</span>
             </div>
           </div>
 

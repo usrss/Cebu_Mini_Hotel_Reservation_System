@@ -9,7 +9,7 @@ const ROLE_LABELS = {
   front_desk:'Front Desk', housekeeping:'Housekeeping',
   maintenance:'Maintenance', security:'Security',
 };
-const ROLE_COLORS = ['#C9A84C','#60A5FA','#6EE7B7','#C4B5FD','#FCD34D','#F87171','#818CF8'];
+const ROLE_COLORS = ['#3B5BDB','#0D9488','#7C3AED','#D97706','#22D3EE','#F87171','#818CF8'];
 
 function CustomTooltip({ active, payload }) {
   if (!active || !payload?.length) return null;

@@ -2,7 +2,7 @@
  * StaffActivatePage.jsx
  *
  * Frontend activation page — rendered at:
- *   /staff/activate/:uidb64/:token
+ *   /staff/activate/:uidb64/:token/
  *
  * Flow:
  *   1. On mount → GET /api/staff/activate/<uidb64>/<token>/ to validate the link
@@ -13,7 +13,7 @@
  * Add this route to your React Router config:
  *   <Route path="/staff/activate/:uidb64/:token" element={<StaffActivatePage />} />
  *
- * Matches the dark-gold luxury theme.
+ * Light theme matching FrontDesk design.
  */
 
 import { useState, useEffect } from 'react';
@@ -97,18 +97,21 @@ export default function StaffActivatePage() {
   // ── Render helpers ───────────────────────────────────────────────────────────
   const inputStyle = (hasErr) => ({
     width: '100%', boxSizing: 'border-box',
-    background: '#1a1a1a', border: `1px solid ${hasErr ? '#F87171' : '#2a2a2a'}`,
-    borderRadius: 8, color: '#f5f5f5', fontSize: 14, padding: '11px 40px 11px 14px',
-    outline: 'none', fontFamily: 'inherit', transition: 'border-color .2s',
+    background: '#F2F3F7',
+    border: hasErr ? '1.5px solid #DC2626' : 'none',
+    borderRadius: 10, color: '#01000D', fontSize: 14,
+    padding: '11px 40px 11px 14px',
+    outline: 'none', fontFamily: 'inherit', transition: 'box-shadow .2s',
+    boxShadow: hasErr ? '0 0 0 3px rgba(220,38,38,0.15)' : '0 1px 2px rgba(1,0,13,0.06)',
   });
 
   // ── Loading ──────────────────────────────────────────────────────────────────
   if (checking) {
     return (
       <PageShell>
-        <div style={{ textAlign: 'center', padding: '48px 0', color: '#666' }}>
-          <Loader2 size={28} style={{ animation: 'spin 1s linear infinite', color: '#C9A84C' }} />
-          <p style={{ marginTop: 16, fontSize: 13 }}>Verifying your activation link…</p>
+        <div style={{ textAlign: 'center', padding: '48px 0', color: '#7A7987' }}>
+          <Loader2 size={28} style={{ animation: 'spin 1s linear infinite', color: '#01000D' }} />
+          <p style={{ marginTop: 16, fontSize: 13, color: '#52515E' }}>Verifying your activation link…</p>
         </div>
       </PageShell>
     );
@@ -121,16 +124,16 @@ export default function StaffActivatePage() {
         <div style={{ textAlign: 'center', padding: '40px 0' }}>
           <div style={{
             width: 56, height: 56, borderRadius: '50%',
-            background: 'rgba(248,113,113,.1)', border: '1px solid rgba(248,113,113,.3)',
+            background: 'rgba(220,38,38,0.09)',
             display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px',
           }}>
-            <XCircle size={26} color="#F87171" />
+            <XCircle size={26} color="#DC2626" />
           </div>
-          <h2 style={{ color: '#f5f5f5', margin: '0 0 10px', fontSize: 20 }}>Link Expired or Invalid</h2>
-          <p style={{ color: '#888', fontSize: 13, lineHeight: 1.7, margin: '0 0 24px', maxWidth: 320, marginInline: 'auto' }}>
+          <h2 style={{ color: '#01000D', margin: '0 0 10px', fontSize: 20, fontFamily: "'DM Serif Display', serif", fontWeight: 400 }}>Link Expired or Invalid</h2>
+          <p style={{ color: '#7A7987', fontSize: 13, lineHeight: 1.7, margin: '0 0 24px', maxWidth: 320, marginInline: 'auto' }}>
             {tokenErr}
           </p>
-          <p style={{ fontSize: 12, color: '#666' }}>
+          <p style={{ fontSize: 12, color: '#7A7987' }}>
             Please contact your administrator to request a new activation email.
           </p>
         </div>
@@ -145,16 +148,16 @@ export default function StaffActivatePage() {
         <div style={{ textAlign: 'center', padding: '40px 0' }}>
           <div style={{
             width: 56, height: 56, borderRadius: '50%',
-            background: 'rgba(110,231,183,.1)', border: '1px solid rgba(110,231,183,.3)',
+            background: 'rgba(13,148,136,0.09)',
             display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px',
           }}>
-            <CheckCircle2 size={26} color="#6EE7B7" />
+            <CheckCircle2 size={26} color="#0D9488" />
           </div>
-          <h2 style={{ color: '#f5f5f5', margin: '0 0 10px', fontSize: 20 }}>Account Activated!</h2>
-          <p style={{ color: '#888', fontSize: 13, lineHeight: 1.7, margin: '0 0 24px' }}>
+          <h2 style={{ color: '#01000D', margin: '0 0 10px', fontSize: 20, fontFamily: "'DM Serif Display', serif", fontWeight: 400 }}>Account Activated!</h2>
+          <p style={{ color: '#7A7987', fontSize: 13, lineHeight: 1.7, margin: '0 0 24px' }}>
             Your password has been set. Redirecting you to login…
           </p>
-          <Link to="/login" style={{ color: '#C9A84C', fontSize: 13 }}>Go to Login →</Link>
+          <Link to="/login" style={{ color: '#01000D', fontSize: 13, fontWeight: 600 }}>Go to Login →</Link>
         </div>
       </PageShell>
     );
@@ -165,22 +168,24 @@ export default function StaffActivatePage() {
     <PageShell>
       {/* Welcome */}
       <div style={{ marginBottom: 28 }}>
-        <p style={{ color: '#C9A84C', fontSize: 11, letterSpacing: 2, fontWeight: 700,
-                    textTransform: 'uppercase', margin: '0 0 6px' }}>
+        <p style={{ color: '#52515E', fontSize: 10, letterSpacing: '0.14em', fontWeight: 700,
+                    textTransform: 'uppercase', margin: '0 0 8px' }}>
           Staff Activation
         </p>
-        <h1 style={{ color: '#f5f5f5', fontSize: 22, fontWeight: 700, margin: '0 0 8px' }}>
+        <h1 style={{ color: '#01000D', fontSize: 22, fontWeight: 400, margin: '0 0 8px',
+                     fontFamily: "'DM Serif Display', serif", letterSpacing: '-0.01em' }}>
           Set Your Password
         </h1>
-        <p style={{ color: '#777', fontSize: 13, margin: 0 }}>
-          Welcome, <strong style={{ color: '#aaa' }}>
+        <p style={{ color: '#7A7987', fontSize: 13, margin: 0, fontWeight: 400 }}>
+          Welcome, <strong style={{ color: '#01000D', fontWeight: 600 }}>
             {tokenInfo?.full_name || tokenInfo?.email}
           </strong>
           {tokenInfo?.role && (
             <span style={{
-              marginLeft: 8, fontSize: 11, color: '#C9A84C', fontWeight: 600,
-              background: 'rgba(201,168,76,.1)', border: '1px solid rgba(201,168,76,.2)',
-              borderRadius: 5, padding: '2px 8px',
+              marginLeft: 8, fontSize: 10, color: '#52515E', fontWeight: 700,
+              background: 'rgba(1,0,13,0.07)',
+              borderRadius: 999, padding: '2px 8px',
+              letterSpacing: '0.06em', textTransform: 'uppercase',
             }}>
               {tokenInfo.role.replace('_', ' ').toUpperCase()}
             </span>
@@ -190,8 +195,8 @@ export default function StaffActivatePage() {
 
       {globalErr && (
         <div style={{
-          background: 'rgba(248,113,113,.08)', border: '1px solid rgba(248,113,113,.25)',
-          borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#F87171', marginBottom: 20,
+          background: 'rgba(220,38,38,0.09)', borderRadius: 10,
+          padding: '10px 14px', fontSize: 13, color: '#DC2626', marginBottom: 20,
         }}>
           {globalErr}
         </div>
@@ -201,8 +206,9 @@ export default function StaffActivatePage() {
 
         {/* Password */}
         <div style={{ marginBottom: 18 }}>
-          <label style={{ display: 'block', fontSize: 12, color: '#aaa',
-                          fontWeight: 600, marginBottom: 6, letterSpacing: .3 }}>
+          <label style={{ display: 'block', fontSize: 10, color: '#52515E',
+                          fontWeight: 700, marginBottom: 8, letterSpacing: '0.08em',
+                          textTransform: 'uppercase' }}>
             <Lock size={11} style={{ marginRight: 4 }} />NEW PASSWORD
           </label>
           <div style={{ position: 'relative' }}>
@@ -216,17 +222,18 @@ export default function StaffActivatePage() {
             />
             <button type="button" onClick={() => setShowPwd(v => !v)}
               style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
-                       background: 'none', border: 'none', color: '#666', cursor: 'pointer', padding: 2 }}>
+                       background: 'none', border: 'none', color: '#7A7987', cursor: 'pointer', padding: 2 }}>
               {showPwd ? <EyeOff size={14} /> : <Eye size={14} />}
             </button>
           </div>
-          {fieldErr.password && <p style={{ margin: '5px 0 0', fontSize: 12, color: '#F87171' }}>{fieldErr.password}</p>}
+          {fieldErr.password && <p style={{ margin: '5px 0 0', fontSize: 12, color: '#DC2626' }}>{fieldErr.password}</p>}
         </div>
 
         {/* Confirm */}
         <div style={{ marginBottom: 28 }}>
-          <label style={{ display: 'block', fontSize: 12, color: '#aaa',
-                          fontWeight: 600, marginBottom: 6, letterSpacing: .3 }}>
+          <label style={{ display: 'block', fontSize: 10, color: '#52515E',
+                          fontWeight: 700, marginBottom: 8, letterSpacing: '0.08em',
+                          textTransform: 'uppercase' }}>
             <Lock size={11} style={{ marginRight: 4 }} />CONFIRM PASSWORD
           </label>
           <div style={{ position: 'relative' }}>
@@ -239,22 +246,23 @@ export default function StaffActivatePage() {
             />
             <button type="button" onClick={() => setShowConf(v => !v)}
               style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
-                       background: 'none', border: 'none', color: '#666', cursor: 'pointer', padding: 2 }}>
+                       background: 'none', border: 'none', color: '#7A7987', cursor: 'pointer', padding: 2 }}>
               {showConf ? <EyeOff size={14} /> : <Eye size={14} />}
             </button>
           </div>
-          {fieldErr.confirm && <p style={{ margin: '5px 0 0', fontSize: 12, color: '#F87171' }}>{fieldErr.confirm}</p>}
+          {fieldErr.confirm && <p style={{ margin: '5px 0 0', fontSize: 12, color: '#DC2626' }}>{fieldErr.confirm}</p>}
         </div>
 
         <button
           type="submit"
           disabled={submitting}
           style={{
-            width: '100%', background: '#C9A84C', color: '#0f0f0f',
-            border: 'none', borderRadius: 8, padding: '13px 0',
-            fontSize: 14, fontWeight: 700, cursor: submitting ? 'not-allowed' : 'pointer',
+            width: '100%', background: '#01000D', color: '#FFFFFF',
+            border: 'none', borderRadius: 10, padding: '13px 0',
+            fontSize: 14, fontWeight: 600, cursor: submitting ? 'not-allowed' : 'pointer',
             opacity: submitting ? .7 : 1, display: 'flex', alignItems: 'center',
-            justifyContent: 'center', gap: 8, fontFamily: 'inherit', letterSpacing: .3,
+            justifyContent: 'center', gap: 8, fontFamily: 'inherit', letterSpacing: '0.02em',
+            boxShadow: '0 2px 8px rgba(1,0,13,0.18)',
           }}
         >
           {submitting
@@ -273,17 +281,18 @@ export default function StaffActivatePage() {
 function PageShell({ children }) {
   return (
     <div style={{
-      minHeight: '100vh', background: '#0f0f0f',
+      minHeight: '100vh', background: '#F2F3F7',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      padding: 24, fontFamily: "'Raleway', 'Segoe UI', sans-serif",
+      padding: 24, fontFamily: "'DM Sans', 'Segoe UI', sans-serif",
     }}>
       <div style={{
-        width: '100%', maxWidth: 420, background: '#141414',
-        border: '1px solid #222', borderRadius: 14, overflow: 'hidden',
+        width: '100%', maxWidth: 420, background: '#FFFFFF',
+        borderRadius: 20, overflow: 'hidden',
+        boxShadow: '0 4px 24px rgba(1,0,13,0.10), 0 2px 8px rgba(1,0,13,0.06)',
       }}>
         {/* Top bar */}
-        <div style={{ background: '#1a1a1a', borderBottom: '1px solid #222', padding: '20px 32px' }}>
-          <div style={{ fontSize: 10, letterSpacing: 3, color: '#C9A84C',
+        <div style={{ background: '#F2F3F7', borderBottom: '1px solid #E4E6ED', padding: '18px 32px' }}>
+          <div style={{ fontSize: 10, letterSpacing: '0.14em', color: '#52515E',
                         fontWeight: 700, textTransform: 'uppercase' }}>
             ⟡ CEBU MINI HOTEL
           </div>

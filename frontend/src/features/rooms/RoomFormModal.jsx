@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import {
-  X, Plus, Trash2, Edit2, ChevronDown, ChevronUp,
-  Calendar, Tag, Package, Settings, Info, Percent,
-  DollarSign, Star, Check,
+  X, Plus, Trash2, Edit2,
+  Calendar, Package, Settings, Info, Percent,
+  Star, Check, ExternalLink, ShieldCheck,
 } from 'lucide-react';
 import './RoomFormModal.css';
 
@@ -10,40 +11,57 @@ import './RoomFormModal.css';
 const ROOM_TYPES   = ['standard','deluxe','suite','family'];
 const BED_TYPES    = ['single','double','queen','king','twin'];
 const VIEW_TYPES   = ['none','garden','pool','city','sea','mountain'];
-const CANCEL_POLICIES = [
-  'Free cancellation 48+ hours before check-in (90% refund). 50% refund for cancellations within 48 hours of check-in. No refund for same-day cancellations or no-shows.',
-  'Non-refundable. No cancellations allowed.',
-  'Partial refund (50%) if cancelled 24 hours before check-in.',
-];
+
 const PRIORITY_LABELS = { 1:'Low', 2:'Normal', 3:'High', 4:'Peak' };
 const PRIORITY_COLORS = { 1:'#6b7280', 2:'#3b82f6', 3:'#f59e0b', 4:'#ef4444' };
 
 const TABS = [
-  { key:'basic',    label:'Basic Info',     icon:<Info size={14}/> },
-  { key:'pricing',  label:'Pricing',        icon:<DollarSign size={14}/> },
-  { key:'seasonal', label:'Seasonal Prices',icon:<Calendar size={14}/> },
-  { key:'amenities',label:'Amenities',      icon:<Star size={14}/> },
-  { key:'inclusions',label:'Inclusions',    icon:<Package size={14}/> },
-  { key:'policy',   label:'Policy',         icon:<Settings size={14}/> },
+  { key:'basic',     label:'Basic Info',      icon:<Info size={14}/> },
+  { key:'pricing',   label:'Pricing',         icon:<span style={{ fontSize: 13, fontWeight: 700 }}>₱</span> },
+  { key:'seasonal',  label:'Seasonal Prices', icon:<Calendar size={14}/> },
+  { key:'amenities', label:'Amenities',       icon:<Star size={14}/> },
+  { key:'inclusions',label:'Inclusions',      icon:<Package size={14}/> },
+  { key:'policy',    label:'Policy',          icon:<Settings size={14}/> },
 ];
 
 /* ─── Helpers ────────────────────────────────────────────── */
 const cap = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
+
 const emptyRoom = () => ({
   room_number: '', room_type: 'standard', floor: 1,
   bed_type: 'double', view_type: 'none',
   capacity: 2, max_adults: 2, max_children: 0,
   price_per_night: '', discount_percentage: 0,
   size_sqm: '', description: '',
-  cancellation_policy: CANCEL_POLICIES[0],
+  cancellation_policy: '',
   is_featured: false, is_active: true,
 });
+
 const emptySeasonalRow = () => ({
   _id: Date.now() + Math.random(),
   name: '', start_date: '', end_date: '',
   price_per_night: '', priority: 2,
   is_weekend_only: false, is_active: true,
 });
+
+/* ─── Fetch hotel settings cancellation tiers ────────────── */
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
+
+async function fetchCancellationTiers() {
+  try {
+    const token = localStorage.getItem('accessToken');
+    const res = await fetch(`${API_BASE}/rooms/hotel/settings/`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return Array.isArray(data.cancellation_tiers) && data.cancellation_tiers.length > 0
+      ? data.cancellation_tiers
+      : null;
+  } catch {
+    return null;
+  }
+}
 
 /* ─── Sub-components ─────────────────────────────────────── */
 function TabBtn({ tab, active, onClick }) {
@@ -222,7 +240,6 @@ function InclusionPicker({ available, selected, onChange }) {
     acc[cat].push(i);
     return acc;
   }, {});
-  // selected = [{ inclusion_id, notes }]
   const isSelected = (id) => selected.some(s => s.inclusion_id === id);
   const toggle = (id) => {
     if (isSelected(id)) {
@@ -288,6 +305,124 @@ function InclusionPicker({ available, selected, onChange }) {
   );
 }
 
+/* ─── PolicyTab ──────────────────────────────────────────── */
+/**
+ * Cancellation policy in the room form is READ-ONLY by design.
+ *
+ * Why: The hotel has a single, globally-configured cancellation policy
+ * (managed in Hotel Settings → Cancellation & Refund Tiers). Allowing
+ * per-room overrides would create inconsistent guest experiences and
+ * conflict with the refund calculation engine that reads from
+ * `hotel_settings.cancellation_tiers`.
+ *
+ * This tab displays the live policy tiers fetched from settings so
+ * the admin can verify what guests will see — and links directly to
+ * Hotel Settings if a change is needed.
+ */
+function PolicyTab() {
+  const [tiers,   setTiers]   = useState(null);   // null = loading
+  const [error,   setError]   = useState(false);
+
+  useEffect(() => {
+    fetchCancellationTiers().then(t => {
+      if (t) setTiers(t);
+      else   setError(true);
+    });
+  }, []);
+
+  // Sort descending (most generous first, catch-all last)
+  const sorted = tiers
+    ? [...tiers].sort((a, b) => Number(b.hours_before) - Number(a.hours_before))
+    : [];
+
+  return (
+    <div className="rfm-section">
+
+      {/* Explanation banner */}
+      <div className="rfm-policy-info-banner">
+        <ShieldCheck size={16} className="rfm-policy-info-icon" />
+        <div>
+          <p className="rfm-policy-info-title">Hotel-wide Cancellation Policy</p>
+          <p className="rfm-policy-info-body">
+            The cancellation policy is configured globally in{' '}
+            <strong>Hotel Settings → Cancellation &amp; Refund Tiers</strong>.
+            All rooms follow the same policy — the refund engine reads these
+            tiers automatically. To change the policy, update it in Hotel Settings.
+          </p>
+        </div>
+      </div>
+
+      {/* Live tier display */}
+      <div className="rfm-policy-tiers-wrap">
+        <div className="rfm-policy-tiers-label">
+          Live policy — what guests see during booking
+        </div>
+
+        {tiers === null && !error && (
+          <div className="rfm-policy-loading">
+            <span className="rfm-spinner" /> Loading policy…
+          </div>
+        )}
+
+        {error && (
+          <div className="rfm-policy-error">
+            <Info size={13} /> Could not load policy tiers. Check Hotel Settings.
+          </div>
+        )}
+
+        {tiers && sorted.map((tier, i) => {
+          const isCatchAll = Number(tier.hours_before) === 0;
+          const pct        = Number(tier.refund_pct);
+          const color      = pct >= 80 ? '#059669' : pct >= 40 ? '#d97706' : '#52515E';
+          const bg         = pct >= 80
+            ? 'rgba(5,150,105,0.08)'
+            : pct >= 40
+            ? 'rgba(217,119,6,0.08)'
+            : 'rgba(1,0,13,0.04)';
+          const border     = pct >= 80
+            ? 'rgba(5,150,105,0.22)'
+            : pct >= 40
+            ? 'rgba(217,119,6,0.22)'
+            : '#E4E6ED';
+
+          return (
+            <div key={i} className="rfm-policy-tier-row">
+              <div
+                className="rfm-policy-tier-badge"
+                style={{ background: bg, color, border: `1.5px solid ${border}` }}
+              >
+                {pct}%
+              </div>
+              <div className="rfm-policy-tier-text">
+                <span className="rfm-policy-tier-condition">
+                  {isCatchAll
+                    ? 'Same day / after check-in'
+                    : `≥ ${tier.hours_before}h before check-in`}
+                </span>
+                {tier.label && (
+                  <span className="rfm-policy-tier-label">{tier.label}</span>
+                )}
+              </div>
+              <div className="rfm-policy-tier-refund">
+                {pct === 0 ? 'No refund' : `${pct}% refund`}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Link to settings */}
+      <Link
+        to="/admin/hotel-settings"
+        className="rfm-policy-settings-link"
+      >
+        <ExternalLink size={13} />
+        Edit in Hotel Settings
+      </Link>
+    </div>
+  );
+}
+
 /* ═══════════════════════════════════════════════════════════
    MAIN MODAL
    ═══════════════════════════════════════════════════════════ */
@@ -296,42 +431,37 @@ export default function RoomFormModal({
   onSave,
   onClose,
   submitting,
-  availableAmenities = [],   // [{ id, name, icon, category }]
-  availableInclusions = [],  // [{ id, name, icon, category }]
+  availableAmenities  = [],
+  availableInclusions = [],
 }) {
   const isEdit = Boolean(room);
-  const [tab, setTab]   = useState('basic');
-  const [form, setForm] = useState(emptyRoom);
+  const [tab,    setTab]    = useState('basic');
+  const [form,   setForm]   = useState(emptyRoom);
   const [errors, setErrors] = useState({});
 
-  // Seasonal
-  const [seasonal, setSeasonal] = useState([]);
-  // Amenities: array of IDs
-  const [amenityIds, setAmenityIds] = useState([]);
-  // Inclusions: [{ inclusion_id, notes }]
-  const [inclusions, setInclusions] = useState([]);
+  const [seasonal,    setSeasonal]    = useState([]);
+  const [amenityIds,  setAmenityIds]  = useState([]);
+  const [inclusions,  setInclusions]  = useState([]);
 
-  const [editingPolicy, setEditingPolicy] = useState(false);
-
-  /* seed form from room prop */
+  /* seed form */
   useEffect(() => {
     if (room) {
       setForm({
-        room_number: room.room_number || '',
-        room_type: room.room_type || 'standard',
-        floor: room.floor || 1,
-        bed_type: room.bed_type || 'double',
-        view_type: room.view_type || 'none',
-        capacity: room.capacity || 2,
-        max_adults: room.max_adults || 2,
-        max_children: room.max_children || 0,
-        price_per_night: room.price_per_night || '',
+        room_number:         room.room_number         || '',
+        room_type:           room.room_type           || 'standard',
+        floor:               room.floor               || 1,
+        bed_type:            room.bed_type            || 'double',
+        view_type:           room.view_type           || 'none',
+        capacity:            room.capacity            || 2,
+        max_adults:          room.max_adults          || 2,
+        max_children:        room.max_children        || 0,
+        price_per_night:     room.price_per_night     || '',
         discount_percentage: room.discount_percentage || 0,
-        size_sqm: room.size_sqm || '',
-        description: room.description || '',
-        cancellation_policy: room.cancellation_policy || CANCEL_POLICIES[0],
-        is_featured: room.is_featured ?? false,
-        is_active: room.is_active ?? true,
+        size_sqm:            room.size_sqm            || '',
+        description:         room.description         || '',
+        cancellation_policy: room.cancellation_policy || '',
+        is_featured:         room.is_featured         ?? false,
+        is_active:           room.is_active           ?? true,
       });
       setSeasonal((room.seasonal_prices || []).map(s => ({
         ...s, _id: s.id || (Date.now() + Math.random()),
@@ -350,7 +480,6 @@ export default function RoomFormModal({
     ? (Number(form.price_per_night) * (1 - form.discount_percentage / 100)).toFixed(2)
     : null;
 
-  /* validation */
   const validate = () => {
     const e = {};
     if (!form.room_number.trim()) e.room_number = 'Room number is required';
@@ -380,7 +509,7 @@ export default function RoomFormModal({
     <div className="rfm-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="rfm-modal">
 
-        {/* ── Header ──────────────────────────── */}
+        {/* ── Header ── */}
         <div className="rfm-header">
           <div>
             <p className="rfm-eyebrow">{isEdit ? 'Edit Room' : 'New Room'}</p>
@@ -393,17 +522,17 @@ export default function RoomFormModal({
           </button>
         </div>
 
-        {/* ── Tabs ────────────────────────────── */}
+        {/* ── Tabs ── */}
         <div className="rfm-tabs">
           {TABS.map(t => (
             <TabBtn key={t.key} tab={t} active={tab === t.key} onClick={setTab} />
           ))}
         </div>
 
-        {/* ── Content ─────────────────────────── */}
+        {/* ── Content ── */}
         <form className="rfm-body" onSubmit={handleSubmit}>
 
-          {/* ── BASIC ─────────────────────────── */}
+          {/* BASIC */}
           {tab === 'basic' && (
             <div className="rfm-section">
               <div className="rfm-grid-2">
@@ -416,11 +545,8 @@ export default function RoomFormModal({
                   {errors.room_number && <span className="rfm-error">{errors.room_number}</span>}
                 </Field>
                 <Field label="Floor">
-                  <Input
-                    type="number" min={1}
-                    value={form.floor}
-                    onChange={(e) => set('floor', Number(e.target.value))}
-                  />
+                  <Input type="number" min={1} value={form.floor}
+                    onChange={(e) => set('floor', Number(e.target.value))} />
                 </Field>
               </div>
               <div className="rfm-grid-3">
@@ -436,7 +562,9 @@ export default function RoomFormModal({
                 </Field>
                 <Field label="View Type">
                   <Select value={form.view_type} onChange={(e) => set('view_type', e.target.value)}>
-                    {VIEW_TYPES.map(t => <option key={t} value={t}>{t === 'none' ? 'No View' : cap(t)}</option>)}
+                    {VIEW_TYPES.map(t => (
+                      <option key={t} value={t}>{t === 'none' ? 'No View' : cap(t)}</option>
+                    ))}
                   </Select>
                 </Field>
               </div>
@@ -461,8 +589,7 @@ export default function RoomFormModal({
               </Field>
               <Field label="Description" hint="optional">
                 <textarea
-                  className="rfm-textarea"
-                  rows={3}
+                  className="rfm-textarea" rows={3}
                   placeholder="Brief description shown to guests…"
                   value={form.description}
                   onChange={(e) => set('description', e.target.value)}
@@ -483,7 +610,7 @@ export default function RoomFormModal({
             </div>
           )}
 
-          {/* ── PRICING ───────────────────────── */}
+          {/* PRICING */}
           {tab === 'pricing' && (
             <div className="rfm-section">
               <Field label="Base Price per Night" required>
@@ -498,7 +625,6 @@ export default function RoomFormModal({
                 </div>
                 {errors.price_per_night && <span className="rfm-error">{errors.price_per_night}</span>}
               </Field>
-
               <Field label="Discount Percentage" hint="0 = no discount">
                 <div className="rfm-input-suffix-wrap">
                   <Input
@@ -511,7 +637,6 @@ export default function RoomFormModal({
                 </div>
                 {errors.discount_percentage && <span className="rfm-error">{errors.discount_percentage}</span>}
               </Field>
-
               {discountedPrice && (
                 <div className="rfm-price-preview">
                   <div className="rfm-price-preview-label">Effective Discounted Price</div>
@@ -526,7 +651,7 @@ export default function RoomFormModal({
             </div>
           )}
 
-          {/* ── SEASONAL ──────────────────────── */}
+          {/* SEASONAL */}
           {tab === 'seasonal' && (
             <div className="rfm-section">
               <div className="rfm-section-intro">
@@ -534,9 +659,7 @@ export default function RoomFormModal({
               </div>
               <div className="rfm-seasonal-list">
                 {seasonal.length === 0 && (
-                  <div className="rfm-seasonal-empty">
-                    No seasonal pricing rules yet. Add one below.
-                  </div>
+                  <div className="rfm-seasonal-empty">No seasonal pricing rules yet. Add one below.</div>
                 )}
                 {seasonal.map((row) => (
                   <SeasonalRow
@@ -561,7 +684,7 @@ export default function RoomFormModal({
             </div>
           )}
 
-          {/* ── AMENITIES ─────────────────────── */}
+          {/* AMENITIES */}
           {tab === 'amenities' && (
             <div className="rfm-section">
               <div className="rfm-section-intro">
@@ -582,7 +705,7 @@ export default function RoomFormModal({
             </div>
           )}
 
-          {/* ── INCLUSIONS ────────────────────── */}
+          {/* INCLUSIONS */}
           {tab === 'inclusions' && (
             <div className="rfm-section">
               <div className="rfm-section-intro">
@@ -603,59 +726,10 @@ export default function RoomFormModal({
             </div>
           )}
 
-          {/* ── POLICY ────────────────────────── */}
-          {tab === 'policy' && (
-            <div className="rfm-section">
-              <Field label="Cancellation Policy">
-                <div className="rfm-policy-wrap">
-                  {!editingPolicy ? (
-                    <div className="rfm-policy-display">
-                      <p className="rfm-policy-text">{form.cancellation_policy}</p>
-                      <button
-                        type="button"
-                        className="rfm-policy-edit-btn"
-                        onClick={() => setEditingPolicy(true)}
-                      >
-                        <Edit2 size={13} /> Edit
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="rfm-policy-editor">
-                      <div className="rfm-policy-presets">
-                        <p className="rfm-policy-presets-label">Quick presets:</p>
-                        {CANCEL_POLICIES.map((p, i) => (
-                          <button
-                            key={i}
-                            type="button"
-                            className={`rfm-policy-preset${form.cancellation_policy === p ? ' rfm-policy-preset--active' : ''}`}
-                            onClick={() => set('cancellation_policy', p)}
-                          >
-                            {p}
-                          </button>
-                        ))}
-                      </div>
-                      <textarea
-                        className="rfm-textarea rfm-textarea--tall"
-                        rows={4}
-                        placeholder="Custom cancellation policy…"
-                        value={form.cancellation_policy}
-                        onChange={(e) => set('cancellation_policy', e.target.value)}
-                      />
-                      <button
-                        type="button"
-                        className="rfm-policy-done-btn"
-                        onClick={() => setEditingPolicy(false)}
-                      >
-                        <Check size={13} /> Done
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </Field>
-            </div>
-          )}
+          {/* POLICY — live read-only from hotel settings */}
+          {tab === 'policy' && <PolicyTab />}
 
-          {/* ── Footer ────────────────────────── */}
+          {/* Footer */}
           <div className="rfm-footer">
             <button type="button" className="rfm-btn rfm-btn--ghost" onClick={onClose}>
               Cancel

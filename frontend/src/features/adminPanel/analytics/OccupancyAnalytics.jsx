@@ -5,7 +5,7 @@ import {
 } from 'recharts';
 import { analyticsApi } from '../../../services/adminApi';
 
-const DONUT_COLORS = ['#6EE7B7','#C9A84C','#C4B5FD','#F87171'];
+const DONUT_COLORS = ['#6EE7B7','#3B5BDB','#C4B5FD','#F87171'];
 
 function StatBox({ label, value, color }) {
   return (
@@ -43,7 +43,12 @@ export default function OccupancyAnalytics({ dashboard, period }) {
 
   const r = dashboard?.rooms;
   const t = dashboard?.tasks;
-  const occupancyRate = r?.total ? Math.round((r.occupied / r.total) * 100) : null;
+  const liveOccupancyRate = r?.total ? Math.round((r.occupied / r.total) * 100) : null;
+  const avgOccupancyRateRaw = report?.summary?.avg_occupancy_rate ?? report?.summary?.occupancy_rate ?? null;
+  const avgOccupancyRate = avgOccupancyRateRaw != null ? Math.round(Number(avgOccupancyRateRaw)) : null;
+
+  const isTodayPeriod = chartPeriod === 'daily';
+  const occupancyRate = isTodayPeriod ? liveOccupancyRate : avgOccupancyRate;
 
   const donutData = r ? [
     { name: 'Available',   value: r.available   ?? 0 },
@@ -74,11 +79,34 @@ export default function OccupancyAnalytics({ dashboard, period }) {
       </div>
 
       <div className="an-grid-4">
-        <StatBox label="Occupancy Rate" value={occupancyRate !== null ? `${occupancyRate}%` : '—'}
+        <StatBox
+          label={isTodayPeriod ? 'Live Occupancy' : 'Avg Occupancy Rate'}
+          value={occupancyRate !== null ? `${occupancyRate}%` : '—'}
           color={occupancyRate >= 70 ? '#6EE7B7' : occupancyRate >= 40 ? '#FCD34D' : '#F87171'} />
-        <StatBox label="Total Rooms"  value={r?.total}     color="var(--white)" />
-        <StatBox label="Occupied"     value={r?.occupied}  color="var(--c-occupancy)" />
-        <StatBox label="Available"    value={r?.available} color="#6EE7B7" />
+        <StatBox
+          label="Total Rooms"
+          value={isTodayPeriod ? r?.total : report?.summary?.total_rooms ?? r?.total}
+          color="var(--white)" />
+        <StatBox
+          label="Occupied"
+          value={
+            isTodayPeriod
+              ? r?.occupied
+              : (avgOccupancyRate != null && report?.summary?.total_rooms != null)
+                ? Math.round((avgOccupancyRate / 100) * report.summary.total_rooms)
+                : '—'
+          }
+          color="var(--c-occupancy)" />
+        <StatBox
+          label="Available"
+          value={
+            isTodayPeriod
+              ? r?.available
+              : (avgOccupancyRate != null && report?.summary?.total_rooms != null)
+                ? report.summary.total_rooms - Math.round((avgOccupancyRate / 100) * report.summary.total_rooms)
+                : '—'
+          }
+          color="#6EE7B7" />
       </div>
 
       <div className="an-grid-chart-wide">

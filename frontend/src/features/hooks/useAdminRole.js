@@ -1,30 +1,127 @@
 /**
- * useAdminRole.js
- * Returns the current user's role and permission flags.
+ * src/features/adminPanel/hooks/useAdminRole.js
  *
- * Since the login response does NOT include staff_profile,
- * we fall back to is_staff to determine access level.
- *
- * Once your backend includes staff_profile in the login response,
- * replace the fallback line with:
- *   const role = user?.staff_profile?.effective_role ?? null;
+ * Returns the current staff user's role and derived permission flags.
  */
 
-import { getStoredUser } from '../../services/api';
+import { useState, useEffect } from 'react';
+import { getStoredUser, getCurrentUser } from '../../services/api';
+
+// Helper to extract role from various user object shapes
+function extractRole(user) {
+  if (!user) return null;
+
+  // Try different possible paths for the role
+  return user?.staff_profile?.effective_role
+      || user?.staff_profile?.role
+      || user?.role
+      || (user?.is_staff ? 'admin' : null)
+      || null;
+}
 
 export function useAdminRole() {
-  const user = getStoredUser();
+  const [role, setRole] = useState(() => {
+    const u = getStoredUser();
+    return extractRole(u);
+  });
 
-  // Use staff_profile if available, otherwise fall back to is_staff
-  const role = user?.staff_profile?.effective_role
-    ?? (user?.is_staff ? 'admin' : null);
+  const [loading, setLoading] = useState(() => {
+    const u = getStoredUser();
+    return !extractRole(u);
+  });
+
+  useEffect(() => {
+    if (role) {
+      setLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    getCurrentUser()
+      .then((user) => {
+        if (!cancelled) {
+          const extractedRole = extractRole(user);
+          setRole(extractedRole);
+        }
+      })
+      .catch(() => {
+        // Ignore — user may not be authenticated yet.
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, []);
+
+  // ── Derived permissions ───────────────────────────────────────────────────
+  const isAdmin       = role === 'admin';
+  const isManager     = role === 'manager';
+  const isReceptionist = role === 'receptionist';
+  const isFrontDesk   = role === 'front_desk';
+  const isHousekeeping = role === 'housekeeping';
+  const isMaintenance  = role === 'maintenance';
+  const isSecurity     = role === 'security';
+  const isKitchenStaff = role === 'kitchen_staff';
+
+  // Guest management permissions
+  const canViewGuests   = isAdmin || isManager || isReceptionist || isFrontDesk;
+  const canModifyGuests = isAdmin || isManager;
+
+  // Payment permissions
+  const canManagePayments = isAdmin || isManager || isFrontDesk;
+  const canRefund         = isAdmin || isManager;
+
+  // Review permissions
+  const canManageReviews = isAdmin || isManager;
+
+  // Report permissions
+  const canViewReports = isAdmin || isManager;
+
+  // Staff management
+  const canManageStaff = isAdmin;
+
+  // Settings
+  const canManageSettings = isAdmin;
+
+  // Room management
+  const canViewRooms   = isAdmin || isManager || isHousekeeping || isMaintenance;
+  const canManageRooms = isAdmin || isManager;
+
+  // Operations
+  const canViewOperations   = isAdmin || isManager;
+  const canManageOperations = isAdmin || isManager;
+
+  // Food menu
+  const canManageFoodMenu = isAdmin;
 
   return {
     role,
-    canViewGuests:     ['admin', 'manager', 'receptionist', 'front_desk'].includes(role),
-    canModifyGuests:   ['admin', 'manager'].includes(role),
-    canManagePayments: ['admin', 'manager', 'front_desk'].includes(role),
-    canRefund:         ['admin', 'manager'].includes(role),
-    canManageReviews:  ['admin', 'manager'].includes(role),
+    loading,
+    isAdmin,
+    isManager,
+    isReceptionist,
+    isFrontDesk,
+    isHousekeeping,
+    isMaintenance,
+    isSecurity,
+    isKitchenStaff,
+
+    // Permission flags - THESE WERE MISSING in your original file
+    canViewGuests,
+    canModifyGuests,
+    canManagePayments,
+    canRefund,
+    canManageReviews,
+    canViewReports,
+    canManageStaff,
+    canManageSettings,
+    canViewRooms,
+    canManageRooms,
+    canViewOperations,
+    canManageOperations,
+    canManageFoodMenu,
   };
 }
+
+export default useAdminRole;
