@@ -227,7 +227,7 @@ export default function FoodAnalytics({ period: globalPeriod }) {
               <tbody>
                 {topItems.map((item, i) => (
                   <tr key={i}>
-                    <td style={{ fontWeight: 600, color: 'var(--white)' }}>{item.name}</td>
+                    <td style={{ fontWeight: 600, color: '#01000D' }}>{item.name}</td>
                     <td>
                       <span style={{
                         fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',

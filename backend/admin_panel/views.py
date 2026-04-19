@@ -29,7 +29,7 @@ from rest_framework.views import APIView
 
 from bookings.models import Booking
 from payments.models import Payment, PaymentStatus, Refund
-from rooms.models import RoomReview
+from rooms.models import RoomReview, ReviewHelpfulness
 
 from .filters import GuestFilter, PaymentAdminFilter, ReviewAdminFilter
 from .permissions import (
@@ -663,6 +663,58 @@ class ReviewStatsView(APIView):
             created_at__lt=now  - timezone.timedelta(days=30),
         )
 
+        # ── Helpfulness aggregation ───────────────────────────────────────────
+        helpfulness_qs = ReviewHelpfulness.objects.all()
+        if room_type:
+            helpfulness_qs = helpfulness_qs.filter(review__room__room_type=room_type)
+
+        total_helpful     = helpfulness_qs.filter(is_helpful=True).count()
+        total_not_helpful = helpfulness_qs.filter(is_helpful=False).count()
+        total_votes       = total_helpful + total_not_helpful
+        helpfulness_ratio = (
+            round((total_helpful / total_votes) * 100, 1)
+            if total_votes > 0 else None
+        )
+
+        # Top 5 most-helpful reviews (annotated at DB level — avoids N+1)
+        most_helpful_reviews = list(
+            visible_qs
+            .annotate(
+                helpful_count=Count(
+                    "helpfulness_votes",
+                    filter=Q(helpfulness_votes__is_helpful=True),
+                ),
+                not_helpful_count=Count(
+                    "helpfulness_votes",
+                    filter=Q(helpfulness_votes__is_helpful=False),
+                ),
+                vote_total=Count("helpfulness_votes"),
+            )
+            .filter(vote_total__gt=0)
+            .order_by("-helpful_count")
+            .values(
+                "id", "rating", "review_text",
+                "guest_name", "guest__first_name", "guest__last_name",
+                "room__room_number", "room__room_type",
+                "helpful_count", "not_helpful_count", "vote_total",
+                "created_at",
+            )[:5]
+        )
+
+        # Serialize guest display name safely
+        for r in most_helpful_reviews:
+            first    = r.pop("guest__first_name") or ""
+            last     = r.pop("guest__last_name")  or ""
+            fallback = r.pop("guest_name") or "Guest"
+            if first:
+                r["display_name"] = f"{first} {last[0]}." if last else first
+            else:
+                parts = fallback.strip().split()
+                r["display_name"] = (
+                    f"{parts[0]} {parts[-1][0]}." if len(parts) >= 2 else fallback
+                )
+            r["created_at"] = str(r["created_at"])
+
         return Response({
             "avg_rating":       aggregate["avg_rating"],
             "total_reviews":    aggregate["total_reviews"],
@@ -672,5 +724,12 @@ class ReviewStatsView(APIView):
             "trend": {
                 "last_30_days": last30.count(),
                 "prev_30_days": prev30.count(),
+            },
+            "helpfulness": {
+                "total_helpful":        total_helpful,
+                "total_not_helpful":    total_not_helpful,
+                "total_votes":          total_votes,
+                "helpfulness_ratio":    helpfulness_ratio,
+                "most_helpful_reviews": most_helpful_reviews,
             },
         })

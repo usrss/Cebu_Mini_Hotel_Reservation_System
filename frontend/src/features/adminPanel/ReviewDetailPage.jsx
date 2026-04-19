@@ -6,6 +6,7 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { ThumbsUp, ThumbsDown, ShieldCheck, Eye, EyeOff, ArrowLeft, CalendarDays, User, Mail, Hash, BedDouble, Star as StarIcon } from 'lucide-react';
 import { reviewApi } from '../../services/adminApi';
 import { useAdminRole } from '../hooks/useAdminRole';
 import styles from './ReviewDetailPage.module.css';
@@ -68,15 +69,22 @@ export default function ReviewDetailPage() {
 
   return (
     <div className={styles.page}>
-      <button className={styles.back} onClick={() => navigate('/admin/reviews')}>← Reviews</button>
+      <button className={styles.back} onClick={() => navigate('/admin/reviews')}>
+        <ArrowLeft size={15} /> Back to Reviews
+      </button>
 
+      {/* Header bar */}
       <div className={styles.pageHeader}>
         <div className={styles.headerLeft}>
           <Stars rating={review.rating} />
           <div className={styles.badges}>
-            {review.is_verified && <span className={styles.verified}>✓ Verified</span>}
+            {review.is_verified && (
+              <span className={styles.verified}>
+                <ShieldCheck size={12} /> Verified
+              </span>
+            )}
             <span className={review.is_visible ? styles.visibleBadge : styles.hiddenBadge}>
-              {review.is_visible ? 'Visible' : 'Hidden'}
+              {review.is_visible ? <><Eye size={12} /> Visible</> : <><EyeOff size={12} /> Hidden</>}
             </span>
           </div>
         </div>
@@ -85,36 +93,45 @@ export default function ReviewDetailPage() {
           onClick={toggleVisibility}
           disabled={toggling}
         >
-          {review.is_visible ? 'Hide Review' : 'Show Review'}
+          {review.is_visible ? <><EyeOff size={14} /> Hide Review</> : <><Eye size={14} /> Show Review</>}
         </button>
       </div>
 
-      {/* Review text */}
+      {/* Review content card */}
       <div className={styles.reviewCard}>
         <p className={styles.reviewText}>{review.review_text}</p>
         <div className={styles.helpful}>
-          👍 {review.helpful_count} helpful &nbsp;&nbsp; 👎 {review.not_helpful_count} not helpful
+          <span className={styles.voteBadge + ' ' + styles.voteBadgeUp}>
+            <ThumbsUp size={14} /> {review.helpful_count} helpful
+          </span>
+          <span className={styles.voteBadge + ' ' + styles.voteBadgeDown}>
+            <ThumbsDown size={14} /> {review.not_helpful_count} not helpful
+          </span>
         </div>
       </div>
 
-      {/* Details */}
+      {/* Detail sections */}
       <div className={styles.sections}>
         <div className={styles.section}>
-          <h2 className={styles.sectionTitle}>Guest & Booking</h2>
+          <h2 className={styles.sectionTitle}>
+            <User size={15} /> Guest & Booking
+          </h2>
           <div className={styles.grid}>
-            <Field label="Guest Name"      value={review.guest_name} />
-            <Field label="Guest Email"     value={review.guest_email} />
-            <Field label="Booking Ref"     value={review.booking_reference} />
-            <Field label="Room"            value={`${review.room_number} · ${review.room_type}`} />
+            <Field label="Guest Name" value={review.guest_name} />
+            <Field label="Guest Email" value={review.guest_email} />
+            <Field label="Booking Ref" value={review.booking_reference} />
+            <Field label="Room" value={`${review.room_number} · ${review.room_type}`} />
           </div>
         </div>
         <div className={styles.section}>
-          <h2 className={styles.sectionTitle}>Review Info</h2>
+          <h2 className={styles.sectionTitle}>
+            <CalendarDays size={15} /> Review Info
+          </h2>
           <div className={styles.grid}>
-            <Field label="Rating"      value={`${review.rating} / 5`} />
-            <Field label="Stars"       value={review.star_display} />
-            <Field label="Created"     value={new Date(review.created_at).toLocaleString()} />
-            <Field label="Updated"     value={new Date(review.updated_at).toLocaleString()} />
+            <Field label="Rating" value={`${review.rating} / 5`} />
+            <Field label="Stars" value={review.star_display} />
+            <Field label="Created" value={new Date(review.created_at).toLocaleString()} />
+            <Field label="Updated" value={new Date(review.updated_at).toLocaleString()} />
           </div>
         </div>
       </div>

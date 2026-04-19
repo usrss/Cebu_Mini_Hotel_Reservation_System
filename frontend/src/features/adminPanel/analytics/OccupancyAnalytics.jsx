@@ -11,7 +11,7 @@ function StatBox({ label, value, color }) {
   return (
     <div className="an-stat-box">
       <span className="an-stat-box-label">{label}</span>
-      <span className="an-stat-box-value" style={{ color: color ?? 'var(--white)' }}>{value ?? '—'}</span>
+      <span className="an-stat-box-value" style={{ color: color ?? '#01000D' }}>{value ?? '—'}</span>
     </div>
   );
 }
@@ -19,9 +19,9 @@ function StatBox({ label, value, color }) {
 function CustomTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
   return (
-    <div style={{ background:'var(--navy-card)', border:'1px solid var(--gold-border)', padding:'10px 14px', fontFamily:'Raleway,sans-serif', fontSize:12 }}>
-      <p style={{ color:'var(--gold)', fontWeight:700, margin:'0 0 6px' }}>{label}</p>
-      {payload.map((p,i) => <p key={i} style={{ color:p.color, margin:'2px 0' }}>{p.name}: <strong>{p.value}</strong></p>)}
+    <div style={{ background: '#FFFFFF', border: 'none', borderRadius: 10, padding: '10px 14px', fontFamily: "'DM Sans', sans-serif", fontSize: 12, boxShadow: '0 4px 20px rgba(1,0,13,0.09)' }}>
+      <p style={{ color: '#52515E', fontWeight: 700, margin: '0 0 6px' }}>{label}</p>
+      {payload.map((p,i) => <p key={i} style={{ color: p.color, margin: '2px 0' }}>{p.name}: <strong>{p.value}</strong></p>)}
     </div>
   );
 }
@@ -86,7 +86,7 @@ export default function OccupancyAnalytics({ dashboard, period }) {
         <StatBox
           label="Total Rooms"
           value={isTodayPeriod ? r?.total : report?.summary?.total_rooms ?? r?.total}
-          color="var(--white)" />
+          color="#01000D" />
         <StatBox
           label="Occupied"
           value={
@@ -122,7 +122,7 @@ export default function OccupancyAnalytics({ dashboard, period }) {
                   {donutData.map((_, i) => <Cell key={i} fill={DONUT_COLORS[i]} />)}
                 </Pie>
                 <Tooltip content={<CustomTooltip />} />
-                <Legend wrapperStyle={{ fontSize:10, color:'rgba(248,246,240,0.55)' }} />
+                <Legend wrapperStyle={{ fontSize:10, color:'#52515E' }} />
               </PieChart>
             </ResponsiveContainer>
           ) : <div className="an-empty">No room data.</div>}
@@ -135,9 +135,9 @@ export default function OccupancyAnalytics({ dashboard, period }) {
           {taskData.some(d => d.value > 0) ? (
             <ResponsiveContainer width="100%" height={240}>
               <BarChart data={taskData} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(201,168,76,0.08)" horizontal={false} />
-                <XAxis type="number" tick={{ fill:'rgba(248,246,240,0.45)', fontSize:10 }} />
-                <YAxis type="category" dataKey="name" tick={{ fill:'rgba(248,246,240,0.45)', fontSize:10 }} width={110} />
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(1,0,13,0.05)" horizontal={false} />
+                <XAxis type="number" tick={{ fill:'#7A7987', fontSize:10 }} />
+                <YAxis type="category" dataKey="name" tick={{ fill:'#7A7987', fontSize:10 }} width={110} />
                 <Tooltip content={<CustomTooltip />} />
                 <Bar dataKey="value" radius={[0,2,2,0]}>
                   {taskData.map((d, i) => <Cell key={i} fill={d.fill} />)}

@@ -36,6 +36,7 @@ from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.core.cache   import cache
+from django.db           import models
 from django.db.models    import Avg, Count, F, Q, Sum
 from django.db.models.functions import TruncDate, TruncMonth, TruncWeek
 from django.utils        import timezone
@@ -121,7 +122,8 @@ class EnhancedReportService:
             "occupancy": cls._occupancy,
             "guests":    cls._guests,
             "staff":     cls._staff,
-            "food": cls._food,
+            "food":      cls._food,
+            "payments":  cls._payments,
         }
 
         fn = generators.get(report_type)
@@ -441,76 +443,515 @@ class EnhancedReportService:
         start: date, end: date,
         metrics: list, group_by: str, filters: dict, user=None
     ) -> dict:
-        from staff.models import StaffActivityLog, CleaningTask, MaintenanceTask, StaffProfile
+        """
+        Returns per-staff breakdown rows[] that StaffResultPanel can consume.
 
-        # Role-based scope: managers cannot see admin/manager staff data
-        role = getattr(getattr(user, "staff_profile", None), "effective_role", None) if user else None
+        Each row contains:
+          staff_id, name, email, role,
+          check_ins_handled, check_outs_handled, bookings_created,
+          cancellations_processed, avg_check_in_time,   ← front_desk
+          rooms_cleaned, avg_cleaning_time,
+          rooms_cleaned_per_shift, delayed_cleanings,   ← housekeeping
+          orders_completed, avg_preparation_time,
+          pending_orders, cancelled_orders,             ← kitchen_staff
 
-        def _scoped_profiles():
-            qs = StaffProfile.objects.all()
-            if role == "manager":
-                qs = qs.exclude(role__in=["admin", "manager"])
-            if filters.get("staff_id"):
-                qs = qs.filter(pk=filters["staff_id"])
-            return qs
+        Role detection on the frontend (StaffResultPanel.detectRole) reads the
+        explicit `role` field, so we must populate it — the old code never did,
+        which caused every row to fall through all heuristics and be silently
+        dropped, leaving the leaderboard empty.
 
-        profiles = _scoped_profiles()
-        profile_ids = list(profiles.values_list("id", flat=True))
+        Business rules:
+          - All active, in-scope StaffProfile rows appear even if inactive
+            in the period (values default to 0, not NULL).
+          - front_desk / receptionist  → check-in metrics from StaffActivityLog
+          - housekeeping               → CleaningTask completions
+          - maintenance                → MaintenanceTask completions
+          - kitchen_staff              → FoodOrder completions (if food app present)
+          - admin / manager            → excluded from per-staff rows
+                                         (they appear in scoped_profiles but are
+                                          filtered below since the panel has no
+                                          role section for them)
+          - Managers cannot see admin/manager profile data (role-scope guard).
+        """
+        from staff.models import (
+            StaffActivityLog, CleaningTask, MaintenanceTask,
+            StaffProfile, StaffRole,
+        )
 
-        checkins = (
+        caller_role = (
+            getattr(getattr(user, "staff_profile", None), "effective_role", None)
+            if user else None
+        )
+
+        # ── 1. Resolve in-scope profiles ──────────────────────────────────────
+        profiles_qs = (
+            StaffProfile.objects
+            .select_related("user")
+            .filter(is_active=True)
+        )
+        if caller_role == "manager":
+            profiles_qs = profiles_qs.exclude(role__in=["admin", "manager"])
+        if filters.get("role"):
+            profiles_qs = profiles_qs.filter(role=filters["role"])
+        if filters.get("staff_id"):
+            profiles_qs = profiles_qs.filter(pk=filters["staff_id"])
+
+        # Exclude admin/manager from the per-staff breakdown rows — there are no
+        # role sections for them in StaffResultPanel.
+        OPERATIONAL_ROLES = {
+            StaffRole.FRONT_DESK,
+            StaffRole.RECEPTIONIST,   # receptionist maps to front_desk panel
+            StaffRole.HOUSEKEEPING,
+            StaffRole.MAINTENANCE,
+            StaffRole.KITCHEN_STAFF,
+            StaffRole.SECURITY,
+        }
+        profiles_qs = profiles_qs.filter(role__in=OPERATIONAL_ROLES)
+
+        # Build a dict keyed by profile.pk so we can merge activity counts in.
+        # Seed every profile with zero counts so inactive staff still appear.
+        perf: dict[int, dict] = {}
+        for p in profiles_qs:
+            full_name = p.user.get_full_name() or p.user.email
+
+            # Map receptionist → front_desk so the frontend panel picks it up.
+            panel_role = (
+                "front_desk"
+                if p.role == StaffRole.RECEPTIONIST
+                else p.role
+            )
+
+            perf[p.pk] = {
+                # Identity
+                "staff_id":  p.employee_id or str(p.pk),
+                "name":      full_name,
+                "email":     p.user.email,
+                "role":      panel_role,   # ← what StaffResultPanel.detectRole() reads
+                # front_desk metrics
+                "check_ins_handled":        0,
+                "check_outs_handled":       0,
+                "bookings_created":         0,
+                "cancellations_processed":  0,
+                "avg_check_in_time":        None,
+                # housekeeping metrics
+                "rooms_cleaned":            0,
+                "avg_cleaning_time":        None,
+                "rooms_cleaned_per_shift":  0,
+                "delayed_cleanings":        0,
+                # maintenance / kitchen metrics
+                "orders_completed":         0,
+                "avg_preparation_time":     None,
+                "pending_orders":           0,
+                "cancelled_orders":         0,
+                # security metrics
+                "incidents_logged":         0,
+                "incidents_resolved":       0,
+                "high_severity":            0,
+                "avg_resolution_time":      None,
+            }
+
+        profile_ids = list(perf.keys())
+        if not profile_ids:
+            return {
+                "summary": _filter_summary(
+                    {"total_check_ins": 0, "total_cleaning_done": 0,
+                     "total_maintenance_done": 0, "total_staff": 0},
+                    metrics,
+                ),
+                "rows": [],
+            }
+
+        # ── 2. Front-desk metrics from StaffActivityLog ───────────────────────
+        # Each action_type maps to a counter on the row.
+        ACTION_MAP = {
+            "check_in_guest":          "check_ins_handled",
+            "check_out_guest":         "check_outs_handled",
+            "create_booking":          "bookings_created",
+            "cancel_booking":          "cancellations_processed",
+            # Legacy aliases that may exist in older audit entries
+            "guest_check_in":          "check_ins_handled",
+            "guest_check_out":         "check_outs_handled",
+        }
+        activity_rows = (
             StaffActivityLog.objects.filter(
-                action_type="check_in_guest",
+                action_type__in=list(ACTION_MAP.keys()),
                 created_at__date__gte=start,
                 created_at__date__lte=end,
                 staff_id__in=profile_ids,
             )
-            .values("staff__id", "staff__user__email")
+            .values("staff_id", "action_type")
             .annotate(count=Count("id"))
         )
+        for row in activity_rows:
+            pid  = row["staff_id"]
+            key  = ACTION_MAP.get(row["action_type"])
+            if pid in perf and key:
+                perf[pid][key] += row["count"]
 
-        cleaning = (
+        # ── 3. Housekeeping — CleaningTask completions ────────────────────────
+        cleaning_rows = (
             CleaningTask.objects.filter(
                 status="clean",
                 completed_at__date__gte=start,
                 completed_at__date__lte=end,
                 assigned_to_id__in=profile_ids,
             )
-            .values("assigned_to__id", "assigned_to__user__email")
-            .annotate(count=Count("id"))
+            .values("assigned_to_id")
+            .annotate(
+                count=Count("id"),
+                avg_mins=Avg(
+                    F("completed_at") - F("started_at"),
+                    output_field=models.DurationField(),
+                ),
+                delayed=Count(
+                    "id",
+                    filter=Q(completed_at__gt=F("cleaning_end_at"),
+                             cleaning_end_at__isnull=False),
+                ),
+            )
         )
+        for row in cleaning_rows:
+            pid = row["assigned_to_id"]
+            if pid not in perf:
+                continue
+            perf[pid]["rooms_cleaned"] = row["count"]
+            if row["avg_mins"] is not None:
+                # DurationField returns a timedelta
+                total_secs = row["avg_mins"].total_seconds()
+                perf[pid]["avg_cleaning_time"] = round(total_secs / 60, 1)
+            perf[pid]["delayed_cleanings"] = row["delayed"]
 
-        maintenance = (
+        # rooms_cleaned_per_shift: divide by number of distinct shift days in period
+        shift_days_in_period = max((end - start).days + 1, 1)
+        for pid in perf:
+            if perf[pid]["rooms_cleaned"] > 0:
+                perf[pid]["rooms_cleaned_per_shift"] = round(
+                    perf[pid]["rooms_cleaned"] / shift_days_in_period, 2
+                )
+
+        # ── 4. Maintenance — MaintenanceTask completions ──────────────────────
+        maintenance_rows = (
             MaintenanceTask.objects.filter(
                 status="completed",
                 completed_at__date__gte=start,
                 completed_at__date__lte=end,
                 assigned_to_id__in=profile_ids,
             )
-            .values("assigned_to__id", "assigned_to__user__email")
+            .values("assigned_to_id")
             .annotate(count=Count("id"))
         )
+        for row in maintenance_rows:
+            pid = row["assigned_to_id"]
+            if pid in perf:
+                perf[pid]["orders_completed"] = row["count"]   # reuse orders_completed field
+                # StaffResultPanel uses orders_completed for maintenance score too —
+                # it reads ROLE_CONFIG[maintenance].scoreKeys = ['orders_completed']
 
-        perf: dict[str, dict] = {}
-        for row in checkins:
-            email = row["staff__user__email"]
-            perf.setdefault(email, {"email": email, "check_ins": 0, "cleaning": 0, "maintenance": 0})
-            perf[email]["check_ins"] = row["count"]
-        for row in cleaning:
-            email = row["assigned_to__user__email"]
-            perf.setdefault(email, {"email": email, "check_ins": 0, "cleaning": 0, "maintenance": 0})
-            perf[email]["cleaning"] = row["count"]
-        for row in maintenance:
-            email = row["assigned_to__user__email"]
-            perf.setdefault(email, {"email": email, "check_ins": 0, "cleaning": 0, "maintenance": 0})
-            perf[email]["maintenance"] = row["count"]
+        # ── 5. Kitchen staff — FoodOrder completions (optional) ───────────────
+        try:
+            from food.models import FoodOrder
+            kitchen_ids = [
+                pid for pid, d in perf.items()
+                if d["role"] == "kitchen_staff"
+            ]
+            if kitchen_ids:
+                # FoodOrder may link to staff via a FK; gracefully skip if not.
+                food_qs_kwargs = {}
+                # Try the most common FK name; if the field doesn't exist we
+                # catch AttributeError and fall through to the zero default.
+                try:
+                    FoodOrder._meta.get_field("prepared_by")
+                    food_qs_kwargs = dict(
+                        prepared_by_id__in=kitchen_ids,
+                        order_status="completed",
+                        created_at__date__gte=start,
+                        created_at__date__lte=end,
+                    )
+                    food_rows = (
+                        FoodOrder.objects.filter(**food_qs_kwargs)
+                        .values("prepared_by_id")
+                        .annotate(
+                            completed=Count("id"),
+                            avg_prep=Avg(
+                                F("completed_at") - F("created_at"),
+                                output_field=models.DurationField(),
+                            ),
+                        )
+                    )
+                    for row in food_rows:
+                        pid = row["prepared_by_id"]
+                        if pid in perf:
+                            perf[pid]["orders_completed"]    = row["completed"]
+                            if row["avg_prep"] is not None:
+                                perf[pid]["avg_preparation_time"] = round(
+                                    row["avg_prep"].total_seconds() / 60, 1
+                                )
+                except Exception:
+                    pass   # FoodOrder has no prepared_by FK — leave zeros
 
-        rows = sorted(perf.values(), key=lambda r: -(r["check_ins"] + r["cleaning"] + r["maintenance"]))
+                # pending / cancelled orders (global counts for the period,
+                # not per-staff since there's no staff FK yet)
+                try:
+                    kitchen_pending   = FoodOrder.objects.filter(
+                        order_status="pending",
+                        created_at__date__gte=start,
+                        created_at__date__lte=end,
+                    ).count()
+                    kitchen_cancelled = FoodOrder.objects.filter(
+                        order_status="cancelled",
+                        created_at__date__gte=start,
+                        created_at__date__lte=end,
+                    ).count()
+                    for pid in kitchen_ids:
+                        if pid in perf:
+                            perf[pid]["pending_orders"]   = kitchen_pending
+                            perf[pid]["cancelled_orders"] = kitchen_cancelled
+                except Exception:
+                    pass
+        except ImportError:
+            pass   # food app not installed
+
+        # ── 6. Security — IncidentLog metrics ────────────────────────────────────
+        security_ids = [
+            pid for pid, d in perf.items()
+            if d["role"] == "security"
+        ]
+        if security_ids:
+            from staff.models import IncidentLog
+
+            # Total incidents logged per security staff member
+            incident_counts = (
+                IncidentLog.objects.filter(
+                    logged_by_id__in=security_ids,
+                    created_at__date__gte=start,
+                    created_at__date__lte=end,
+                )
+                .values("logged_by_id")
+                .annotate(
+                    total=Count("id"),
+                    resolved=Count("id", filter=Q(status="resolved")),
+                    high=Count(
+                        "id",
+                        filter=Q(severity__in=["high", "critical"]),
+                    ),
+                )
+            )
+            for row in incident_counts:
+                pid = row["logged_by_id"]
+                if pid in perf:
+                    perf[pid]["incidents_logged"]   = row["total"]
+                    perf[pid]["incidents_resolved"] = row["resolved"]
+                    perf[pid]["high_severity"]       = row["high"]
+
+            # Average resolution time (resolved_at - created_at) in minutes
+            resolution_times = (
+                IncidentLog.objects.filter(
+                    logged_by_id__in=security_ids,
+                    created_at__date__gte=start,
+                    created_at__date__lte=end,
+                    status="resolved",
+                    resolved_at__isnull=False,
+                )
+                .values("logged_by_id")
+                .annotate(
+                    avg_res=Avg(
+                        F("resolved_at") - F("created_at"),
+                        output_field=models.DurationField(),
+                    )
+                )
+            )
+            for row in resolution_times:
+                pid = row["logged_by_id"]
+                if pid in perf and row["avg_res"] is not None:
+                    perf[pid]["avg_resolution_time"] = round(
+                        row["avg_res"].total_seconds() / 60, 1
+                    )
+
+        # ── 7. Assemble rows and summary ──────────────────────────────────────
+        rows = sorted(
+            perf.values(),
+            key=lambda r: -(
+                r["check_ins_handled"]
+                + r["rooms_cleaned"]
+                + r["orders_completed"]
+            ),
+        )
 
         summary_full = {
-            "total_check_ins":       sum(r["check_ins"]    for r in rows),
-            "total_cleaning_done":   sum(r["cleaning"]     for r in rows),
-            "total_maintenance_done":sum(r["maintenance"]  for r in rows),
+            "total_staff":            len(rows),
+            "total_check_ins":        sum(r["check_ins_handled"] for r in rows),
+            "total_cleaning_done":    sum(r["rooms_cleaned"]      for r in rows),
+            "total_maintenance_done": sum(
+                r["orders_completed"] for r in rows
+                if r["role"] == "maintenance"
+            ),
+            "total_incidents_logged": sum(
+                r["incidents_logged"] for r in rows
+                if r["role"] == "security"
+            ),
+            # Period boundaries for the summary band in StaffResultPanel
+            "period_start": str(start),
+            "period_end":   str(end),
         }
+
+        return {
+            "summary": _filter_summary(summary_full, metrics),
+            "rows":    rows,
+        }
+
+    # ── Payments ───────────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _payments(
+        start: date, end: date,
+        metrics: list, group_by: str, filters: dict, user=None
+    ) -> dict:
+        """
+        Queries payments.Payment (the dedicated payments table) — NOT Booking.
+
+        Financial rules enforced here and visible via PaymentsResultPanel:
+          - Only PAID payments count toward gross / net revenue.
+          - FAILED payments are counted separately and never added to revenue.
+          - REFUNDED payments reduce net_collected_amount via the Refund table.
+          - PENDING payments are shown in their own card (awaiting completion).
+
+        group_by options: day | week | month | payment_method | payment_status
+        """
+        from payments.models import Payment, PaymentStatus, Refund
+        from django.db.models import DecimalField
+        from django.db.models.functions import Coalesce
+
+        qs = Payment.objects.filter(
+            created_at__date__gte=start,
+            created_at__date__lte=end,
+        )
+
+        # Optional filters
+        if filters.get("room_type"):
+            qs = qs.filter(booking__room__room_type=filters["room_type"])
+        if filters.get("payment_status"):
+            qs = qs.filter(status=filters["payment_status"])
+        if filters.get("payment_method"):
+            qs = qs.filter(payment_method=filters["payment_method"])
+
+        # ── Aggregate KPIs ────────────────────────────────────────────────────
+        paid_qs   = qs.filter(status=PaymentStatus.PAID)
+        failed_qs = qs.filter(status=PaymentStatus.FAILED)
+        pending_qs = qs.filter(status=PaymentStatus.PENDING)
+
+        paid_agg = paid_qs.aggregate(
+            gross=Coalesce(Sum("amount"), Decimal("0"), output_field=DecimalField()),
+            count=Count("id"),
+            avg=Coalesce(Avg("amount"), Decimal("0"), output_field=DecimalField()),
+        )
+
+        # Total refunds processed in the period (from the Refund table)
+        refund_total = (
+            Refund.objects.filter(
+                status="completed",
+                created_at__date__gte=start,
+                created_at__date__lte=end,
+            ).aggregate(
+                t=Coalesce(Sum("amount"), Decimal("0"), output_field=DecimalField())
+            )["t"]
+        )
+
+        gross_amount = paid_agg["gross"]
+        net_amount   = gross_amount - refund_total
+        total_txns   = qs.count()
+
+        summary_full = {
+            "total_gross_amount":       float(gross_amount),
+            "net_collected_amount":     float(net_amount),
+            "total_refunds":            float(refund_total),
+            "successful_payments":      paid_agg["count"],
+            "failed_payments":          failed_qs.count(),
+            "pending_payments":         pending_qs.count(),
+            "total_payments_processed": total_txns,
+            "average_transaction_value": float(paid_agg["avg"]),
+            "refund_rate": (
+                round(float(refund_total) / float(gross_amount) * 100, 2)
+                if gross_amount else 0.0
+            ),
+            "failed_payment_rate": (
+                round(failed_qs.count() / total_txns * 100, 2)
+                if total_txns else 0.0
+            ),
+        }
+
+        # ── Rows (grouped) ────────────────────────────────────────────────────
+        rows: list[dict] = []
+
+        if group_by in ("day", "week", "month"):
+            trunc = _trunc_fn(group_by)
+            rows_qs = (
+                qs.annotate(period=trunc("created_at"))
+                  .values("period")
+                  .annotate(
+                      total_gross_amount=Coalesce(
+                          Sum("amount", filter=Q(status=PaymentStatus.PAID)),
+                          Decimal("0"), output_field=DecimalField(),
+                      ),
+                      successful_payments=Count("id", filter=Q(status=PaymentStatus.PAID)),
+                      failed_payments=Count("id", filter=Q(status=PaymentStatus.FAILED)),
+                      pending_payments=Count("id", filter=Q(status=PaymentStatus.PENDING)),
+                  )
+                  .order_by("period")
+            )
+            rows = [
+                {
+                    "period":               str(r["period"]),
+                    "total_gross_amount":   float(r["total_gross_amount"]),
+                    "net_collected_amount": float(r["total_gross_amount"]),  # refunds not per-period
+                    "successful_payments":  r["successful_payments"],
+                    "failed_payments":      r["failed_payments"],
+                    "pending_payments":     r["pending_payments"],
+                }
+                for r in rows_qs
+            ]
+
+        elif group_by == "payment_method":
+            rows_qs = (
+                qs.values("payment_method")
+                  .annotate(
+                      total_gross_amount=Coalesce(
+                          Sum("amount", filter=Q(status=PaymentStatus.PAID)),
+                          Decimal("0"), output_field=DecimalField(),
+                      ),
+                      successful_payments=Count("id", filter=Q(status=PaymentStatus.PAID)),
+                      failed_payments=Count("id", filter=Q(status=PaymentStatus.FAILED)),
+                  )
+                  .order_by("-total_gross_amount")
+            )
+            rows = [
+                {
+                    "payment_method":       r["payment_method"],
+                    "total_gross_amount":   float(r["total_gross_amount"]),
+                    "successful_payments":  r["successful_payments"],
+                    "failed_payments":      r["failed_payments"],
+                }
+                for r in rows_qs
+            ]
+
+        elif group_by == "payment_status":
+            rows_qs = (
+                qs.values("status")
+                  .annotate(
+                      count=Count("id"),
+                      total_amount=Coalesce(
+                          Sum("amount"), Decimal("0"), output_field=DecimalField(),
+                      ),
+                  )
+                  .order_by("-count")
+            )
+            rows = [
+                {
+                    "payment_status": r["status"],
+                    "count":          r["count"],
+                    "total_amount":   float(r["total_amount"]),
+                }
+                for r in rows_qs
+            ]
 
         return {
             "summary": _filter_summary(summary_full, metrics),
@@ -600,156 +1041,602 @@ class EnhancedReportService:
 
 # ─── Export helpers ───────────────────────────────────────────────────────────
 
+# Human-readable column labels for every field the reports produce.
+# Keys are the raw dict keys from rows[] and summary{}.
+COLUMN_LABELS = {
+    # Identity / period
+    "period":                   "Period",
+    "staff_id":                 "Staff ID",
+    "name":                     "Name",
+    "email":                    "Email",
+    "role":                     "Role",
+    # Bookings
+    "bookings":                 "Bookings",
+    "count":                    "Count",
+    "status":                   "Status",
+    "room_type":                "Room Type",
+    "label":                    "Label",
+    "paid_revenue":             "Paid Revenue (₱)",
+    # Revenue
+    "revenue":                  "Revenue (₱)",
+    "total_revenue":            "Total Revenue (₱)",
+    "total_tax":                "Total Tax (₱)",
+    "total_service_fee":        "Service Fee (₱)",
+    "net_revenue":              "Net Revenue (₱)",
+    "avg_booking_value":        "Avg Booking Value (₱)",
+    "paid_bookings":            "Paid Bookings",
+    "total_refunds":            "Total Refunds (₱)",
+    # Occupancy
+    "room_count":               "Room Count",
+    "room_type_label":          "Room Type",
+    "occupied_nights":          "Occupied Nights",
+    "max_nights":               "Max Nights",
+    "occupancy_rate":           "Occupancy Rate (%)",
+    "total_rooms":              "Total Rooms",
+    "total_days":               "Total Days",
+    "total_room_nights":        "Total Room Nights",
+    # Guests
+    "spent":                    "Total Spent (₱)",
+    # Front desk
+    "check_ins_handled":        "Check-ins Handled",
+    "check_outs_handled":       "Check-outs Handled",
+    "bookings_created":         "Bookings Created",
+    "cancellations_processed":  "Cancellations Handled",
+    "avg_check_in_time":        "Avg Check-in Time (min)",
+    # Housekeeping
+    "rooms_cleaned":            "Rooms Cleaned",
+    "avg_cleaning_time":        "Avg Cleaning Time (min)",
+    "rooms_cleaned_per_shift":  "Rooms / Shift",
+    "delayed_cleanings":        "Delayed Cleanings",
+    # Maintenance / kitchen
+    "orders_completed":         "Tasks / Orders Completed",
+    "avg_preparation_time":     "Avg Prep Time (min)",
+    "pending_orders":           "Pending",
+    "cancelled_orders":         "Cancelled",
+    # Security
+    "incidents_logged":         "Incidents Logged",
+    "incidents_resolved":       "Incidents Resolved",
+    "high_severity":            "High / Critical Incidents",
+    "avg_resolution_time":      "Avg Resolution Time (min)",
+    # Payments
+    "payment_method":           "Payment Method",
+    "payment_status":           "Payment Status",
+    "total_gross_amount":       "Gross Amount (₱)",
+    "net_collected_amount":     "Net Collected (₱)",
+    "total_amount":             "Total Amount (₱)",
+    "successful_payments":      "Successful Payments",
+    "failed_payments":          "Failed Payments",
+    "pending_payments":         "Pending Payments",
+    "total_payments_processed": "Total Transactions",
+    "average_transaction_value":"Avg Transaction (₱)",
+    "refund_rate":              "Refund Rate (%)",
+    "failed_payment_rate":      "Failure Rate (%)",
+    # Food
+    "category":                 "Category",
+    "orders":                   "Orders",
+    "total_orders":             "Total Orders",
+    "avg_order_value":          "Avg Order Value (₱)",
+    "paid_revenue":             "Paid Revenue (₱)",
+    "pending_orders":           "Pending Orders",
+    "completed_orders":         "Completed Orders",
+    # Summary keys
+    "total_check_ins":          "Total Check-ins",
+    "total_cleaning_done":      "Total Rooms Cleaned",
+    "total_maintenance_done":   "Total Maintenance Tasks",
+    "total_incidents_logged":   "Total Incidents Logged",
+    "total_staff":              "Total Staff",
+    "period_start":             "Period Start",
+    "period_end":               "Period End",
+    "total_gross_amount":       "Gross Amount (₱)",
+    "net_collected_amount":     "Net Collected (₱)",
+}
+
+# Fields that contain monetary amounts — formatted as ₱ in CSV/PDF,
+# stored as real numbers in Excel so it can sum/chart them.
+CURRENCY_FIELDS = {
+    "revenue", "paid_revenue", "total_revenue", "total_tax",
+    "total_service_fee", "net_revenue", "avg_booking_value",
+    "total_refunds", "spent", "total_gross_amount",
+    "net_collected_amount", "total_amount", "average_transaction_value",
+    "avg_order_value", "paid_revenue",
+}
+
+# Fields that are percentages
+PERCENT_FIELDS = {"occupancy_rate", "refund_rate", "failed_payment_rate"}
+
+# Role labels for staff report grouping headers
+ROLE_LABELS = {
+    "front_desk":   "Front Desk",
+    "housekeeping": "Housekeeping",
+    "maintenance":  "Maintenance",
+    "kitchen_staff":"Kitchen Staff",
+    "security":     "Security",
+}
+
+
+def _col_label(key: str) -> str:
+    """Return a human-readable column header for a field key."""
+    return COLUMN_LABELS.get(key, key.replace("_", " ").title())
+
+
+def _fmt_value(key: str, val) -> str:
+    """Format a value for CSV / PDF text cells."""
+    if val is None:
+        return "—"
+    if key in CURRENCY_FIELDS and isinstance(val, (int, float)):
+        return f"₱{val:,.2f}"
+    if key in PERCENT_FIELDS and isinstance(val, (int, float)):
+        return f"{val:.1f}%"
+    if isinstance(val, float):
+        return f"{val:,.2f}" if val != int(val) else f"{int(val):,}"
+    if isinstance(val, int):
+        return f"{val:,}"
+    return str(val)
+
+
+def _is_staff_report(data: dict) -> bool:
+    return data.get("meta", {}).get("report_type") == "staff"
+
+
+def _group_staff_rows(rows: list) -> list[tuple[str, list]]:
+    """
+    Returns [(role_label, [rows]), ...] preserving ROLE_LABELS order.
+    Used by CSV and PDF to write role-separated sections.
+    """
+    grouped: dict[str, list] = {}
+    for row in rows:
+        role = row.get("role", "unknown")
+        grouped.setdefault(role, []).append(row)
+
+    ordered = []
+    for role_key in ROLE_LABELS:
+        if role_key in grouped:
+            ordered.append((ROLE_LABELS[role_key], grouped[role_key]))
+    # Append any unknown/unexpected roles at the end
+    for role_key, role_rows in grouped.items():
+        if role_key not in ROLE_LABELS:
+            ordered.append((role_key.replace("_", " ").title(), role_rows))
+    return ordered
+
+
+# ── Role-specific columns so each section only shows relevant columns ─────────
+
+ROLE_COLUMNS = {
+    "front_desk": [
+        "staff_id", "name", "email",
+        "check_ins_handled", "check_outs_handled",
+        "bookings_created", "cancellations_processed", "avg_check_in_time",
+    ],
+    "housekeeping": [
+        "staff_id", "name", "email",
+        "rooms_cleaned", "avg_cleaning_time",
+        "rooms_cleaned_per_shift", "delayed_cleanings",
+    ],
+    "maintenance": [
+        "staff_id", "name", "email",
+        "orders_completed", "pending_orders", "cancelled_orders",
+    ],
+    "kitchen_staff": [
+        "staff_id", "name", "email",
+        "orders_completed", "avg_preparation_time",
+        "pending_orders", "cancelled_orders",
+    ],
+    "security": [
+        "staff_id", "name", "email",
+        "incidents_logged", "incidents_resolved",
+        "high_severity", "avg_resolution_time",
+    ],
+}
+
+
 def export_csv(data: dict, report_type: str) -> bytes:
-    """Render report data as CSV bytes."""
+    """
+    Render report data as CSV bytes.
+
+    Structure:
+      Section 1 — Report info (type, period, generated_at)
+      Section 2 — Summary (metric, value pairs)
+      Section 3 — Data rows
+        For staff reports: one sub-section per role with role-specific columns.
+        For all others: single flat table.
+    """
     import csv as _csv
 
-    buf  = io.StringIO()
+    buf = io.StringIO()
+    w   = _csv.writer(buf)
+
+    meta = data.get("meta", {})
+
+    # ── Header block ──────────────────────────────────────────────────────────
+    w.writerow(["Report Type", report_type.replace("_", " ").title()])
+    if meta.get("start_date"):
+        w.writerow(["Period", f"{meta['start_date']} to {meta['end_date']}"])
+    if meta.get("generated_at"):
+        w.writerow(["Generated", meta["generated_at"]])
+    w.writerow([])
+
+    # ── Summary section ───────────────────────────────────────────────────────
+    summary = data.get("summary", {})
+    if summary:
+        w.writerow(["SUMMARY"])
+        w.writerow(["Metric", "Value"])
+        for k, v in summary.items():
+            w.writerow([_col_label(k), _fmt_value(k, v)])
+        w.writerow([])
+
+    # ── Data rows ─────────────────────────────────────────────────────────────
     rows = data.get("rows", [])
     if not rows:
-        return buf.getvalue().encode()
+        w.writerow(["No data available for the selected period and filters."])
+        return buf.getvalue().encode("utf-8")
 
-    writer = _csv.DictWriter(buf, fieldnames=rows[0].keys())
-    writer.writeheader()
-    writer.writerows(rows)
+    if _is_staff_report(data):
+        # Per-role sections with role-specific columns
+        for role_label, role_rows in _group_staff_rows(rows):
+            if not role_rows:
+                continue
+            role_key = role_rows[0].get("role", "")
+            cols     = ROLE_COLUMNS.get(role_key, list(role_rows[0].keys()))
+            # Only keep cols that actually exist in the rows
+            cols = [c for c in cols if c in role_rows[0]]
+
+            w.writerow([])
+            w.writerow([f"── {role_label} ──"])
+            w.writerow([_col_label(c) for c in cols])
+            for row in role_rows:
+                w.writerow([_fmt_value(c, row.get(c)) for c in cols])
+    else:
+        cols = list(rows[0].keys())
+        w.writerow([_col_label(c) for c in cols])
+        for row in rows:
+            w.writerow([_fmt_value(c, row.get(c)) for c in cols])
+
     return buf.getvalue().encode("utf-8")
 
 
 def export_pdf(data: dict, report_type: str) -> bytes:
     """
     Render report data as a PDF using ReportLab.
-    Falls back to a plain-text PDF if ReportLab is unavailable.
+    Falls back to a plain-text document if ReportLab is unavailable.
+
+    Layout:
+      - Title + period line
+      - Summary table (Metric | Value)
+      - Data table(s) — one per role for staff reports
     """
     try:
         from reportlab.lib.pagesizes import A4, landscape
-        from reportlab.lib.styles    import getSampleStyleSheet
+        from reportlab.lib.styles    import getSampleStyleSheet, ParagraphStyle
         from reportlab.lib.units     import cm
+        from reportlab.lib.enums     import TA_LEFT
         from reportlab.platypus      import (
-            SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer,
+            SimpleDocTemplate, Table, TableStyle,
+            Paragraph, Spacer, HRFlowable,
         )
-        from reportlab.lib           import colors
+        from reportlab.lib import colors
 
-        buf  = io.BytesIO()
-        doc  = SimpleDocTemplate(buf, pagesize=landscape(A4))
-        styles = getSampleStyleSheet()
-        story  = []
+        buf    = io.BytesIO()
+        doc    = SimpleDocTemplate(
+            buf,
+            pagesize=landscape(A4),
+            leftMargin=1.5*cm, rightMargin=1.5*cm,
+            topMargin=1.5*cm,  bottomMargin=1.5*cm,
+        )
+        styles  = getSampleStyleSheet()
+        story   = []
+        meta    = data.get("meta", {})
+        summary = data.get("summary", {})
+        rows    = data.get("rows", [])
 
-        # Title
-        title = f"{report_type.replace('_',' ').title()} Report"
-        story.append(Paragraph(title, styles["Title"]))
-        meta = data.get("meta", {})
-        story.append(Paragraph(
-            f"Period: {meta.get('start_date','')} — {meta.get('end_date','')} | "
-            f"Generated: {meta.get('generated_at','')}",
-            styles["Normal"],
-        ))
+        # Shared table style builder
+        HEADER_BG  = colors.HexColor("#1a2744")
+        ALT_ROW    = colors.HexColor("#f3f4f6")
+        ROLE_COLORS = {
+            "front_desk":   colors.HexColor("#1D4ED8"),
+            "housekeeping": colors.HexColor("#065F46"),
+            "maintenance":  colors.HexColor("#5B21B6"),
+            "kitchen_staff":colors.HexColor("#92400E"),
+            "security":     colors.HexColor("#991B1B"),
+        }
+
+        def _make_table(table_data, col_widths=None, header_color=HEADER_BG):
+            t = Table(table_data, colWidths=col_widths, repeatRows=1)
+            t.setStyle(TableStyle([
+                ("BACKGROUND",    (0, 0), (-1, 0), header_color),
+                ("TEXTCOLOR",     (0, 0), (-1, 0), colors.white),
+                ("FONTNAME",      (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTSIZE",      (0, 0), (-1, 0), 8),
+                ("FONTSIZE",      (0, 1), (-1, -1), 7),
+                ("ROWBACKGROUNDS",(0, 1), (-1, -1), [colors.white, ALT_ROW]),
+                ("GRID",          (0, 0), (-1, -1), 0.4, colors.HexColor("#d1d5db")),
+                ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
+                ("TOPPADDING",    (0, 0), (-1, -1), 3),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+                ("LEFTPADDING",   (0, 0), (-1, -1), 5),
+                ("RIGHTPADDING",  (0, 0), (-1, -1), 5),
+            ]))
+            return t
+
+        # ── Title ─────────────────────────────────────────────────────────────
+        title_text = f"{report_type.replace('_', ' ').title()} Report"
+        story.append(Paragraph(title_text, styles["Title"]))
+
+        period_text = ""
+        if meta.get("start_date"):
+            period_text = (
+                f"Period: {meta['start_date']} — {meta['end_date']}   |   "
+                f"Generated: {meta.get('generated_at', '')[:19].replace('T', ' ')}"
+            )
+        if meta.get("group_by"):
+            period_text += f"   |   Grouped by: {meta['group_by'].replace('_', ' ').title()}"
+        if period_text:
+            story.append(Paragraph(period_text, styles["Normal"]))
         story.append(Spacer(1, 0.4 * cm))
 
-        # Summary table
-        summary = data.get("summary", {})
+        # ── Summary table ─────────────────────────────────────────────────────
         if summary:
             story.append(Paragraph("Summary", styles["Heading2"]))
             s_data = [["Metric", "Value"]] + [
-                [k.replace("_", " ").title(), str(v)]
+                [_col_label(k), _fmt_value(k, v)]
                 for k, v in summary.items()
+                if k not in ("period_start", "period_end")  # shown in header already
             ]
-            t = Table(s_data, colWidths=[8 * cm, 6 * cm])
-            t.setStyle(TableStyle([
-                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1a2744")),
-                ("TEXTCOLOR",  (0, 0), (-1, 0), colors.white),
-                ("FONTNAME",   (0, 0), (-1, 0), "Helvetica-Bold"),
-                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f3f4f6")]),
-                ("GRID",       (0, 0), (-1, -1), 0.5, colors.grey),
-                ("FONTSIZE",   (0, 0), (-1, -1), 9),
-            ]))
-            story.append(t)
-            story.append(Spacer(1, 0.4 * cm))
+            story.append(_make_table(s_data, col_widths=[9*cm, 7*cm]))
+            story.append(Spacer(1, 0.5 * cm))
 
-        # Rows table
-        rows = data.get("rows", [])
-        if rows:
+        # ── Data table(s) ─────────────────────────────────────────────────────
+        if not rows:
+            story.append(Paragraph(
+                "No data available for the selected period and filters.",
+                styles["Normal"],
+            ))
+        elif _is_staff_report(data):
+            story.append(Paragraph("Staff Performance by Role", styles["Heading2"]))
+            page_width = landscape(A4)[0] - 3*cm  # usable width
+
+            for role_label, role_rows in _group_staff_rows(rows):
+                if not role_rows:
+                    continue
+                role_key     = role_rows[0].get("role", "")
+                header_color = ROLE_COLORS.get(role_key, HEADER_BG)
+                cols         = ROLE_COLUMNS.get(role_key, list(role_rows[0].keys()))
+                cols         = [c for c in cols if c in role_rows[0]]
+
+                story.append(Spacer(1, 0.3 * cm))
+                story.append(Paragraph(role_label, styles["Heading3"]))
+                story.append(Spacer(1, 0.15 * cm))
+
+                col_w = page_width / len(cols)
+                t_data = [[_col_label(c) for c in cols]] + [
+                    [_fmt_value(c, row.get(c)) for c in cols]
+                    for row in role_rows
+                ]
+                story.append(_make_table(t_data, col_widths=[col_w]*len(cols),
+                                         header_color=header_color))
+        else:
             story.append(Paragraph("Data", styles["Heading2"]))
-            headers   = list(rows[0].keys())
-            col_width = max(2 * cm, 25 * cm / len(headers))
-            r_data    = [headers] + [[str(row.get(h, "")) for h in headers] for row in rows]
-            t2 = Table(r_data, colWidths=[col_width] * len(headers))
-            t2.setStyle(TableStyle([
-                ("BACKGROUND",    (0, 0), (-1, 0), colors.HexColor("#1a2744")),
-                ("TEXTCOLOR",     (0, 0), (-1, 0), colors.white),
-                ("FONTNAME",      (0, 0), (-1, 0), "Helvetica-Bold"),
-                ("ROWBACKGROUNDS",(0, 1), (-1, -1), [colors.white, colors.HexColor("#f3f4f6")]),
-                ("GRID",          (0, 0), (-1, -1), 0.5, colors.grey),
-                ("FONTSIZE",      (0, 0), (-1, -1), 8),
-            ]))
-            story.append(t2)
+            cols      = list(rows[0].keys())
+            page_width = landscape(A4)[0] - 3*cm
+            col_w     = max(2*cm, page_width / len(cols))
+            t_data    = [[_col_label(c) for c in cols]] + [
+                [_fmt_value(c, row.get(c)) for c in cols]
+                for row in rows
+            ]
+            story.append(_make_table(t_data, col_widths=[col_w]*len(cols)))
 
         doc.build(story)
         return buf.getvalue()
 
     except ImportError:
-        # Fallback: plain text PDF-like response
-        content = f"Report: {report_type}\n\n"
-        content += json.dumps(data.get("summary", {}), indent=2)
-        return content.encode("utf-8")
+        # Fallback: structured plain text
+        lines = [
+            f"REPORT: {report_type.replace('_', ' ').upper()}",
+            f"Period: {data.get('meta', {}).get('start_date', '')} to "
+            f"{data.get('meta', {}).get('end_date', '')}",
+            "",
+            "SUMMARY",
+            "--------",
+        ]
+        for k, v in data.get("summary", {}).items():
+            lines.append(f"{_col_label(k)}: {_fmt_value(k, v)}")
+
+        lines += ["", "DATA", "----"]
+        rows = data.get("rows", [])
+        if rows:
+            if _is_staff_report(data):
+                for role_label, role_rows in _group_staff_rows(rows):
+                    lines.append(f"\n[{role_label}]")
+                    cols = ROLE_COLUMNS.get(
+                        role_rows[0].get("role", ""), list(role_rows[0].keys())
+                    )
+                    cols = [c for c in cols if c in role_rows[0]]
+                    lines.append("\t".join(_col_label(c) for c in cols))
+                    for row in role_rows:
+                        lines.append("\t".join(_fmt_value(c, row.get(c)) for c in cols))
+            else:
+                cols = list(rows[0].keys())
+                lines.append("\t".join(_col_label(c) for c in cols))
+                for row in rows:
+                    lines.append("\t".join(_fmt_value(c, row.get(c)) for c in cols))
+        else:
+            lines.append("No data.")
+
+        return "\n".join(lines).encode("utf-8")
 
 
 def export_excel(data: dict, report_type: str) -> bytes:
-    """Render report data as an Excel workbook using openpyxl."""
+    """
+    Render report data as an Excel workbook using openpyxl.
+
+    Sheets:
+      Summary  — KPI summary with human-readable labels and number formatting
+      Data     — Flat rows for non-staff reports; one sheet per role for staff
+      Meta     — Report metadata (type, period, generated_at, filters)
+
+    Improvements over original:
+      - Human-readable column headers via COLUMN_LABELS
+      - Currency fields stored as real numbers with ₱ accounting format
+      - Percentage fields stored as real numbers with % format
+      - Integer fields stored as integers
+      - Freeze panes on row 1 of every data sheet
+      - Auto column widths (capped at 40)
+      - Staff reports split into per-role sheets with role-specific columns
+      - Non-data rows (empty values) still present as 0, not ""
+    """
     try:
         import openpyxl
-        from openpyxl.styles import Font, PatternFill, Alignment
+        from openpyxl.styles  import Font, PatternFill, Alignment, Border, Side
+        from openpyxl.utils   import get_column_letter
 
-        wb = openpyxl.Workbook()
+        HEADER_FONT  = Font(bold=True, color="FFFFFF", size=9)
+        HEADER_FILL  = PatternFill("solid", fgColor="1A2744")
+        ALT_FILL     = PatternFill("solid", fgColor="F3F4F6")
+        ROLE_FILLS   = {
+            "front_desk":    PatternFill("solid", fgColor="1D4ED8"),
+            "housekeeping":  PatternFill("solid", fgColor="065F46"),
+            "maintenance":   PatternFill("solid", fgColor="5B21B6"),
+            "kitchen_staff": PatternFill("solid", fgColor="92400E"),
+            "security":      PatternFill("solid", fgColor="991B1B"),
+        }
+        THIN_BORDER  = Border(
+            bottom=Side(style="thin", color="D1D5DB"),
+        )
+
+        PHP_FMT  = '₱#,##0.00'
+        PCT_FMT  = '0.0"%"'
+        INT_FMT  = '#,##0'
+        FLOAT_FMT= '#,##0.00'
+
+        def _cell_value(key, val):
+            """Return (native_value, number_format) for a cell."""
+            if val is None:
+                return (0 if key not in ("name", "email", "role", "staff_id",
+                                         "period", "payment_method",
+                                         "payment_status", "room_type",
+                                         "category", "status") else "—",
+                        None)
+            if key in CURRENCY_FIELDS and isinstance(val, (int, float)):
+                return (float(val), PHP_FMT)
+            if key in PERCENT_FIELDS and isinstance(val, (int, float)):
+                return (float(val), PCT_FMT)
+            if isinstance(val, float):
+                return (val, FLOAT_FMT)
+            if isinstance(val, int):
+                return (val, INT_FMT)
+            return (val, None)
+
+        def _write_sheet(ws, cols, rows, header_fill=HEADER_FILL):
+            """Write a header row + data rows to a worksheet."""
+            # Header
+            for ci, col in enumerate(cols, 1):
+                cell = ws.cell(row=1, column=ci, value=_col_label(col))
+                cell.font      = HEADER_FONT
+                cell.fill      = header_fill
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+
+            # Data rows
+            for ri, row in enumerate(rows, 2):
+                fill = ALT_FILL if ri % 2 == 0 else None
+                for ci, col in enumerate(cols, 1):
+                    val, fmt = _cell_value(col, row.get(col))
+                    cell      = ws.cell(row=ri, column=ci, value=val)
+                    cell.border = THIN_BORDER
+                    if fmt:
+                        cell.number_format = fmt
+                    if fill:
+                        cell.fill = fill
+
+            # Freeze header row
+            ws.freeze_panes = ws.cell(row=2, column=1)
+
+            # Auto column widths
+            for ci, col in enumerate(cols, 1):
+                letter   = get_column_letter(ci)
+                max_len  = len(_col_label(col))
+                for ri in range(2, min(len(rows) + 2, 500)):  # sample first 500
+                    cell_val = ws.cell(row=ri, column=ci).value
+                    if cell_val is not None:
+                        max_len = max(max_len, len(str(cell_val)))
+                ws.column_dimensions[letter].width = min(max_len + 3, 40)
+
+        wb      = openpyxl.Workbook()
+        meta    = data.get("meta", {})
+        summary = data.get("summary", {})
+        rows    = data.get("rows", [])
 
         # ── Summary sheet ──────────────────────────────────────────────────────
-        ws_summary = wb.active
+        ws_summary       = wb.active
         ws_summary.title = "Summary"
 
-        header_font = Font(bold=True, color="FFFFFF")
-        header_fill = PatternFill("solid", fgColor="1a2744")
+        # Report info block at the top
+        info_rows = [
+            ("Report Type",  report_type.replace("_", " ").title()),
+            ("Period",       f"{meta.get('start_date', '')} to {meta.get('end_date', '')}"),
+            ("Group By",     meta.get("group_by", "").replace("_", " ").title()),
+            ("Generated",    str(meta.get("generated_at", ""))[:19].replace("T", " ")),
+        ]
+        for r, (label, value) in enumerate(info_rows, 1):
+            ws_summary.cell(row=r, column=1, value=label).font = Font(bold=True, size=9)
+            ws_summary.cell(row=r, column=2, value=value)
 
-        ws_summary.append(["Metric", "Value"])
-        ws_summary["A1"].font = header_font
-        ws_summary["A1"].fill = header_fill
-        ws_summary["B1"].font = header_font
-        ws_summary["B1"].fill = header_fill
+        # Blank row
+        info_end = len(info_rows) + 2
 
-        for k, v in data.get("summary", {}).items():
-            ws_summary.append([k.replace("_", " ").title(), v])
+        # Summary header
+        hdr_row = info_end
+        ws_summary.cell(row=hdr_row, column=1, value="Metric").font   = HEADER_FONT
+        ws_summary.cell(row=hdr_row, column=1).fill  = HEADER_FILL
+        ws_summary.cell(row=hdr_row, column=2, value="Value").font    = HEADER_FONT
+        ws_summary.cell(row=hdr_row, column=2).fill  = HEADER_FILL
 
-        ws_summary.column_dimensions["A"].width = 30
-        ws_summary.column_dimensions["B"].width = 20
+        for si, (k, v) in enumerate(summary.items(), hdr_row + 1):
+            ws_summary.cell(row=si, column=1, value=_col_label(k))
+            val, fmt = _cell_value(k, v)
+            cell     = ws_summary.cell(row=si, column=2, value=val)
+            if fmt:
+                cell.number_format = fmt
+            if si % 2 == 0:
+                ws_summary.cell(row=si, column=1).fill = ALT_FILL
+                cell.fill = ALT_FILL
 
-        # ── Data sheet ────────────────────────────────────────────────────────
-        rows = data.get("rows", [])
+        ws_summary.column_dimensions["A"].width = 32
+        ws_summary.column_dimensions["B"].width = 22
+
+        # ── Data sheet(s) ──────────────────────────────────────────────────────
         if rows:
-            ws_data = wb.create_sheet(title="Data")
-            headers = list(rows[0].keys())
-            ws_data.append(headers)
-            for col_idx, h in enumerate(headers, 1):
-                cell = ws_data.cell(row=1, column=col_idx)
-                cell.font = header_font
-                cell.fill = header_fill
-                cell.alignment = Alignment(horizontal="center")
+            if _is_staff_report(data):
+                for role_label, role_rows in _group_staff_rows(rows):
+                    if not role_rows:
+                        continue
+                    role_key  = role_rows[0].get("role", "")
+                    sheet_name = role_label[:31]   # Excel sheet name limit
+                    ws         = wb.create_sheet(title=sheet_name)
+                    cols       = ROLE_COLUMNS.get(role_key, list(role_rows[0].keys()))
+                    cols       = [c for c in cols if c in role_rows[0]]
+                    h_fill     = ROLE_FILLS.get(role_key, HEADER_FILL)
+                    _write_sheet(ws, cols, role_rows, header_fill=h_fill)
+            else:
+                ws   = wb.create_sheet(title="Data")
+                cols = list(rows[0].keys())
+                _write_sheet(ws, cols, rows)
 
-            for row in rows:
-                ws_data.append([row.get(h, "") for h in headers])
-
-            for col in ws_data.columns:
-                max_len = max(len(str(cell.value or "")) for cell in col) + 2
-                ws_data.column_dimensions[col[0].column_letter].width = min(max_len, 30)
-
-        # ── Meta sheet ────────────────────────────────────────────────────────
-        ws_meta = wb.create_sheet(title="Meta")
-        for k, v in data.get("meta", {}).items():
-            ws_meta.append([k, str(v)])
+        # ── Meta sheet ─────────────────────────────────────────────────────────
+        ws_meta       = wb.create_sheet(title="Meta")
+        ws_meta.cell(row=1, column=1, value="Key").font  = HEADER_FONT
+        ws_meta.cell(row=1, column=1).fill = HEADER_FILL
+        ws_meta.cell(row=1, column=2, value="Value").font = HEADER_FONT
+        ws_meta.cell(row=1, column=2).fill = HEADER_FILL
+        for mi, (k, v) in enumerate(meta.items(), 2):
+            ws_meta.cell(row=mi, column=1, value=k)
+            ws_meta.cell(row=mi, column=2, value=str(v))
+        ws_meta.column_dimensions["A"].width = 20
+        ws_meta.column_dimensions["B"].width = 40
 
         buf = io.BytesIO()
         wb.save(buf)
         return buf.getvalue()
 
     except ImportError:
-        # Fallback to CSV bytes
         return export_csv(data, report_type)
 
 
@@ -915,5 +1802,3 @@ def run_report_and_log(
             )
 
         return None, execution
-
-

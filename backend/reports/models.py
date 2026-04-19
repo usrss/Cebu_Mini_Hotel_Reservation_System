@@ -17,12 +17,13 @@ from django.utils    import timezone
 # ─── Choices ──────────────────────────────────────────────────────────────────
 
 class ReportType(models.TextChoices):
-    BOOKINGS   = "bookings",   "Bookings"
-    REVENUE    = "revenue",    "Revenue"
-    OCCUPANCY  = "occupancy",  "Occupancy"
-    GUESTS     = "guests",     "Guests"
-    STAFF      = "staff",      "Staff Performance"
-    FOOD = "food",             "Food & Drinks"
+    BOOKINGS  = "bookings",  "Bookings"
+    REVENUE   = "revenue",   "Revenue"
+    OCCUPANCY = "occupancy", "Occupancy"
+    GUESTS    = "guests",    "Guests"
+    STAFF     = "staff",     "Staff Performance"
+    FOOD      = "food",      "Food & Drinks"
+    PAYMENTS  = "payments",  "Payments"   # FIX: was missing — caused AttributeError in serializers.py
 
 
 class ExportFormat(models.TextChoices):
@@ -39,9 +40,9 @@ class ScheduleFrequency(models.TextChoices):
 
 
 class ExecutionStatus(models.TextChoices):
-    PENDING  = "pending",  "Pending"
-    SUCCESS  = "success",  "Success"
-    FAILED   = "failed",   "Failed"
+    PENDING = "pending", "Pending"
+    SUCCESS = "success", "Success"
+    FAILED  = "failed",  "Failed"
 
 
 # ─── ReportTemplate ───────────────────────────────────────────────────────────

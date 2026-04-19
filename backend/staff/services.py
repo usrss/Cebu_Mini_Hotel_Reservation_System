@@ -101,7 +101,8 @@ class ReportService:
               .aggregate(total=Sum("total_price"))["total"] or Decimal("0")
         )
 
-        # Daily breakdown
+        # Daily breakdown — includes per-day confirmed / cancelled / no_show
+        # so the frontend trend chart can render all three lines.
         from django.db.models.functions import TruncDate
         daily = (
             qs.annotate(day=TruncDate("created_at"))
@@ -112,26 +113,49 @@ class ReportService:
                       "total_price",
                       filter=Q(payment_status=PaymentStatus.PAID),
                   ),
+                  day_confirmed=Count(
+                      "id", filter=Q(status=BookingStatus.CONFIRMED),
+                  ),
+                  day_cancelled=Count(
+                      "id", filter=Q(status=BookingStatus.CANCELLED),
+                  ),
+                  day_no_show=Count(
+                      "id", filter=Q(status=BookingStatus.NO_SHOW),
+                  ),
               )
               .order_by("day")
+        )
+
+        # Cancellation rate (overall for the period)
+        cancellation_rate = (
+            round((cancelled / total) * 100, 1) if total > 0 else 0
         )
 
         return {
             "summary": {
                 "total":       total,
+                "total_bookings": total,
                 "confirmed":   confirmed,
                 "checked_in":  checked_in,
                 "checked_out": checked_out,
                 "cancelled":   cancelled,
+                "cancelled_bookings": cancelled,
                 "expired":     expired,
                 "no_show":     no_show,
+                "no_show_bookings": no_show,
+                "pending_payment": qs.filter(status=BookingStatus.PENDING_PAYMENT).count(),
+                "cancellation_rate": cancellation_rate,
                 "total_revenue": float(revenue),
             },
             "rows": [
                 {
-                    "date":         str(row["day"]),
-                    "bookings":     row["count"],
-                    "paid_revenue": float(row["paid_revenue"] or 0),
+                    "date":           str(row["day"]),
+                    "total_bookings": row["count"],
+                    "bookings":       row["count"],
+                    "confirmed":      row["day_confirmed"],
+                    "cancelled":      row["day_cancelled"],
+                    "no_show":        row["day_no_show"],
+                    "paid_revenue":   float(row["paid_revenue"] or 0),
                 }
                 for row in daily
             ],
@@ -278,57 +302,104 @@ class ReportService:
     @staticmethod
     def guest_report(start: date, end: date) -> dict:
         """
-        New guest registrations and repeat/returning guests.
+        Guest analytics: new vs returning guests, avg stay, time-series trend.
+        Field names match what the frontend GuestAnalytics.jsx expects:
+          summary.new_guests, summary.returning_guests, summary.avg_stay_nights
+          rows[].new_guests, rows[].returning_guests (time-series)
         """
+        from django.db.models.functions import TruncDate
+
         new_users = User.objects.filter(
             date_joined__date__gte=start,
             date_joined__date__lte=end,
             is_staff=False,
         ).count()
 
-        # Guests with >1 confirmed booking ever (repeat guests)
-        repeat_guests = (
-            Booking.objects.filter(
-                payment_status=PaymentStatus.PAID,
-            )
-            .values("user")
-            .annotate(bookings=Count("id"))
-            .filter(bookings__gt=1)
-            .count()
-        )
-
-        # Bookings in period by unique user
+        # Returning guests = users who booked in this period AND had a previous booking
         period_bookings = Booking.objects.filter(
             created_at__date__gte=start,
             created_at__date__lte=end,
         )
-        walk_ins = period_bookings.filter(user__isnull=True).count()
-        registered = period_bookings.filter(user__isnull=False).count()
 
-        # Top guests by number of bookings in period
-        top_guests = (
+        unique_users_in_period = set(
             period_bookings.filter(user__isnull=False)
-            .values("user__email", "full_name")
-            .annotate(bookings=Count("id"), spent=Sum("total_price"))
-            .order_by("-bookings")[:10]
+            .values_list("user_id", flat=True)
         )
+        returning_count = 0
+        for uid in unique_users_in_period:
+            prior = Booking.objects.filter(
+                user_id=uid, created_at__date__lt=start,
+            ).exists()
+            if prior:
+                returning_count += 1
+        new_guest_count = len(unique_users_in_period) - returning_count
+
+        # Average stay duration (nights) for bookings in this period
+        from django.db.models import DurationField, ExpressionWrapper
+        stays = list(
+            period_bookings
+            .annotate(
+                stay_duration=ExpressionWrapper(
+                    F("check_out") - F("check_in"),
+                    output_field=DurationField(),
+                )
+            )
+            .values_list("stay_duration", flat=True)
+        )
+        total_nights = sum((d.days for d in stays if d and hasattr(d, 'days')), 0)
+        avg_stay = round(total_nights / len(stays), 1) if stays else 0
+
+        # Time-series: daily new registrations vs returning bookers
+        # New registrations by day
+        new_by_day = dict(
+            User.objects.filter(
+                date_joined__date__gte=start,
+                date_joined__date__lte=end,
+                is_staff=False,
+            )
+            .annotate(day=TruncDate("date_joined"))
+            .values("day")
+            .annotate(count=Count("id"))
+            .values_list("day", "count")
+        )
+
+        # Returning bookers by day (bookings by users who have prior bookings)
+        returning_by_day = {}
+        returning_bookings = (
+            period_bookings.filter(user__isnull=False)
+            .annotate(day=TruncDate("created_at"))
+            .values("day", "user_id")
+        )
+        for entry in returning_bookings:
+            uid = entry["user_id"]
+            day = entry["day"]
+            prior = Booking.objects.filter(
+                user_id=uid, created_at__date__lt=start,
+            ).exists()
+            if prior:
+                returning_by_day[day] = returning_by_day.get(day, 0) + 1
+
+        # Build sorted date list
+        all_days = sorted(set(list(new_by_day.keys()) + list(returning_by_day.keys())))
+        rows = [
+            {
+                "date":             str(day),
+                "new_guests":       new_by_day.get(day, 0),
+                "returning_guests": returning_by_day.get(day, 0),
+            }
+            for day in all_days
+        ]
 
         return {
             "summary": {
+                "new_guests":       new_guest_count,
+                "returning_guests": returning_count,
+                "avg_stay_nights":  avg_stay,
                 "new_registrations": new_users,
-                "repeat_guests":     repeat_guests,
-                "walk_in_bookings":  walk_ins,
-                "registered_bookings": registered,
+                "walk_in_bookings":  period_bookings.filter(user__isnull=True).count(),
+                "registered_bookings": period_bookings.filter(user__isnull=False).count(),
             },
-            "rows": [
-                {
-                    "email":    g["user__email"],
-                    "name":     g["full_name"],
-                    "bookings": g["bookings"],
-                    "spent":    float(g["spent"] or 0),
-                }
-                for g in top_guests
-            ],
+            "rows": rows,
         }
 
     # ── Staff Performance Report ──────────────────────────────────────────────

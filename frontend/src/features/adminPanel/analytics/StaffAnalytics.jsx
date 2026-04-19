@@ -14,8 +14,8 @@ const ROLE_COLORS = ['#3B5BDB','#0D9488','#7C3AED','#D97706','#22D3EE','#F87171'
 function CustomTooltip({ active, payload }) {
   if (!active || !payload?.length) return null;
   return (
-    <div style={{ background:'var(--navy-card)', border:'1px solid var(--gold-border)', padding:'10px 14px', fontFamily:'Raleway,sans-serif', fontSize:12 }}>
-      {payload.map((p,i) => <p key={i} style={{ color:p.payload.fill, margin:'2px 0' }}>{p.name}: <strong>{p.value}</strong></p>)}
+    <div style={{ background: '#FFFFFF', border: 'none', borderRadius: 10, padding: '10px 14px', fontFamily: "'DM Sans', sans-serif", fontSize: 12, boxShadow: '0 4px 20px rgba(1,0,13,0.09)' }}>
+      {payload.map((p,i) => <p key={i} style={{ color: p.payload.fill, margin: '2px 0' }}>{p.name}: <strong>{p.value}</strong></p>)}
     </div>
   );
 }
@@ -45,17 +45,17 @@ export default function StaffAnalytics({ dashboard }) {
   const statusData = s ? [
     { name: 'Online',  value: s.online  ?? 0, fill: '#6EE7B7' },
     { name: 'Idle',    value: s.idle    ?? 0, fill: '#FCD34D' },
-    { name: 'Offline', value: s.offline ?? 0, fill: 'rgba(248,246,240,0.2)' },
+    { name: 'Offline', value: s.offline ?? 0, fill: '#B8B8C0' },
   ].filter(d => d.value > 0) : [];
 
   return (
     <>
       <div className="an-grid-4">
         {[
-          { label: 'Total Active', value: s?.total,   color: 'var(--white)' },
+          { label: 'Total Active', value: s?.total,   color: '#01000D' },
           { label: 'Online',       value: s?.online,  color: '#6EE7B7' },
           { label: 'Idle',         value: s?.idle,    color: '#FCD34D' },
-          { label: 'Offline',      value: s?.offline, color: 'rgba(248,246,240,0.4)' },
+          { label: 'Offline',      value: s?.offline, color: '#7A7987' },
         ].map((k,i) => (
           <div key={i} className="an-stat-box">
             <span className="an-stat-box-label">{k.label}</span>
@@ -77,7 +77,7 @@ export default function StaffAnalytics({ dashboard }) {
                   {statusData.map((d,i) => <Cell key={i} fill={d.fill} />)}
                 </Pie>
                 <Tooltip content={<CustomTooltip />} />
-                <Legend wrapperStyle={{ fontSize:10, color:'rgba(248,246,240,0.55)' }} />
+                <Legend wrapperStyle={{ fontSize:10, color:'#52515E' }} />
               </PieChart>
             </ResponsiveContainer>
           ) : <div className="an-empty">No status data.</div>}
@@ -95,7 +95,7 @@ export default function StaffAnalytics({ dashboard }) {
                   {donutData.map((d,i) => <Cell key={i} fill={d.fill} />)}
                 </Pie>
                 <Tooltip content={<CustomTooltip />} />
-                <Legend wrapperStyle={{ fontSize:10, color:'rgba(248,246,240,0.55)' }} />
+                <Legend wrapperStyle={{ fontSize:10, color:'#52515E' }} />
               </PieChart>
             </ResponsiveContainer>
           ) : <div className="an-empty">No role data.</div>}
@@ -115,7 +115,7 @@ export default function StaffAnalytics({ dashboard }) {
                 {dashboard.recent_activity.slice(0,15).map((log,i) => (
                   <tr key={i}>
                     <td>{log.staff_name ?? log.staff ?? '—'}</td>
-                    <td style={{ color:'var(--gold)', textTransform:'capitalize' }}>
+                    <td style={{ color:'#3B5BDB', textTransform:'capitalize' }}>
                       {log.action_type?.replace(/_/g,' ')}
                     </td>
                     <td style={{ maxWidth:240, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>

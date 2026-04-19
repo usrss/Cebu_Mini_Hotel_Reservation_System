@@ -117,6 +117,61 @@ export default function ReviewStatsPage() {
           )}
         </div>
       </div>
+
+      {/* Helpfulness section */}
+      {stats.helpfulness && (
+        <>
+          <div className={styles.kpis} style={{ marginTop: '1.5rem' }}>
+            <div className={styles.kpi}>
+              <span className={styles.kpiLabel}>👍 Helpful</span>
+              <span className={styles.kpiValue} style={{ color: '#0D9488' }}>
+                {stats.helpfulness.total_helpful ?? 0}
+              </span>
+            </div>
+            <div className={styles.kpi}>
+              <span className={styles.kpiLabel}>👎 Not Helpful</span>
+              <span className={styles.kpiValue} style={{ color: '#DC2626' }}>
+                {stats.helpfulness.total_not_helpful ?? 0}
+              </span>
+            </div>
+            <div className={styles.kpi}>
+              <span className={styles.kpiLabel}>Total Votes</span>
+              <span className={styles.kpiValue}>
+                {stats.helpfulness.total_votes ?? 0}
+              </span>
+            </div>
+            <div className={styles.kpi}>
+              <span className={styles.kpiLabel}>Helpfulness Ratio</span>
+              <span className={styles.kpiValue} style={{ color: '#D97706' }}>
+                {stats.helpfulness.helpfulness_ratio != null
+                  ? `${stats.helpfulness.helpfulness_ratio}%`
+                  : '—'}
+              </span>
+            </div>
+          </div>
+
+          {stats.helpfulness.most_helpful_reviews?.length > 0 && (
+            <div className={styles.panels}>
+              <div className={styles.panel} style={{ gridColumn: '1 / -1' }}>
+                <h2 className={styles.panelTitle}>Most Helpful Reviews</h2>
+                <div className={styles.roomList}>
+                  {stats.helpfulness.most_helpful_reviews.map((r, i) => (
+                    <div key={i} className={styles.roomRow}>
+                      <span className={styles.roomRank}>#{i + 1}</span>
+                      <div className={styles.roomInfo}>
+                        <span className={styles.roomNum}>Room {r.room__room_number}</span>
+                        <span className={styles.roomType}>{r.display_name} · {r.rating}★</span>
+                      </div>
+                      <span className={styles.roomAvg} style={{ color: '#0D9488' }}>👍 {r.helpful_count}</span>
+                      <span className={styles.roomCount} style={{ color: '#DC2626' }}>👎 {r.not_helpful_count}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }

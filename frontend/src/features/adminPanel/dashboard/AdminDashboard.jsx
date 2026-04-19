@@ -147,7 +147,13 @@ export default function AdminDashboard() {
       if (results[0].status === 'fulfilled') setDash(results[0].value);
       if (results[1].status === 'fulfilled') {
         const d = results[1].value;
-        setGuestCount(d.count ?? (Array.isArray(d.results) ? d.results.length : null));
+        setGuestCount(
+          d.count != null ? d.count :
+          d.total != null ? d.total :
+          Array.isArray(d.results) ? d.results.length :
+          Array.isArray(d) ? d.length :
+          null
+        );
       }
       if (results[2].status === 'fulfilled') {
         const d = results[2].value;
@@ -275,7 +281,7 @@ export default function AdminDashboard() {
         <KpiCard
           icon={<Users size={22} />}
           label="Total Guests"
-          value={val(fmt(guestCount))}
+          value={val(guestCount != null ? fmt(guestCount) : '—')}
           sub="Registered accounts"
           color="var(--gold)"
           onClick={() => navigate('/admin/guests')}

@@ -10,9 +10,9 @@ const COLORS = ['#6EE7B7','#93C5FD'];
 function CustomTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
   return (
-    <div style={{ background:'var(--navy-card)', border:'1px solid var(--gold-border)', padding:'10px 14px', fontFamily:'Raleway,sans-serif', fontSize:12 }}>
-      <p style={{ color:'var(--gold)', fontWeight:700, margin:'0 0 6px' }}>{label}</p>
-      {payload.map((p,i) => <p key={i} style={{ color:p.color, margin:'2px 0' }}>{p.name}: <strong>{p.value}</strong></p>)}
+    <div style={{ background: '#FFFFFF', border: 'none', borderRadius: 10, padding: '10px 14px', fontFamily: "'DM Sans', sans-serif", fontSize: 12, boxShadow: '0 4px 20px rgba(1,0,13,0.09)' }}>
+      <p style={{ color: '#52515E', fontWeight: 700, margin: '0 0 6px' }}>{label}</p>
+      {payload.map((p,i) => <p key={i} style={{ color: p.color, margin: '2px 0' }}>{p.name}: <strong>{p.value}</strong></p>)}
     </div>
   );
 }
@@ -56,7 +56,7 @@ export default function GuestAnalytics({ period }) {
     <>
       <div className="an-grid-4">
         {[
-          { label: 'Total Guests',       value: guestCount,                         color: 'var(--gold)' },
+          { label: 'Total Guests',       value: guestCount,                         color: '#3B5BDB' },
           { label: 'New Guests',         value: newG || '—',                        color: '#6EE7B7' },
           { label: 'Returning Guests',   value: returning || '—',                   color: '#93C5FD' },
           { label: 'Avg Stay (nights)',  value: summary.avg_stay_nights ?? '—',     color: '#FCD34D' },
@@ -85,11 +85,11 @@ export default function GuestAnalytics({ period }) {
           {trendData.length ? (
             <ResponsiveContainer width="100%" height={220}>
               <LineChart data={trendData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(201,168,76,0.08)" />
-                <XAxis dataKey="name" tick={{ fill:'rgba(248,246,240,0.45)', fontSize:10 }} />
-                <YAxis tick={{ fill:'rgba(248,246,240,0.45)', fontSize:10 }} />
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(1,0,13,0.05)" />
+                <XAxis dataKey="name" tick={{ fill:'#7A7987', fontSize:10 }} />
+                <YAxis tick={{ fill:'#7A7987', fontSize:10 }} />
                 <Tooltip content={<CustomTooltip />} />
-                <Legend wrapperStyle={{ fontSize:11, color:'rgba(248,246,240,0.55)' }} />
+                <Legend wrapperStyle={{ fontSize:11, color:'#52515E' }} />
                 <Line type="monotone" dataKey="New Guests"       stroke="#6EE7B7" strokeWidth={2} dot={false} />
                 <Line type="monotone" dataKey="Returning Guests" stroke="#93C5FD" strokeWidth={2} dot={false} />
               </LineChart>
@@ -109,7 +109,7 @@ export default function GuestAnalytics({ period }) {
                   {donutData.map((_, i) => <Cell key={i} fill={COLORS[i]} />)}
                 </Pie>
                 <Tooltip content={<CustomTooltip />} />
-                <Legend wrapperStyle={{ fontSize:10, color:'rgba(248,246,240,0.55)' }} />
+                <Legend wrapperStyle={{ fontSize:10, color:'#52515E' }} />
               </PieChart>
             </ResponsiveContainer>
           ) : <div className="an-empty">No data.</div>}

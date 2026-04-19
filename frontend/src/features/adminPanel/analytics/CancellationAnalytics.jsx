@@ -8,9 +8,9 @@ import { analyticsApi } from '../../../services/adminApi';
 function CustomTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
   return (
-    <div style={{ background:'var(--navy-card)', border:'1px solid var(--gold-border)', padding:'10px 14px', fontFamily:'Raleway,sans-serif', fontSize:12 }}>
-      <p style={{ color:'var(--gold)', fontWeight:700, margin:'0 0 6px' }}>{label}</p>
-      {payload.map((p,i) => <p key={i} style={{ color:p.color, margin:'2px 0' }}>{p.name}: <strong>{p.value}</strong></p>)}
+    <div style={{ background: '#FFFFFF', border: 'none', borderRadius: 10, padding: '10px 14px', fontFamily: "'DM Sans', sans-serif", fontSize: 12, boxShadow: '0 4px 20px rgba(1,0,13,0.09)' }}>
+      <p style={{ color: '#52515E', fontWeight: 700, margin: '0 0 6px' }}>{label}</p>
+      {payload.map((p,i) => <p key={i} style={{ color: p.color, margin: '2px 0' }}>{p.name}: <strong>{p.value}</strong></p>)}
     </div>
   );
 }
@@ -65,7 +65,7 @@ export default function CancellationAnalytics({ period }) {
 
       <div className="an-grid-4">
         {[
-          { label: 'Total Bookings',    value: totalBooks,    color: 'var(--white)' },
+          { label: 'Total Bookings',    value: totalBooks,    color: '#01000D' },
           { label: 'Cancellations',     value: totalCancel,   color: '#F87171' },
           { label: 'Cancellation Rate', value: cancelRate !== null ? `${cancelRate}%` : '—',
             color: Number(cancelRate) > 20 ? '#F87171' : Number(cancelRate) > 10 ? '#FCD34D' : '#6EE7B7' },
@@ -95,11 +95,11 @@ export default function CancellationAnalytics({ period }) {
         ) : trendData.length ? (
           <ResponsiveContainer width="100%" height={240}>
             <LineChart data={trendData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(201,168,76,0.08)" />
-              <XAxis dataKey="name" tick={{ fill:'rgba(248,246,240,0.45)', fontSize:10 }} />
-              <YAxis tick={{ fill:'rgba(248,246,240,0.45)', fontSize:10 }} />
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(1,0,13,0.05)" />
+              <XAxis dataKey="name" tick={{ fill:'#7A7987', fontSize:10 }} />
+              <YAxis tick={{ fill:'#7A7987', fontSize:10 }} />
               <Tooltip content={<CustomTooltip />} />
-              <Legend wrapperStyle={{ fontSize:11, color:'rgba(248,246,240,0.55)' }} />
+              <Legend wrapperStyle={{ fontSize:11, color:'#52515E' }} />
               <Line type="monotone" dataKey="Bookings"  stroke="#60A5FA" strokeWidth={2} dot={false} />
               <Line type="monotone" dataKey="Cancelled" stroke="#F87171" strokeWidth={2} dot={false} />
               <Line type="monotone" dataKey="No Show"   stroke="#C4B5FD" strokeWidth={2} dot={false} strokeDasharray="4 2" />

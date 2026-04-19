@@ -75,7 +75,6 @@ const NAV_STRUCTURE = [
     roles: ['admin','manager','front_desk'],
     children: [
       { key:'payments', label:'All Payments', to:'/admin/payments',         roles:['admin','manager','front_desk'] },
-      { key:'revenue',  label:'Revenue',      to:'/admin/payments/revenue', roles:['admin','manager'] },
     ],
   },
   {
@@ -85,8 +84,7 @@ const NAV_STRUCTURE = [
     icon: <Star size={18} />,
     roles: ['admin','manager'],
     children: [
-      { key:'reviews',      label:'Moderate',   to:'/admin/reviews',       roles:['admin','manager'] },
-      { key:'review-stats', label:'Statistics', to:'/admin/reviews/stats', roles:['admin','manager'] },
+      { key:'reviews', label:'Moderate', to:'/admin/reviews', roles:['admin','manager'] },
     ],
   },
   {
@@ -107,9 +105,9 @@ const NAV_STRUCTURE = [
       { key: 'housekeeping',         label: 'Housekeeping',     to: '/staff/cleaning',               roles: ['admin', 'manager'] },
       { key: 'maintenance',          label: 'Maintenance Tasks', to: '/staff/maintenance',           roles: ['admin', 'manager'] },
       { key: 'maintenance-requests', label: 'Maint. Requests',  to: '/staff/maintenance-requests',   roles: ['admin', 'manager'] },
-      { key: 'incidents',            label: 'Incidents',        to: '/staff/incidents',              roles: ['admin', 'manager'] },
-      { key: 'monitoring',           label: 'Staff Monitoring', to: '/staff/monitoring',             roles: ['admin', 'manager'] },
-      { key: 'food-orders',          label: 'Food Orders',       to: '/admin/food-orders',          roles: ['admin', 'manager'] }
+      { key: 'incidents',            label: 'Incidents',        to: '/staff/incidents',              roles: ['admin', 'manager'] }
+
+
     ],
   },
   // ── Support Tickets ──────────────────────────────────────────────────────

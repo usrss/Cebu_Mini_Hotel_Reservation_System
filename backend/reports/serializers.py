@@ -38,17 +38,39 @@ METRICS_BY_TYPE = {
         "walk_in_bookings", "registered_bookings",
     ],
     ReportType.STAFF: [
+        # Summary-level aggregates (returned in summary{})
         "total_check_ins", "total_cleaning_done", "total_maintenance_done",
+        "total_incidents_logged",
+        # Per-staff row fields expected by StaffResultPanel (returned in rows[])
+        "check_ins_handled", "check_outs_handled", "bookings_created",
+        "cancellations_processed", "avg_check_in_time",
+        "rooms_cleaned", "avg_cleaning_time", "rooms_cleaned_per_shift",
+        "delayed_cleanings", "orders_completed", "avg_preparation_time",
+        "pending_orders", "cancelled_orders",
+        # Security-specific row fields
+        "incidents_logged", "incidents_resolved", "high_severity",
+        "avg_resolution_time",
     ],
-
-     ReportType.FOOD: [
-           "total_orders", "total_revenue", "paid_revenue",
-           "avg_order_value", "pending_orders", "completed_orders",
+    ReportType.FOOD: [
+        "total_orders", "total_revenue", "paid_revenue",
+        "avg_order_value", "pending_orders", "completed_orders",
+    ],
+    # FIX: payments was missing entirely — added with all fields that
+    # PaymentsResultPanel expects in summary{} and rows[].
+    ReportType.PAYMENTS: [
+        "total_gross_amount", "net_collected_amount", "total_refunds",
+        "successful_payments", "failed_payments", "pending_payments",
+        "average_transaction_value", "refund_rate", "failed_payment_rate",
+        "total_payments_processed",
     ],
 }
 
-GROUP_BY_OPTIONS = ["day", "week", "month", "room_type", "status"]
-PERIOD_OPTIONS   = ["daily", "weekly", "monthly", "yearly", "custom"]
+GROUP_BY_OPTIONS = [
+    "day", "week", "month", "room_type", "status",
+    "payment_method", "payment_status", "category",
+    "staff", "role",
+]
+PERIOD_OPTIONS = ["daily", "weekly", "monthly", "yearly", "custom"]
 
 
 # ─── Config validator ─────────────────────────────────────────────────────────
@@ -57,16 +79,18 @@ PERIOD_OPTIONS   = ["daily", "weekly", "monthly", "yearly", "custom"]
 MAX_DATE_RANGE_DAYS = 366
 
 # Fix #3 — group_by options that are valid per report type.
-# "day" / "week" / "month" work for all time-series reports.
-# "room_type" only makes sense for reports that have room data.
-# "status" only makes sense for booking reports.
+# FIX: added "payments" entry (was missing, causing all payments runs to be
+# rejected by the group_by validator). Also added "staff" and "role" to the
+# staff entry so the frontend group-by buttons are not all disabled.
 VALID_GROUP_BY_PER_TYPE = {
     "bookings":  ["day", "week", "month", "room_type", "status"],
     "revenue":   ["day", "week", "month", "room_type"],
-    "occupancy": ["room_type"],          # occupancy is already broken down by room_type
+    "occupancy": ["room_type"],
     "guests":    ["day", "week", "month"],
-    "staff":     ["day", "week", "month"],
-    "food": ["day", "week", "month", "category"],
+    "staff":     ["day", "week", "month", "staff", "role"],
+    "food":      ["day", "week", "month", "category"],
+    # FIX: was missing — payments runs were always rejected at validation
+    "payments":  ["day", "week", "month", "payment_method", "payment_status"],
 }
 
 
@@ -210,10 +234,10 @@ class ReportTemplateListSerializer(serializers.ModelSerializer):
 # ─── ScheduledReport ─────────────────────────────────────────────────────────
 
 class ScheduledReportSerializer(serializers.ModelSerializer):
-    template_name       = serializers.CharField(source="template.name",    read_only=True)
-    template_type       = serializers.CharField(source="template.report_type", read_only=True)
-    created_by_email    = serializers.EmailField(source="created_by.email", read_only=True)
-    frequency_display   = serializers.CharField(source="get_frequency_display", read_only=True)
+    template_name         = serializers.CharField(source="template.name",         read_only=True)
+    template_type         = serializers.CharField(source="template.report_type",  read_only=True)
+    created_by_email      = serializers.EmailField(source="created_by.email",     read_only=True)
+    frequency_display     = serializers.CharField(source="get_frequency_display", read_only=True)
     export_format_display = serializers.CharField(source="get_export_format_display", read_only=True)
 
     class Meta:
@@ -262,19 +286,19 @@ class ScheduledReportSerializer(serializers.ModelSerializer):
 # ─── ReportExecution ─────────────────────────────────────────────────────────
 
 class ReportExecutionSerializer(serializers.ModelSerializer):
-    triggered_by_email   = serializers.EmailField(
+    triggered_by_email    = serializers.EmailField(
         source="triggered_by.email", read_only=True
     )
-    report_type_display  = serializers.CharField(
+    report_type_display   = serializers.CharField(
         source="get_report_type_display", read_only=True
     )
-    status_display       = serializers.CharField(
+    status_display        = serializers.CharField(
         source="get_status_display", read_only=True
     )
     export_format_display = serializers.CharField(
         source="get_export_format_display", read_only=True
     )
-    duration_seconds     = serializers.SerializerMethodField()
+    duration_seconds      = serializers.SerializerMethodField()
 
     class Meta:
         model  = ReportExecution
@@ -344,7 +368,7 @@ class RunReportSerializer(serializers.Serializer):
             )
             if role == "manager":
                 # Managers cannot request staff reports for other managers' teams
-                filters = data["config"].get("filters", {})
+                filters  = data["config"].get("filters", {})
                 staff_id = filters.get("staff_id")
                 if staff_id:
                     from staff.models import StaffProfile

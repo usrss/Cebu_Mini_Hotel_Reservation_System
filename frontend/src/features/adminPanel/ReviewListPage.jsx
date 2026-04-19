@@ -5,6 +5,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ThumbsUp, ThumbsDown, Star, Eye, EyeOff, ShieldCheck, Search } from 'lucide-react';
 import { reviewApi } from '../../services/adminApi';
 import { useAdminRole } from '../hooks/useAdminRole';
 import styles from './ReviewListPage.module.css';
@@ -144,7 +145,12 @@ export default function ReviewListPage() {
                   <span className={styles.date}>{new Date(r.created_at).toLocaleDateString()}</span>
                 </div>
                 <div className={styles.helpful}>
-                  👍 {r.helpful_count} &nbsp; 👎 {r.not_helpful_count}
+                  <span className={styles.voteBadge + ' ' + styles.voteBadgeUp}>
+                    <ThumbsUp size={13} /> {r.helpful_count}
+                  </span>
+                  <span className={styles.voteBadge + ' ' + styles.voteBadgeDown}>
+                    <ThumbsDown size={13} /> {r.not_helpful_count}
+                  </span>
                 </div>
               </div>
             ))}

@@ -16,14 +16,24 @@
  *   - /api/reports/templates/     (CRUD)
  *   - /api/reports/schedules/     (CRUD)
  *   - /api/reports/executions/    (history)
+ *
+ * Report types supported:
+ *   bookings, revenue, occupancy, staff, food, payments
+ *
+ * Result panels are routed by report_type:
+ *   payments → PaymentsResultPanel  (financial auditability, no revenue mixing)
+ *   staff    → StaffResultPanel     (role-separated, leaderboard)
+ *   *        → ReportResultPanel    (generic chart + table)
  */
 
 import { useState, useEffect, useCallback } from 'react';
 import {
   Play, Download, Save, Clock, History,
-  FileText, Plus, Trash2, ChevronRight,
+  FileText, Trash2, ChevronRight,
   CheckCircle2, AlertTriangle, RefreshCw,
   BarChart2, Calendar, ToggleLeft, ToggleRight,
+  UtensilsCrossed, Users, TrendingUp, BedDouble,
+  UserCog, ChevronDown, CreditCard,
 } from 'lucide-react';
 import {
   reportMetaApi,
@@ -33,9 +43,11 @@ import {
   reportExecutionApi,
   triggerBlobDownload,
 } from '../../../services/reportsApi';
-import ReportResultPanel  from './ReportResultPanel';
-import SaveTemplateModal  from './SaveTemplateModal';
-import ScheduleModal      from './ScheduleModal';
+import ReportResultPanel    from './ReportResultPanel';
+import PaymentsResultPanel  from './PaymentsResultPanel';
+import StaffResultPanel     from './StaffResultPanel';
+import SaveTemplateModal    from './SaveTemplateModal';
+import ScheduleModal        from './ScheduleModal';
 import './CustomReportPage.css';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -47,11 +59,24 @@ const TABS = [
   { id: 'history',   label: 'History',   icon: <History size={14} />   },
 ];
 
+// FIX: "food_drinks" renamed to "food" to match the backend ReportType enum value.
+// Previously the key mismatch meant food reports got no icon/description in the
+// type grid, and the meta lookup for metrics/group_by fell back to undefined.
+const REPORT_TYPE_META = {
+  bookings: { icon: <BedDouble size={15} />,       label: 'Bookings',      desc: 'Reservation trends & status'     },
+  revenue:  { icon: <TrendingUp size={15} />,      label: 'Revenue',       desc: 'Income & payment summaries'      },
+  occupancy:{ icon: <BedDouble size={15} />,       label: 'Occupancy',     desc: 'Room utilisation rates'          },
+  staff:    { icon: <UserCog size={15} />,         label: 'Staff',         desc: 'Role-based performance metrics'  },
+  food:     { icon: <UtensilsCrossed size={15} />, label: 'Food & Drinks', desc: 'F&B orders & revenue'            },
+  payments: { icon: <CreditCard size={15} />,      label: 'Payments',      desc: 'Transaction flow & auditability' },
+};
+
 const FORMAT_LABELS = { json: 'In-App', csv: 'CSV', pdf: 'PDF', excel: 'Excel' };
+
 const STATUS_COLORS = {
-  success: 'var(--green)',
-  failed:  'var(--red)',
-  pending: 'var(--amber)',
+  success: 'var(--sf-green)',
+  failed:  'var(--sf-red)',
+  pending: 'var(--sf-amber)',
 };
 
 // Fix #1 — mirror MAX_DATE_RANGE_DAYS from backend serializers.py
@@ -60,28 +85,18 @@ const MAX_DATE_RANGE_DAYS = 366;
 // Fix #3 — VALID_GROUP_BY_PER_TYPE is now served by GET /api/reports/meta/
 // as valid_group_by_per_type. The constant below is the fallback used only
 // if the API hasn't loaded yet (prevents the UI from being empty on first render).
+// FIX: added "payments" entry and corrected "food_drinks" → "food".
 const VALID_GROUP_BY_PER_TYPE_FALLBACK = {
   bookings:  ['day', 'week', 'month', 'room_type', 'status'],
   revenue:   ['day', 'week', 'month', 'room_type'],
   occupancy: ['room_type'],
   guests:    ['day', 'week', 'month'],
-  staff:     ['day', 'week', 'month'],
+  staff:     ['day', 'week', 'month', 'staff', 'role'],
+  food:      ['day', 'week', 'month', 'category'],
+  payments:  ['day', 'week', 'month', 'payment_method', 'payment_status'],
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function fmt(n) {
-  if (n == null) return '—';
-  if (typeof n === 'number') {
-    if (Math.abs(n) >= 1000) return Number(n).toLocaleString('en-PH', { maximumFractionDigits: 2 });
-    return Number(n).toFixed(Number.isInteger(n) ? 0 : 2);
-  }
-  return String(n);
-}
-
-function currency(n) {
-  return `₱${Number(n || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
-}
 
 function timeAgo(iso) {
   const diff = Date.now() - new Date(iso).getTime();
@@ -95,15 +110,12 @@ function timeAgo(iso) {
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-function SectionLabel({ children }) {
+function SectionLabel({ children, hint }) {
   return (
-    <p style={{
-      fontSize: 9, fontWeight: 700, letterSpacing: 2.5,
-      textTransform: 'uppercase', color: "#01000D",
-      marginBottom: 8,
-    }}>
-      {children}
-    </p>
+    <div className="crp-section-label-row">
+      <p className="crp-section-label">{children}</p>
+      {hint && <span className="crp-section-hint">{hint}</span>}
+    </div>
   );
 }
 
@@ -120,12 +132,16 @@ function MetricChip({ label, active, onClick }) {
   );
 }
 
-function FilterSelect({ label, value, onChange, options }) {
+function FilterSelect({ label, value, onChange, options, placeholder = 'Any' }) {
   return (
     <div className="crp-filter-item">
       <label className="crp-filter-label">{label}</label>
-      <select className="sf-input crp-filter-select" value={value} onChange={e => onChange(e.target.value)}>
-        <option value="">Any</option>
+      <select
+        className="sf-input crp-filter-select"
+        value={value}
+        onChange={e => onChange(e.target.value)}
+      >
+        <option value="">{placeholder}</option>
         {options.map(o => (
           <option key={o.value} value={o.value}>{o.label}</option>
         ))}
@@ -139,9 +155,14 @@ function StatusBadge({ status }) {
     <span style={{
       fontSize: 9, fontWeight: 700, letterSpacing: 1.5,
       textTransform: 'uppercase',
-      color: STATUS_COLORS[status] || 'var(--white-dim)',
-      padding: '2px 7px',
-      border: `1px solid ${STATUS_COLORS[status] || 'var(--gold-border)'}`,
+      color: STATUS_COLORS[status] || 'var(--sf-text-muted)',
+      padding: '2px 8px',
+      background: status === 'success'
+        ? 'var(--sf-green-bg)'
+        : status === 'failed'
+          ? 'var(--sf-red-bg)'
+          : 'var(--sf-amber-bg)',
+      borderRadius: 999,
     }}>
       {status}
     </span>
@@ -162,12 +183,20 @@ function BuildTab({ meta, onResult }) {
   const [loading,      setLoading]      = useState(false);
   const [error,        setError]        = useState(null);
   const [showSave,     setShowSave]     = useState(false);
+  const [filtersOpen,  setFiltersOpen]  = useState(true);
 
-  const availMetrics  = meta?.metrics_by_type?.[reportType] || [];
+  const availMetrics = meta?.metrics_by_type?.[reportType] || [];
+
   // Fix #3 — use the map served by /api/reports/meta/ (valid_group_by_per_type).
   // Fall back to the local constant only before the API response arrives.
   const groupByMap    = meta?.valid_group_by_per_type || VALID_GROUP_BY_PER_TYPE_FALLBACK;
   const validGroupBys = groupByMap[reportType] || (meta?.group_by_options || []);
+
+  // All possible group_by options to render as buttons — union of all valid values
+  // so the UI always shows every option and just disables the ones not valid for
+  // the current report type.
+  const allGroupByOptions = meta?.group_by_options ||
+    [...new Set(Object.values(VALID_GROUP_BY_PER_TYPE_FALLBACK).flat())];
 
   // Reset metrics, filters, group_by when report type changes
   useEffect(() => {
@@ -176,6 +205,7 @@ function BuildTab({ meta, onResult }) {
     setGroupBy(prev =>
       validGroupBys.includes(prev) ? prev : (validGroupBys[0] || 'day')
     );
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reportType]);
 
   const toggleMetric = (m) =>
@@ -190,10 +220,10 @@ function BuildTab({ meta, onResult }) {
     const s    = new Date(startDate);
     const e    = new Date(endDate);
     const diff = Math.round((e - s) / (1000 * 60 * 60 * 24));
-    if (e < s)                    return 'End date must be after start date.';
+    if (e < s)                       return 'End date must be after start date.';
     if (diff > MAX_DATE_RANGE_DAYS)
       return `Date range cannot exceed ${MAX_DATE_RANGE_DAYS} days (${diff} days selected).`;
-    if (s > new Date())           return 'Start date cannot be in the future.';
+    if (s > new Date())              return 'Start date cannot be in the future.';
     return null;
   };
 
@@ -254,35 +284,100 @@ function BuildTab({ meta, onResult }) {
     { value: 'penthouse', label: 'Penthouse' },
   ];
 
+  const PAYMENT_STATUSES = [
+    { value: 'pending',    label: 'Pending'    },
+    { value: 'processing', label: 'Processing' },
+    { value: 'paid',       label: 'Paid'       },
+    { value: 'failed',     label: 'Failed'     },
+    { value: 'cancelled',  label: 'Cancelled'  },
+    { value: 'refunded',   label: 'Refunded'   },
+    { value: 'expired',    label: 'Expired'    },
+  ];
+
+  const PAYMENT_METHODS = [
+    { value: 'card',          label: 'Credit / Debit Card' },
+    { value: 'gcash',         label: 'GCash'               },
+    { value: 'bank_transfer', label: 'Bank Transfer'       },
+    { value: 'paypal',        label: 'PayPal'              },
+    { value: 'cash',          label: 'Cash (Walk-in)'      },
+  ];
+
+  const BOOKING_STATUSES = [
+    { value: 'confirmed',   label: 'Confirmed'   },
+    { value: 'checked_in',  label: 'Checked In'  },
+    { value: 'checked_out', label: 'Checked Out' },
+    { value: 'cancelled',   label: 'Cancelled'   },
+    { value: 'expired',     label: 'Expired'     },
+    { value: 'no_show',     label: 'No Show'     },
+  ];
+
+  const STAFF_ROLES = [
+    { value: 'front_desk',    label: 'Front Desk'    },
+    { value: 'housekeeping',  label: 'Housekeeping'  },
+    { value: 'kitchen_staff', label: 'Kitchen Staff' },
+  ];
+
+  // FIX: merge meta.report_types (from API) with our local REPORT_TYPE_META so
+  // that types known locally but absent from the API response (e.g. "payments"
+  // when the backend omits it) are still rendered. The API list controls order;
+  // locally-known extras are appended at the end.
+  const reportTypes = (() => {
+    const localList = Object.entries(REPORT_TYPE_META).map(([value, m]) => ({
+      value,
+      label: m.label,
+    }));
+    if (!meta?.report_types?.length) return localList;
+
+    const apiValues = new Set(meta.report_types.map(r => (typeof r === 'string' ? r : r.value)));
+    const apiList   = meta.report_types.map(r =>
+      typeof r === 'string' ? { value: r, label: REPORT_TYPE_META[r]?.label ?? r } : r
+    );
+    // Append anything in our local list that the API didn't return
+    const missing = localList.filter(l => !apiValues.has(l.value));
+    return [...apiList, ...missing];
+  })();
+
   return (
     <div className="crp-build">
 
-      {/* Report Type */}
+      {/* ── Report Type ─────────────────────────────────────────── */}
       <div className="crp-section">
         <SectionLabel>Report Type</SectionLabel>
         <div className="crp-type-grid">
-          {(meta?.report_types || []).map(rt => (
-            <button
-              key={rt.value}
-              className={`crp-type-btn${reportType === rt.value ? ' crp-type-btn--active' : ''}`}
-              onClick={() => setReportType(rt.value)}
-              type="button"
-            >
-              <span className="crp-type-label">{rt.label}</span>
-            </button>
-          ))}
+          {reportTypes.map(rt => {
+            const rtMeta = REPORT_TYPE_META[rt.value];
+            return (
+              <button
+                key={rt.value}
+                className={`crp-type-btn${reportType === rt.value ? ' crp-type-btn--active' : ''}`}
+                onClick={() => { setReportType(rt.value); setError(null); }}
+                type="button"
+              >
+                {rtMeta?.icon && (
+                  <span className="crp-type-icon">{rtMeta.icon}</span>
+                )}
+                <span className="crp-type-text">
+                  <span className="crp-type-label">{rt.label}</span>
+                  {rtMeta?.desc && (
+                    <span className="crp-type-desc">{rtMeta.desc}</span>
+                  )}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
       <div className="crp-two-col">
 
-        {/* Left column */}
+        {/* ── Left column ─────────────────────────────────────────── */}
         <div>
+
           {/* Period */}
           <div className="crp-section">
-            <SectionLabel>Period</SectionLabel>
+            <SectionLabel>Time Period</SectionLabel>
             <div className="crp-period-row">
-              {(meta?.period_options || []).map(p => (
+              {(meta?.period_options || ['daily', 'weekly', 'monthly', 'yearly', 'custom']).map(p => (
                 <button
                   key={p}
                   className={`crp-period-btn${period === p ? ' crp-period-btn--active' : ''}`}
@@ -299,7 +394,7 @@ function BuildTab({ meta, onResult }) {
               <>
                 <div className="crp-date-row">
                   <div>
-                    <label className="crp-filter-label">Start Date</label>
+                    <label className="crp-filter-label" style={{ marginBottom: 5, display: 'block' }}>Start Date</label>
                     <input
                       type="date"
                       className="sf-input"
@@ -309,7 +404,7 @@ function BuildTab({ meta, onResult }) {
                     />
                   </div>
                   <div>
-                    <label className="crp-filter-label">End Date</label>
+                    <label className="crp-filter-label" style={{ marginBottom: 5, display: 'block' }}>End Date</label>
                     <input
                       type="date"
                       className="sf-input"
@@ -332,16 +427,13 @@ function BuildTab({ meta, onResult }) {
 
           {/* Fix #3 — Group By filtered per report type */}
           <div className="crp-section">
-            <SectionLabel>
+            <SectionLabel
+              hint={validGroupBys.length < 5 ? `Limited options for ${REPORT_TYPE_META[reportType]?.label || reportType}` : null}
+            >
               Group By
-              {validGroupBys.length < 5 && (
-                <span style={{ color: "#101000D", fontWeight: 400, marginLeft: 6 }}>
-                  · limited for {reportType}
-                </span>
-              )}
             </SectionLabel>
             <div className="crp-period-row">
-              {(meta?.group_by_options || []).map(g => {
+              {allGroupByOptions.map(g => {
                 const allowed = validGroupBys.includes(g);
                 return (
                   <button
@@ -361,60 +453,143 @@ function BuildTab({ meta, onResult }) {
 
           {/* Filters */}
           <div className="crp-section">
-            <SectionLabel>Filters (Optional)</SectionLabel>
-            <div className="crp-filters-row">
-              <FilterSelect
-                label="Room Type"
-                value={filters.room_type || ''}
-                onChange={v => setFilters(f => ({ ...f, room_type: v || undefined }))}
-                options={ROOM_TYPES}
-              />
-              {reportType === 'bookings' && (
-                <FilterSelect
-                  label="Status"
-                  value={filters.status || ''}
-                  onChange={v => setFilters(f => ({ ...f, status: v || undefined }))}
-                  options={[
-                    { value: 'confirmed',   label: 'Confirmed'   },
-                    { value: 'checked_in',  label: 'Checked In'  },
-                    { value: 'checked_out', label: 'Checked Out' },
-                    { value: 'cancelled',   label: 'Cancelled'   },
-                    { value: 'expired',     label: 'Expired'     },
-                    { value: 'no_show',     label: 'No Show'     },
-                  ]}
-                />
-              )}
-            </div>
+            <button
+              className="crp-collapsible-header"
+              onClick={() => setFiltersOpen(v => !v)}
+              type="button"
+            >
+              <SectionLabel>Filters</SectionLabel>
+              <span className={`crp-collapse-chevron${filtersOpen ? ' crp-collapse-chevron--open' : ''}`}>
+                <ChevronDown size={13} />
+              </span>
+            </button>
+
+            {filtersOpen && (
+              <div className="crp-filters-body">
+                <div className="crp-filters-row">
+                  {/* Room Type — bookings, revenue, occupancy, payments */}
+                  {['bookings', 'revenue', 'occupancy', 'payments'].includes(reportType) && (
+                    <FilterSelect
+                      label="Room Type"
+                      value={filters.room_type || ''}
+                      onChange={v => setFilters(f => ({ ...f, room_type: v || undefined }))}
+                      options={ROOM_TYPES}
+                    />
+                  )}
+
+                  {/* Booking Status — bookings only */}
+                  {reportType === 'bookings' && (
+                    <FilterSelect
+                      label="Booking Status"
+                      value={filters.status || ''}
+                      onChange={v => setFilters(f => ({ ...f, status: v || undefined }))}
+                      options={BOOKING_STATUSES}
+                    />
+                  )}
+
+                  {/* Payment Status — revenue, bookings, payments */}
+                  {['revenue', 'bookings', 'payments'].includes(reportType) && (
+                    <FilterSelect
+                      label="Payment Status"
+                      value={filters.payment_status || ''}
+                      onChange={v => setFilters(f => ({ ...f, payment_status: v || undefined }))}
+                      options={PAYMENT_STATUSES}
+                    />
+                  )}
+
+                  {/* Payment Method — payments only */}
+                  {reportType === 'payments' && (
+                    <FilterSelect
+                      label="Payment Method"
+                      value={filters.payment_method || ''}
+                      onChange={v => setFilters(f => ({ ...f, payment_method: v || undefined }))}
+                      options={PAYMENT_METHODS}
+                    />
+                  )}
+
+                  {/* Staff Role — staff only */}
+                  {reportType === 'staff' && (
+                    <FilterSelect
+                      label="Staff Role"
+                      value={filters.role || ''}
+                      onChange={v => setFilters(f => ({ ...f, role: v || undefined }))}
+                      options={STAFF_ROLES}
+                    />
+                  )}
+
+                  {/* Staff Member — staff only */}
+                  {reportType === 'staff' && (
+                    <div className="crp-filter-item">
+                      <label className="crp-filter-label">Staff Member</label>
+                      <input
+                        type="text"
+                        className="sf-input crp-filter-select"
+                        placeholder="Name or ID…"
+                        value={filters.staff_id || ''}
+                        onChange={e => setFilters(f => ({ ...f, staff_id: e.target.value || undefined }))}
+                      />
+                    </div>
+                  )}
+
+                  {/* No filters for this type */}
+                  {!['bookings', 'revenue', 'occupancy', 'payments', 'staff'].includes(reportType) && (
+                    <p className="crp-filter-none">
+                      No additional filters available for this report type.
+                    </p>
+                  )}
+                </div>
+
+                {Object.values(filters).some(Boolean) && (
+                  <button
+                    className="crp-clear-btn"
+                    onClick={() => setFilters({})}
+                    type="button"
+                  >
+                    Clear all filters
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Right column — Metrics */}
+        {/* ── Right column ─────────────────────────────────────────── */}
         <div>
+
+          {/* Metrics */}
           <div className="crp-section">
-            <SectionLabel>
+            <SectionLabel
+              hint={metrics.length === 0 ? 'All metrics included by default' : `${metrics.length} selected`}
+            >
               Metrics
-              {metrics.length > 0
-                ? ` — ${metrics.length} selected`
-                : ' — all (default)'}
             </SectionLabel>
-            <div className="crp-metrics-grid">
-              {availMetrics.map(m => (
-                <MetricChip
-                  key={m}
-                  label={m}
-                  active={metrics.includes(m)}
-                  onClick={() => toggleMetric(m)}
-                />
-              ))}
-            </div>
-            {metrics.length > 0 && (
-              <button
-                className="crp-clear-btn"
-                onClick={() => setMetrics([])}
-                type="button"
-              >
-                Clear selection (show all)
-              </button>
+
+            {availMetrics.length > 0 ? (
+              <>
+                <div className="crp-metrics-grid">
+                  {availMetrics.map(m => (
+                    <MetricChip
+                      key={m}
+                      label={m}
+                      active={metrics.includes(m)}
+                      onClick={() => toggleMetric(m)}
+                    />
+                  ))}
+                </div>
+                {metrics.length > 0 && (
+                  <button
+                    className="crp-clear-btn"
+                    onClick={() => setMetrics([])}
+                    type="button"
+                  >
+                    Clear selection (show all)
+                  </button>
+                )}
+              </>
+            ) : (
+              <p className="crp-filter-none">
+                Metrics will load after selecting a report type.
+              </p>
             )}
           </div>
 
@@ -434,7 +609,7 @@ function BuildTab({ meta, onResult }) {
               ))}
             </div>
             {exportFmt !== 'json' && (
-              <p style={{ fontSize: 10, color: 'rgba(248,246,240,0.35)', marginTop: 8 }}>
+              <p className="crp-export-note">
                 File will download directly. A notification will confirm when ready.
               </p>
             )}
@@ -450,7 +625,12 @@ function BuildTab({ meta, onResult }) {
 
       {/* Action buttons */}
       <div className="crp-actions">
-        <button className="sf-btn sf-btn-primary crp-run-btn" onClick={handleRun} disabled={loading}>
+        <button
+          className="sf-btn sf-btn-primary crp-run-btn"
+          onClick={handleRun}
+          disabled={loading}
+          type="button"
+        >
           {loading
             ? <><RefreshCw size={13} className="crp-spin" /> Generating…</>
             : <><Play size={13} /> Run Report</>
@@ -518,9 +698,9 @@ function TemplatesTab({ onRunResult }) {
   if (loading) return <div className="crp-loading">Loading templates…</div>;
   if (!templates.length) return (
     <div className="crp-empty">
-      <FileText size={32} style={{ opacity: 0.3, marginBottom: 12 }} />
-      <p>No saved templates yet.</p>
-      <p style={{ fontSize: 12, color: 'var(--white-dim)' }}>
+      <FileText size={32} style={{ opacity: 0.2, marginBottom: 12 }} />
+      <p style={{ fontWeight: 600, color: 'var(--sf-text-primary)' }}>No saved templates yet.</p>
+      <p style={{ fontSize: 12, color: 'var(--sf-text-muted)', marginTop: 4 }}>
         Build a report and click "Save as Template" to reuse it later.
       </p>
     </div>
@@ -546,6 +726,7 @@ function TemplatesTab({ onRunResult }) {
               className="sf-btn sf-btn-primary crp-sm-btn"
               onClick={() => handleRun(tpl)}
               disabled={running === tpl.id}
+              type="button"
             >
               {running === tpl.id
                 ? <RefreshCw size={11} className="crp-spin" />
@@ -556,6 +737,7 @@ function TemplatesTab({ onRunResult }) {
             <button
               className="sf-btn crp-sm-btn"
               onClick={() => setShowSched(tpl)}
+              type="button"
             >
               <Clock size={11} /> Schedule
             </button>
@@ -563,6 +745,7 @@ function TemplatesTab({ onRunResult }) {
               className="crp-icon-btn crp-icon-btn--danger"
               onClick={() => handleDelete(tpl.id)}
               title="Delete"
+              type="button"
             >
               <Trash2 size={13} />
             </button>
@@ -616,9 +799,9 @@ function SchedulesTab() {
   if (loading) return <div className="crp-loading">Loading schedules…</div>;
   if (!schedules.length) return (
     <div className="crp-empty">
-      <Calendar size={32} style={{ opacity: 0.3, marginBottom: 12 }} />
-      <p>No scheduled reports yet.</p>
-      <p style={{ fontSize: 12, color: 'var(--white-dim)' }}>
+      <Calendar size={32} style={{ opacity: 0.2, marginBottom: 12 }} />
+      <p style={{ fontWeight: 600, color: 'var(--sf-text-primary)' }}>No scheduled reports yet.</p>
+      <p style={{ fontSize: 12, color: 'var(--sf-text-muted)', marginTop: 4 }}>
         Go to Templates and click "Schedule" on any saved template.
       </p>
     </div>
@@ -641,16 +824,18 @@ function SchedulesTab() {
               className="crp-icon-btn"
               onClick={() => handleToggle(s.id)}
               title={s.is_active ? 'Deactivate' : 'Activate'}
+              type="button"
             >
               {s.is_active
-                ? <ToggleRight size={18} style={{ color: 'var(--green)' }} />
-                : <ToggleLeft  size={18} style={{ color: 'var(--white-dim)' }} />
+                ? <ToggleRight size={18} style={{ color: 'var(--sf-green)' }} />
+                : <ToggleLeft  size={18} style={{ color: 'var(--sf-text-muted)' }} />
               }
             </button>
             <button
               className="crp-icon-btn crp-icon-btn--danger"
               onClick={() => handleDelete(s.id)}
               title="Delete"
+              type="button"
             >
               <Trash2 size={13} />
             </button>
@@ -664,10 +849,10 @@ function SchedulesTab() {
 // ─── History Tab ──────────────────────────────────────────────────────────────
 
 function HistoryTab({ onViewResult, setActiveTab }) {
-  const [executions,   setExecutions]   = useState([]);
-  const [loading,      setLoading]      = useState(true);
-  const [downloading,  setDownloading]  = useState(null);
-  const [dlError,      setDlError]      = useState(null);
+  const [executions,  setExecutions]  = useState([]);
+  const [loading,     setLoading]     = useState(true);
+  const [downloading, setDownloading] = useState(null);
+  const [dlError,     setDlError]     = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -684,25 +869,23 @@ function HistoryTab({ onViewResult, setActiveTab }) {
     setDownloading(exec.id);
     setDlError(null);
 
-    // If execution failed, show error and don't attempt download
     if (exec.status === 'failed') {
       setDlError(`Cannot download: Report generation failed. ${exec.error_message || ''}`);
       setDownloading(null);
       return;
     }
 
-    // Always regenerate fresh instead of downloading stored file (avoids 404 issues)
     const fmt = exec.export_format === 'json' ? 'csv' : exec.export_format;
 
     try {
       const blob = await reportRunApi.download({
         report_type: exec.report_type,
         config: exec.config_snapshot || {},
-        export_format: fmt
+        export_format: fmt,
       });
 
       if (!blob || blob.size === 0) {
-        setDlError(`Generated file is empty`);
+        setDlError('Generated file is empty');
         return;
       }
 
@@ -742,7 +925,7 @@ function HistoryTab({ onViewResult, setActiveTab }) {
       const result = await reportRunApi.run({
         report_type: exec.report_type,
         config: exec.config_snapshot || {},
-        export_format: 'json'
+        export_format: 'json',
       });
       onViewResult(result);
       setActiveTab('build');
@@ -757,8 +940,8 @@ function HistoryTab({ onViewResult, setActiveTab }) {
   if (loading) return <div className="crp-loading">Loading history…</div>;
   if (!executions.length) return (
     <div className="crp-empty">
-      <History size={32} style={{ opacity: 0.3, marginBottom: 12 }} />
-      <p>No report history yet.</p>
+      <History size={32} style={{ opacity: 0.2, marginBottom: 12 }} />
+      <p style={{ fontWeight: 600, color: 'var(--sf-text-primary)' }}>No report history yet.</p>
     </div>
   );
 
@@ -777,21 +960,21 @@ function HistoryTab({ onViewResult, setActiveTab }) {
             <th>Status</th>
             <th>Triggered By</th>
             <th>Run At</th>
-            <th>Download</th>
+            <th>Actions</th>
           </tr>
         </thead>
         <tbody>
           {executions.map(e => (
             <tr key={e.id}>
               <td>
-                <span style={{ fontWeight: 500, color: 'var(--gold)' }}>
+                <span style={{ fontWeight: 600, color: 'var(--sf-text-primary)' }}>
                   {e.report_type_display}
                 </span>
                 {e.is_scheduled && (
                   <span className="crp-sched-tag">scheduled</span>
                 )}
               </td>
-              <td style={{ textTransform: 'uppercase', fontSize: 10 }}>
+              <td style={{ textTransform: 'uppercase', fontSize: 10, fontWeight: 700, color: 'var(--sf-text-muted)' }}>
                 {e.export_format}
               </td>
               <td>
@@ -799,25 +982,20 @@ function HistoryTab({ onViewResult, setActiveTab }) {
                 {e.status === 'failed' && e.error_message && (
                   <span
                     style={{
-                      fontSize: 9,
-                      color: 'var(--red)',
-                      display: 'block',
-                      maxWidth: 200,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                      marginTop: 4
+                      fontSize: 9, color: 'var(--sf-red)', display: 'block',
+                      maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap', marginTop: 4,
                     }}
                     title={e.error_message}
                   >
-                    {e.error_message.substring(0, 50)}...
+                    {e.error_message.substring(0, 50)}…
                   </span>
                 )}
               </td>
-              <td style={{ fontSize: 11, color: "#101000D" }}>
+              <td style={{ fontSize: 12, color: 'var(--sf-text-muted)' }}>
                 {e.triggered_by_email || '—'}
               </td>
-              <td style={{ fontSize: 11, color: "#101000D" }}>
+              <td style={{ fontSize: 12, color: 'var(--sf-text-muted)' }}>
                 {timeAgo(e.started_at)}
               </td>
               <td>
@@ -829,6 +1007,7 @@ function HistoryTab({ onViewResult, setActiveTab }) {
                           className="crp-icon-btn"
                           title="View result"
                           onClick={() => handleView(e)}
+                          type="button"
                         >
                           <ChevronRight size={13} />
                         </button>
@@ -838,6 +1017,7 @@ function HistoryTab({ onViewResult, setActiveTab }) {
                         title={`Download ${e.export_format === 'json' ? 'CSV' : e.export_format.toUpperCase()}`}
                         onClick={() => handleDownload(e)}
                         disabled={downloading === e.id}
+                        type="button"
                       >
                         {downloading === e.id
                           ? <RefreshCw size={13} className="crp-spin" />
@@ -852,6 +1032,7 @@ function HistoryTab({ onViewResult, setActiveTab }) {
                       title="Retry this report"
                       onClick={() => handleRetry(e)}
                       disabled={downloading === e.id}
+                      type="button"
                     >
                       {downloading === e.id
                         ? <RefreshCw size={13} className="crp-spin" />
@@ -939,14 +1120,37 @@ export default function CustomReportPage() {
           )}
         </div>
 
-        {/* Result panel — rendered below the builder when a JSON result is available */}
-        {result && activeTab === 'build' && (
-          <ReportResultPanel
-            result={result}
-            title={resultTitle}
-            onClose={() => setResult(null)}
-          />
-        )}
+        {/* Result panel — routed by report_type */}
+        {result && activeTab === 'build' && (() => {
+          const reportType = result?.data?.meta?.report_type
+            || result?.meta?.report_type
+            || '';
+          if (reportType === 'payments') {
+            return (
+              <PaymentsResultPanel
+                result={result}
+                title={resultTitle}
+                onClose={() => setResult(null)}
+              />
+            );
+          }
+          if (reportType === 'staff') {
+            return (
+              <StaffResultPanel
+                result={result}
+                title={resultTitle}
+                onClose={() => setResult(null)}
+              />
+            );
+          }
+          return (
+            <ReportResultPanel
+              result={result}
+              title={resultTitle}
+              onClose={() => setResult(null)}
+            />
+          );
+        })()}
       </div>
     </div>
   );
