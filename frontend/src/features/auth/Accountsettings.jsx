@@ -2,11 +2,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getCurrentUser, getStoredUser } from '../../services/api';
-import { User, Mail, Lock, Shield, LogOut, ChevronRight, Check, X, Eye, EyeOff, ArrowLeft, Smartphone } from 'lucide-react';
+import { User, Mail, Lock, Shield, LogOut, ChevronRight, Check, X, Eye, EyeOff, ArrowLeft, Smartphone, Phone } from 'lucide-react';
 import axios from 'axios';
 import './AccountSettings.css';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/auth';
+const API_BASE = import.meta.env.VITE_AUTH_URL || 'http://localhost:8000/api/auth';
 
 function getToken() {
   return (
@@ -28,6 +28,21 @@ function getAuthHeaders() {
   return { Authorization: `Bearer ${getToken()}` };
 }
 
+// ── Phone validation helpers ──────────────────────────────────────────────────
+// Accepts: +63 912 345 6789 / +639123456789 / 09123456789 / 9123456789
+const PHONE_REGEX = /^(\+63|0)?[89]\d{9}$/;
+
+function normalizePhone(raw) {
+  // Strip spaces, dashes, parentheses
+  return raw.replace(/[\s\-().]/g, '');
+}
+
+function validatePhone(raw) {
+  if (!raw) return null; // empty is allowed
+  const cleaned = normalizePhone(raw);
+  return PHONE_REGEX.test(cleaned) ? null : 'Enter a valid PH number (e.g. +63 912 345 6789 or 09123456789)';
+}
+
 // ── Section: Edit Name & Phone ────────────────────────────────────────────────
 function ProfileSection({ user, onSuccess }) {
   const [form, setForm] = useState({
@@ -35,29 +50,53 @@ function ProfileSection({ user, onSuccess }) {
     last_name: user?.last_name || '',
     phone: user?.phone || '',
   });
+  const [phoneError, setPhoneError] = useState('');
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState(null);
   const [message, setMessage] = useState('');
 
   const handleChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    setForm({ ...form, [name]: value });
     setStatus(null);
+
+    if (name === 'phone') {
+      setPhoneError(validatePhone(value) || '');
+    }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // Re-validate phone before submit
+    const phoneErr = validatePhone(form.phone);
+    if (phoneErr) {
+      setPhoneError(phoneErr);
+      return;
+    }
+
     setLoading(true);
     setStatus(null);
     try {
-      const { data } = await axios.patch(`${API_BASE}/profile/`, form, {
+      // Send normalized phone to backend
+      const payload = {
+        ...form,
+        phone: form.phone ? normalizePhone(form.phone) : '',
+      };
+
+      const { data } = await axios.patch(`${API_BASE}/profile/`, payload, {
         headers: getAuthHeaders(),
       });
+      const existingUser = JSON.parse(localStorage.getItem('user') || '{}');
+      const updatedUser = { ...existingUser, ...data.user };
+      localStorage.setItem('user', JSON.stringify(updatedUser));
       setStatus('success');
       setMessage('Profile updated successfully.');
       onSuccess(data.user);
     } catch (err) {
       setStatus('error');
       setMessage(
+        err.response?.data?.phone?.[0] ||
         err.response?.data?.detail ||
         Object.values(err.response?.data || {})[0]?.[0] ||
         'Failed to update profile.'
@@ -89,18 +128,34 @@ function ProfileSection({ user, onSuccess }) {
               placeholder="Doe" className="as-input" />
           </div>
         </div>
+
         <div className="as-field">
-          <label>Phone Number</label>
-          <input name="phone" value={form.phone} onChange={handleChange}
-            placeholder="+63 912 345 6789" className="as-input" type="tel" />
+          <label>Phone Number <span style={{ color: 'var(--as-text-muted)', fontWeight: 500, textTransform: 'none', letterSpacing: 0 }}>(optional)</span></label>
+          <input
+            name="phone"
+            value={form.phone}
+            onChange={handleChange}
+            placeholder="+63 912 345 6789"
+            className={`as-input ${phoneError ? 'as-input-error' : form.phone && !phoneError ? 'as-input-success' : ''}`}
+            type="tel"
+            inputMode="tel"
+            autoComplete="tel"
+          />
+          {phoneError && (
+            <span className="as-hint-error"><X size={12} />{phoneError}</span>
+          )}
+          {form.phone && !phoneError && (
+            <span className="as-hint-success"><Check size={12} />Looks good</span>
+          )}
         </div>
+
         {status && (
           <div className={`as-alert ${status === 'success' ? 'as-alert-success' : 'as-alert-error'}`}>
             {status === 'success' ? <Check size={16} /> : <X size={16} />}
             <span>{message}</span>
           </div>
         )}
-        <button type="submit" className="as-btn-primary" disabled={loading}>
+        <button type="submit" className="as-btn-primary" disabled={loading || !!phoneError}>
           {loading ? <><span className="as-spinner" />Saving...</> : 'Save Changes'}
         </button>
       </form>
@@ -460,16 +515,6 @@ function SessionsSection() {
 }
 
 // ─── Back destination resolver ─────────────────────────────────────────────────
-// Maps the ?from + ?role query params to the correct dashboard route.
-//
-// from=admin      → /admin/dashboard      (admin / manager / receptionist)
-// from=frontdesk  → /staff/front-desk     (front_desk)
-// from=staff      → role-specific home    (housekeeping / maintenance / security)
-//   role=housekeeping → /staff/cleaning
-//   role=maintenance  → /staff/maintenance
-//   role=security     → /staff/incidents
-// (no from)       → /dashboard            (guest)
-
 const STAFF_ROLE_HOME = {
   housekeeping: '/staff/cleaning',
   maintenance:  '/staff/maintenance',
@@ -488,7 +533,7 @@ export default function AccountSettings() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const from = searchParams.get('from');
-  const role = searchParams.get('role');   // present when from=staff
+  const role = searchParams.get('role');
 
   const [user, setUser] = useState(getStoredUser());
   const [loading, setLoading] = useState(true);
@@ -529,7 +574,6 @@ export default function AccountSettings() {
 
   return (
     <div className="as-page">
-      {/* Top Nav */}
       <header className="as-topbar">
         <button
           className="as-back-btn"
@@ -548,7 +592,6 @@ export default function AccountSettings() {
       </header>
 
       <div className="as-layout">
-        {/* Sidebar Tabs */}
         <aside className="as-sidebar">
           <div className="as-sidebar-user">
             <div className="as-avatar-lg">
@@ -572,7 +615,6 @@ export default function AccountSettings() {
           </nav>
         </aside>
 
-        {/* Content */}
         <main className="as-content">
           {activeTab === 'profile'  && <ProfileSection  user={user} onSuccess={handleUserUpdate} />}
           {activeTab === 'email'    && <EmailSection    user={user} onSuccess={handleUserUpdate} />}

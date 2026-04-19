@@ -1,0 +1,101 @@
+/* LoginCaptcha.css — Adaptive math challenge widget
+   Matches AuthModern.css editorial light palette exactly */
+
+.lc-captcha {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  background: var(--am-bg-warm);
+  border: 1px solid var(--am-border-mid);
+  border-radius: 0;
+  margin-bottom: 4px;
+  animation: lc-slidein 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes lc-slidein {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.lc-captcha__header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--am-text-muted);
+}
+
+.lc-captcha__header svg {
+  color: var(--am-text-mid);
+  flex-shrink: 0;
+}
+
+.lc-captcha__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.lc-captcha__question {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--am-text);
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+.lc-captcha__eq {
+  font-size: 16px;
+  font-weight: 400;
+  color: var(--am-text-muted);
+}
+
+.lc-captcha__input {
+  width: 72px;
+  padding: 9px 12px;
+  background: #fff;
+  border: 1.5px solid var(--am-border-mid);
+  border-radius: 0;
+  color: var(--am-text);
+  font-family: 'Montserrat', sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  text-align: center;
+  outline: none;
+  transition: border-color 0.18s, box-shadow 0.18s;
+  /* Remove browser number spinners */
+  -moz-appearance: textfield;
+}
+.lc-captcha__input::-webkit-inner-spin-button,
+.lc-captcha__input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+
+.lc-captcha__input:focus {
+  border-color: var(--am-text);
+  box-shadow: 0 0 0 3px rgba(1, 0, 13, 0.06);
+}
+
+.lc-captcha__input--error {
+  border-color: var(--am-error) !important;
+  box-shadow: 0 0 0 3px rgba(192, 57, 43, 0.08) !important;
+  animation: lc-shake 0.35s ease;
+}
+
+@keyframes lc-shake {
+  0%, 100% { transform: translateX(0); }
+  25%       { transform: translateX(-4px); }
+  75%       { transform: translateX(4px); }
+}
+
+.lc-captcha__hint {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--am-error);
+  margin: 0;
+}

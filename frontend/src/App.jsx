@@ -15,7 +15,7 @@ import HotelHomepage          from './features/home/HotelHomepage.jsx';
 import { notificationRoutes } from './features/notifications/NotificationRoutes';
 import { adminPanelRoutes }   from './components/AdminPanelRoutes';
 import { staffRoutes }        from './features/staff/StaffRoutes';
-import ChatWidget             from './features/chatbot/ChatWidget';
+import ChatWidgetWrapper from './features/chatbot/ChatWidgetWrapper';
 import StaffActivatePage      from './features/adminPanel/staff/StaffActivatePage';
 import { legalRoutes } from './components/legalRoutes';
 // ── at the top with other imports ─────────────────────────────────────────────
@@ -103,7 +103,7 @@ function App() {
       </Routes>
 
       {/* ── Chat Widget — outside <Routes> so it renders on every page ── */}
-      <ChatWidget />
+      <ChatWidgetWrapper />
 
     </Router>
   );

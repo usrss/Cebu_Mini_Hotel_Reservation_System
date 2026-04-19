@@ -46,7 +46,11 @@ FRONTEND_URL        = 'http://localhost:5173'
 
 CORS_ALLOW_ALL_ORIGINS = True
 
-
+'''
+RECAPTCHA_SECRET_KEY = env('RECAPTCHA_SECRET_KEY')  # from Google reCAPTCHA admin console
+RECAPTCHA_REQUIRED = True   # set False in local dev to skip enforcement
+RATELIMIT_USE_CACHE = 'default'
+'''
 # Application definition
 
 INSTALLED_APPS = [

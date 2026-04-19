@@ -42,26 +42,32 @@
   width: var(--sidebar-collapsed);
 }
 
-
-.fdl-brand-icon {
-  width: 32px;
-  height: 32px;
-  background: #01000D;
-  border-radius: 8px;
+.fdl-brand {
   display: flex;
   align-items: center;
-  justify-content: center;
-  color: #FFFFFF;
-  font-size: 14px;
-  font-weight: 700;
+  gap: 10px;
+  padding: 0 16px;
+  height: 60px;
+  border-bottom: 1px solid var(--al-surface-3);
   flex-shrink: 0;
+  position: relative;
 }
-
-.fdl-brand-name {
-  font-size: 13px;
+.fdl-brand-icon {
+  width: 30px; height: 30px;
+  background: var(--al-accent-lt);
+  border-radius: var(--al-radius-md);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--al-accent); font-size: 14px;
+  flex-shrink: 0;
   font-weight: 700;
-  letter-spacing: 0.03em;
-  color: #01000D;
+}
+.fdl-brand-name {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--al-text);
   white-space: nowrap;
   flex: 1;
 }

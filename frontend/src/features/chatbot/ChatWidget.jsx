@@ -1,26 +1,33 @@
 /**
  * src/features/chatbot/ChatWidget.jsx
  *
- * Floating chat widget — appears on every page globally.
- * Mount this once in App.jsx or main.jsx.
+ * Floating chat widget for hotel guests.
+ * Mount via ChatWidgetWrapper.
  *
- * Usage:
- *   import ChatWidget from './features/chatbot/ChatWidget';
- *   // Inside your App/layout component:
- *   <ChatWidget />
+ * Header buttons:  [History]  [New Chat]  [✕]
+ *
+ * History button slides in HistoryPanel over the message area.
+ * Guest can resume any past conversation; closed tickets are read-only.
  */
 
 import { useState, useRef, useEffect, useCallback } from 'react';
+import {
+  Hotel, MessageCircle, X, Send, RotateCcw,
+  Headphones, Bot, AlertTriangle, Clock, History,
+} from 'lucide-react';
 import { useChatbot } from './useChatbot';
 import MessageBubble from './MessageBubble';
 import QuickReplies from './QuickReplies';
+import HistoryPanel from './HistoryPanel';
 import './ChatWidget.css';
 
 // ─── Typing indicator ─────────────────────────────────────────────────────────
 function TypingIndicator() {
   return (
     <div className="cmh-message-row cmh-message-row--bot">
-      <div className="cmh-avatar cmh-avatar--bot">🏨</div>
+      <div className="cmh-avatar cmh-avatar--bot">
+        <Bot size={13} />
+      </div>
       <div className="cmh-typing">
         <span /><span /><span />
       </div>
@@ -28,30 +35,42 @@ function TypingIndicator() {
   );
 }
 
+// ─── Closed ticket notice ─────────────────────────────────────────────────────
+function ClosedNotice() {
+  return (
+    <div className="cmh-closed-notice">
+      <Clock size={13} />
+      This ticket has been resolved and closed. Start a New Chat if you need further assistance.
+    </div>
+  );
+}
+
 // ─── ChatWidget ───────────────────────────────────────────────────────────────
 export default function ChatWidget() {
   const {
-    messages, loading, error, isOpen, isEscalated,
+    messages, loading, error, isOpen, isEscalated, isClosed,
     hasUnread, quickReplies, bottomRef,
-    send, toggleChat, clearChat,
+    conversations, localId, showHistory,
+    send, toggleChat, newChat,
+    resumeConversation, deleteConversation, toggleHistory,
   } = useChatbot();
 
   const [inputValue, setInputValue] = useState('');
   const inputRef = useRef(null);
 
-  // Focus input when chat opens
+  // Focus input when chat opens and history panel is not showing
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !showHistory) {
       setTimeout(() => inputRef.current?.focus(), 150);
     }
-  }, [isOpen]);
+  }, [isOpen, showHistory]);
 
   const handleSend = useCallback(() => {
     const text = inputValue.trim();
-    if (!text || loading) return;
+    if (!text || loading || isClosed) return;
     setInputValue('');
     send(text);
-  }, [inputValue, loading, send]);
+  }, [inputValue, loading, send, isClosed]);
 
   const handleKeyDown = useCallback((e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -61,23 +80,26 @@ export default function ChatWidget() {
   }, [handleSend]);
 
   const handleQuickReply = useCallback((reply) => {
-    send(reply);
-  }, [send]);
+    if (!isClosed) send(reply);
+  }, [send, isClosed]);
 
   return (
     <>
-      {/* ── Chat Window ──────────────────────────────────────────────────── */}
       {isOpen && (
         <div className="cmh-widget" role="dialog" aria-label="Hotel chat assistant">
 
-          {/* Header */}
+          {/* ── Header ── */}
           <div className="cmh-header">
             <div className="cmh-header-left">
-              <div className="cmh-header-avatar">🏨</div>
+              <div className="cmh-header-avatar">
+                <Hotel size={16} />
+              </div>
               <div className="cmh-header-info">
                 <span className="cmh-header-name">CMH Bot</span>
                 <span className="cmh-header-status">
-                  {isEscalated ? (
+                  {isClosed ? (
+                    <><span className="cmh-status-dot" style={{ background: '#909090' }} />Ticket closed</>
+                  ) : isEscalated ? (
                     <><span className="cmh-status-dot cmh-status-dot--support" />Support mode</>
                   ) : (
                     <><span className="cmh-status-dot cmh-status-dot--online" />Online</>
@@ -85,119 +107,148 @@ export default function ChatWidget() {
                 </span>
               </div>
             </div>
+
             <div className="cmh-header-actions">
+              {/* History button — highlights when panel is open */}
+              <button
+                className={`cmh-header-btn ${showHistory ? 'cmh-header-btn--active' : ''}`}
+                onClick={toggleHistory}
+                title="View conversation history"
+                aria-label="Conversation history"
+              >
+                <History size={10} />
+                History
+                {conversations.length > 0 && (
+                  <span className="cmh-history-count">{conversations.length}</span>
+                )}
+              </button>
+
               <button
                 className="cmh-header-btn"
-                onClick={clearChat}
-                title="New conversation"
-                aria-label="Start new conversation"
+                onClick={newChat}
+                title="Start new conversation"
+                aria-label="New chat"
               >
-                ✕ New
+                <RotateCcw size={10} />
+                New
               </button>
+
               <button
                 className="cmh-header-btn cmh-header-btn--close"
                 onClick={toggleChat}
-                title="Close chat"
                 aria-label="Close chat"
               >
-                ✕
+                <X size={14} />
               </button>
             </div>
           </div>
 
-          {/* Support mode banner */}
-          {isEscalated && (
+          {/* ── Support mode banner ── */}
+          {isEscalated && !isClosed && !showHistory && (
             <div className="cmh-support-banner">
-              🙋 You're connected with our support team. A staff member will respond shortly.
+              <Headphones size={12} />
+              Connected with support — a staff member will respond shortly.
             </div>
           )}
 
-          {/* Message list */}
-          <div className="cmh-messages" role="log" aria-live="polite">
-            {messages.length === 0 && !loading && (
-              <div className="cmh-empty-state">
-                <span className="cmh-empty-icon">🏨</span>
-                <p>Welcome to Cebu Mini Hotel!</p>
-                <p className="cmh-empty-sub">Ask me anything about rooms, bookings, or our hotel.</p>
-              </div>
+          {/* ── Widget body (messages OR history panel) ── */}
+          <div style={{ flex: 1, overflow: 'hidden', position: 'relative', display: 'flex', flexDirection: 'column' }}>
+
+            {/* History panel slides over the message area */}
+            {showHistory && (
+              <HistoryPanel
+                conversations={conversations}
+                localId={localId}
+                onResume={resumeConversation}
+                onDelete={deleteConversation}
+              />
             )}
 
-            {messages.map((msg) => (
-              <MessageBubble key={msg.id} message={msg} />
-            ))}
-
-            {loading && <TypingIndicator />}
-
-            {error && (
-              <div className="cmh-error-msg">
-                ⚠️ {error}
-              </div>
-            )}
-
-            <div ref={bottomRef} />
-          </div>
-
-          {/* Quick replies */}
-          <QuickReplies
-            replies={quickReplies}
-            onSelect={handleQuickReply}
-            disabled={loading}
-          />
-
-          {/* Input */}
-          <div className="cmh-input-row">
-            <textarea
-              ref={inputRef}
-              className="cmh-input"
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Type a message…"
-              rows={1}
-              disabled={loading}
-              aria-label="Chat message input"
-            />
-            <button
-              className="cmh-send-btn"
-              onClick={handleSend}
-              disabled={loading || !inputValue.trim()}
-              aria-label="Send message"
-            >
-              {loading ? (
-                <span className="cmh-send-spinner" />
-              ) : (
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <line x1="22" y1="2" x2="11" y2="13" />
-                  <polygon points="22 2 15 22 11 13 2 9 22 2" />
-                </svg>
+            {/* Messages */}
+            <div className="cmh-messages" role="log" aria-live="polite"
+              style={{ display: showHistory ? 'none' : 'flex' }}>
+              {messages.length === 0 && !loading && (
+                <div className="cmh-empty-state">
+                  <div className="cmh-empty-icon-wrap">
+                    <Hotel size={28} />
+                  </div>
+                  <p>Welcome to Cebu Mini Hotel</p>
+                  <p className="cmh-empty-sub">
+                    Ask about rooms, bookings, or anything about our hotel.
+                  </p>
+                </div>
               )}
-            </button>
+
+              {messages.map((msg) => (
+                <MessageBubble key={msg.id} message={msg} />
+              ))}
+
+              {loading && <TypingIndicator />}
+
+              {error && (
+                <div className="cmh-error-msg">
+                  <AlertTriangle size={12} />
+                  {error}
+                </div>
+              )}
+
+              <div ref={bottomRef} />
+            </div>
           </div>
 
-          {/* Footer */}
+          {/* ── Bottom: quick replies + input OR closed notice ── */}
+          {!showHistory && (
+            <>
+              {isClosed ? (
+                <ClosedNotice />
+              ) : (
+                <>
+                  <QuickReplies
+                    replies={quickReplies}
+                    onSelect={handleQuickReply}
+                    disabled={loading}
+                  />
+
+                  <div className="cmh-input-row">
+                    <textarea
+                      ref={inputRef}
+                      className="cmh-input"
+                      value={inputValue}
+                      onChange={(e) => setInputValue(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                      placeholder="Type a message…"
+                      rows={1}
+                      disabled={loading}
+                      aria-label="Chat message input"
+                    />
+                    <button
+                      className="cmh-send-btn"
+                      onClick={handleSend}
+                      disabled={loading || !inputValue.trim()}
+                      aria-label="Send message"
+                    >
+                      {loading ? <span className="cmh-send-spinner" /> : <Send size={13} />}
+                    </button>
+                  </div>
+                </>
+              )}
+            </>
+          )}
+
+          {/* ── Footer ── */}
           <div className="cmh-footer">
-            Powered by <strong>CMH Bot</strong> · Cebu Mini Hotel
+            Powered by CMH Bot · Cebu Mini Hotel
           </div>
         </div>
       )}
 
-      {/* ── Floating Toggle Button ─────────────────────────────────────── */}
+      {/* ── Floating Toggle — gold ── */}
       <button
         className={`cmh-toggle-btn ${isOpen ? 'cmh-toggle-btn--open' : ''}`}
         onClick={toggleChat}
         aria-label={isOpen ? 'Close chat' : 'Open chat'}
-        title={isOpen ? 'Close chat' : 'Chat with us'}
       >
-        {isOpen ? (
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-            <line x1="18" y1="6" x2="6" y2="18" />
-            <line x1="6" y1="6" x2="18" y2="18" />
-          </svg>
-        ) : (
-          <svg viewBox="0 0 24 24" fill="currentColor">
-            <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z"/>
-          </svg>
-        )}
+        {isOpen ? <X size={20} /> : <MessageCircle size={22} />}
         {!isOpen && hasUnread && <span className="cmh-unread-dot" />}
       </button>
     </>

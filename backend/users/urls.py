@@ -25,6 +25,8 @@ from .views import (
     ChangePasswordView,
     UpdateEmailRequestView,
     UpdateEmailVerifyView,
+    # Adaptive CAPTCHA
+    CaptchaView,
 )
 
 app_name = 'authentication'
@@ -32,11 +34,11 @@ app_name = 'authentication'
 urlpatterns = [
     # Registration
     path('register/request/', RegisterRequestView.as_view(), name='register-request'),
-    path('register/verify/', RegisterVerifyView.as_view(), name='register-verify'),
+    path('register/verify/',  RegisterVerifyView.as_view(),  name='register-verify'),
 
     # Login & Logout
-    path('login/', LoginView.as_view(), name='login'),
-    path('logout/', LogoutView.as_view(), name='logout'),
+    path('login/',      LoginView.as_view(),           name='login'),
+    path('logout/',     LogoutView.as_view(),           name='logout'),
     path('logout-all/', LogoutAllSessionsView.as_view(), name='logout-all'),
 
     # Token Management
@@ -49,13 +51,16 @@ urlpatterns = [
     path('resend-code/', ResendCodeView.as_view(), name='resend-code'),
 
     # Forgot Password (3-step flow)
-    path('forgot-password/', ForgotPasswordRequestView.as_view(), name='forgot-password-request'),
-    path('forgot-password/verify/', ForgotPasswordVerifyView.as_view(), name='forgot-password-verify'),
-    path('forgot-password/reset/', ForgotPasswordResetView.as_view(), name='forgot-password-reset'),
+    path('forgot-password/',         ForgotPasswordRequestView.as_view(), name='forgot-password-request'),
+    path('forgot-password/verify/',  ForgotPasswordVerifyView.as_view(),  name='forgot-password-verify'),
+    path('forgot-password/reset/',   ForgotPasswordResetView.as_view(),   name='forgot-password-reset'),
 
     # Account Settings
-    path('profile/', UpdateProfileView.as_view(), name='update-profile'),
-    path('change-password/', ChangePasswordView.as_view(), name='change-password'),
+    path('profile/',              UpdateProfileView.as_view(),      name='update-profile'),
+    path('change-password/',      ChangePasswordView.as_view(),     name='change-password'),
     path('change-email/request/', UpdateEmailRequestView.as_view(), name='change-email-request'),
-    path('change-email/verify/', UpdateEmailVerifyView.as_view(), name='change-email-verify'),
+    path('change-email/verify/',  UpdateEmailVerifyView.as_view(),  name='change-email-verify'),
+
+    # Adaptive CAPTCHA puzzle generator
+    path('captcha/', CaptchaView.as_view(), name='captcha'),
 ]

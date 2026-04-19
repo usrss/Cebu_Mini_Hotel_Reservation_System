@@ -598,20 +598,20 @@
 .rdm-360-btn {
   display: inline-flex;
   align-items: center;
-  gap: 9px;
-  padding: 12px 20px;
+  gap: 6px; /* reduce gap */
+  padding: 8px 12px; /* smaller padding */
   background: #0A0E1A;
   border: none;
   color: #FAF9F6;
   font-family: 'Montserrat', sans-serif;
   font-size: 10px;
   font-weight: 800;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.08em; /* reduce spacing */
   text-transform: uppercase;
   cursor: pointer;
   margin-bottom: 24px;
   transition: background 0.2s;
-  width: auto;
+  width: fit-content;
 }
 
 .rdm-360-btn:hover { background: #222; }

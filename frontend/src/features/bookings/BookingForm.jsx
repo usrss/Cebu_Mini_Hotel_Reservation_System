@@ -156,11 +156,12 @@ export default function BookingForm({ room, prefillCheckIn, prefillCheckOut }) {
 
   useEffect(() => {
     if (user) {
+        console.log('User object:', user);
       setForm(prev => ({
         ...prev,
         full_name: user.full_name || `${user.first_name || ''} ${user.last_name || ''}`.trim() || '',
-        email:     user.email        || '',
-        phone:     user.phone_number || user.phone || '',
+        email:     user.email     || '',
+        phone:     user.phone || '',
       }));
     }
   }, [user]);

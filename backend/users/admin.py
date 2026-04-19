@@ -36,7 +36,7 @@ class CustomUserAdmin(BaseUserAdmin):
             'fields': ('email', 'password')
         }),
         ('Personal Info', {
-            'fields': ('first_name', 'last_name')
+            'fields': ('first_name', 'last_name','phone')
         }),
         ('Authentication', {
             'fields': ('auth_provider', 'social_id', 'is_verified')

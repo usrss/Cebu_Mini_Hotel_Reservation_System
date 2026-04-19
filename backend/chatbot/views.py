@@ -189,6 +189,23 @@ class ChatView(APIView):
             message_text = user_message,
         )
 
+        # ── Closed conversation — reject new messages entirely ────────────
+        # close_ticket() sets conversation.status = ConversationStatus.CLOSED.
+        # Without this check the message would fall through to the bot pipeline
+        # and generate a new reply as if nothing happened.
+        if conversation.status == ConversationStatus.CLOSED:
+            return Response({
+                "conversation_id": conversation.id,
+                "message":         "This conversation has been resolved and closed. Please start a new chat if you need further assistance.",
+                "intent":          "CLOSED",
+                "data":            None,
+                "escalated":       False,
+                "closed":          True,
+                "quick_replies":   [],
+                "user_message_id": user_msg.id,
+                "bot_message_id":  None,
+            }, status=status.HTTP_200_OK)
+
         # ── Already in support mode — accept message, no bot spam ──────────
         if conversation.is_in_support_mode:
             already_notified = conversation.messages.filter(
