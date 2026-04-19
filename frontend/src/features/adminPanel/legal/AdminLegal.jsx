@@ -1,5 +1,6 @@
 // src/features/adminPanel/legal/AdminLegal.jsx
 import { useEffect, useState, useCallback } from 'react';
+import { Scale, ShieldCheck, ExternalLink, ArrowLeft, CheckCircle2, AlertCircle } from 'lucide-react';
 import { listLegalDocuments, activateDocument } from '../../../services/legalApi';
 import LegalEditor from '../../legal/LegalEditor';
 import VersionList from '../../legal/VersionList';
@@ -8,13 +9,12 @@ import './AdminLegal.css';
 /**
  * Admin page — /admin/legal
  * Manage all legal documents: create, edit, activate, view history.
- * Accessed via AdminLayout (already wraps this in the sidebar).
  */
 export default function AdminLegal() {
   const [documents,   setDocuments]   = useState([]);
   const [loading,     setLoading]     = useState(true);
   const [filterType,  setFilterType]  = useState('');
-  const [editorState, setEditorState] = useState(null); // null=list, 'new'=create, obj=edit
+  const [editorState, setEditorState] = useState(null);
   const [toast,       setToast]       = useState(null);
 
   const showToast = (type, message) => {
@@ -55,57 +55,75 @@ export default function AdminLegal() {
   const activeTerms   = documents.find(d => d.type === 'terms'   && d.is_active);
   const activePrivacy = documents.find(d => d.type === 'privacy' && d.is_active);
 
+  const hour     = new Date().getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+
   return (
     <div className="al-page">
 
       {/* Toast */}
       {toast && (
         <div className={`al-toast al-toast-${toast.type}`} role="alert">
-          {toast.type === 'success' ? '✓' : '✕'} {toast.message}
+          {toast.type === 'success'
+            ? <CheckCircle2 size={14} />
+            : <AlertCircle size={14} />}
+          {toast.message}
         </div>
       )}
 
       {/* Header */}
-      <header className="al-header">
-        <div className="al-header-left">
-          <div className="al-header-icon">⚖</div>
-          <div>
-            <h1 className="al-title">Legal Content Management</h1>
-            <p className="al-subtitle">Cebu Mini Hotel — Terms &amp; Privacy Administration</p>
-          </div>
+      <div className="al-header">
+        <div>
+          <p className="al-eyebrow">Admin Panel</p>
+          <h1 className="al-title">Legal Content</h1>
+          <p className="al-subtitle">
+            Terms &amp; Privacy Administration · Cebu Mini Hotel
+          </p>
         </div>
-        <div className="al-header-right">
+        <div className="al-header-actions">
           <a href="/terms-and-conditions" target="_blank" rel="noopener noreferrer" className="al-preview-link">
-            Preview Terms ↗
+            <Scale size={12} />
+            Terms
+            <ExternalLink size={11} />
           </a>
           <a href="/privacy-policy" target="_blank" rel="noopener noreferrer" className="al-preview-link">
-            Preview Privacy ↗
+            <ShieldCheck size={12} />
+            Privacy
+            <ExternalLink size={11} />
           </a>
         </div>
-      </header>
+      </div>
 
-      {/* Active document status cards */}
-      <div className="al-status-cards">
-        <div className={`al-status-card ${activeTerms ? 'al-card-ok' : 'al-card-warn'}`}>
-          <div className="al-card-icon">{activeTerms ? '✓' : '!'}</div>
-          <div>
-            <div className="al-card-label">Terms &amp; Conditions</div>
-            <div className="al-card-value">
-              {activeTerms
-                ? `v${activeTerms.version} — ${activeTerms.title}`
-                : 'No active document'}
+      {/* Status KPI cards */}
+      <p className="al-section-label">Active Documents</p>
+      <div className="al-kpis">
+        <div className={`al-stat-card ${!activeTerms ? 'al-stat-card--warn' : ''}`}>
+          <div className={`al-stat-icon ${activeTerms ? 'al-stat-icon--ok' : 'al-stat-icon--warn'}`}>
+            {activeTerms ? <CheckCircle2 size={20} /> : <AlertCircle size={20} />}
+          </div>
+          <div className="al-stat-body">
+            <div className="al-stat-label">Terms &amp; Conditions</div>
+            <div className="al-stat-value">
+              {activeTerms ? `v${activeTerms.version}` : 'Not published'}
             </div>
+            {activeTerms && (
+              <div className="al-stat-sub">{activeTerms.title}</div>
+            )}
           </div>
         </div>
-        <div className={`al-status-card ${activePrivacy ? 'al-card-ok' : 'al-card-warn'}`}>
-          <div className="al-card-icon">{activePrivacy ? '✓' : '!'}</div>
-          <div>
-            <div className="al-card-label">Privacy Policy</div>
-            <div className="al-card-value">
-              {activePrivacy
-                ? `v${activePrivacy.version} — ${activePrivacy.title}`
-                : 'No active document'}
+
+        <div className={`al-stat-card ${!activePrivacy ? 'al-stat-card--warn' : ''}`}>
+          <div className={`al-stat-icon ${activePrivacy ? 'al-stat-icon--ok' : 'al-stat-icon--warn'}`}>
+            {activePrivacy ? <CheckCircle2 size={20} /> : <AlertCircle size={20} />}
+          </div>
+          <div className="al-stat-body">
+            <div className="al-stat-label">Privacy Policy</div>
+            <div className="al-stat-value">
+              {activePrivacy ? `v${activePrivacy.version}` : 'Not published'}
             </div>
+            {activePrivacy && (
+              <div className="al-stat-sub">{activePrivacy.title}</div>
+            )}
           </div>
         </div>
       </div>
@@ -125,7 +143,8 @@ export default function AdminLegal() {
         ) : (
           <div>
             <button className="al-back-btn" onClick={() => setEditorState(null)}>
-              ← Back to list
+              <ArrowLeft size={13} />
+              Back to list
             </button>
             <LegalEditor
               document={editorState === 'new' ? null : editorState}

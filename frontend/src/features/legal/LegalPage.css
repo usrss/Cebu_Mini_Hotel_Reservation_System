@@ -1,74 +1,110 @@
-/* LegalPage.css — shared styles for TermsAndConditions & PrivacyPolicy pages */
-@import url("https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:wght@400;500;600&family=DM+Mono&display=swap");
+/* LegalPage.css — Editorial light theme matching Dashboard.css */
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@400;500;600&family=DM+Mono&display=swap');
 
 .lp-page {
   min-height: 100vh;
-  background: #f5f1eb;
-  padding: 2rem 1.5rem 4rem;
-  font-family: "DM Sans", sans-serif;
+  background: #FAF9F6;
+  padding: 48px 5% 80px;
+  font-family: 'DM Sans', sans-serif;
+  color: #01000D;
 }
 
 /* Breadcrumb */
 .lp-breadcrumb {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  margin-bottom: 1.25rem;
-  font-size: 0.82rem;
-  color: #8a7a68;
+  gap: 6px;
+  margin-bottom: 28px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #909090;
   max-width: 860px;
   margin-left: auto;
   margin-right: auto;
 }
 
 .lp-breadcrumb-link {
-  color: #b8872a;
+  color: #01000D;
   text-decoration: none;
-  font-weight: 500;
+  transition: opacity 0.15s;
 }
-
-.lp-breadcrumb-link:hover {
-  text-decoration: underline;
-}
+.lp-breadcrumb-link:hover { opacity: 0.5; }
 
 .lp-breadcrumb-sep {
-  color: #c9b99a;
+  color: #D3D1C7;
+  font-size: 10px;
 }
 
-/* Brand strip */
-.lp-brand-strip {
+/* Brand strip — replaced with page header */
+.lp-page-header {
+  max-width: 860px;
+  margin: 0 auto 32px;
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.lp-page-header-icon {
+  width: 40px;
+  height: 40px;
+  background: rgba(1, 0, 13, 0.07);
+  border-radius: 10px;
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  max-width: 860px;
-  margin: 0 auto 1.25rem;
-  padding: 0.6rem 1.1rem;
-  background: linear-gradient(135deg, #1a1209 0%, #3d2c12 100%);
-  border-radius: 8px;
-  color: #f5e6c8;
-  font-size: 0.82rem;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  justify-content: center;
+  color: #01000D;
+  flex-shrink: 0;
+  margin-top: 4px;
 }
 
-.lp-brand-icon {
-  font-size: 1rem;
+.lp-page-header-text { flex: 1; }
+
+.lp-eyebrow {
+  display: block;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: #909090;
+  margin-bottom: 6px;
+}
+
+.lp-page-title {
+  font-family: 'DM Serif Display', serif;
+  font-size: clamp(22px, 3vw, 32px);
+  font-weight: 400;
+  color: #01000D;
+  margin: 0 0 4px;
+  letter-spacing: -0.01em;
+  line-height: 1.12;
+}
+
+.lp-page-subtitle {
+  font-size: 13px;
+  color: #52515E;
+  margin: 0;
 }
 
 /* Back link */
 .lp-back-link {
-  text-align: center;
-  margin-top: 1.5rem;
-  font-size: 0.85rem;
+  max-width: 860px;
+  margin: 24px auto 0;
+  font-size: 11px;
 }
 
 .lp-back-link a {
-  color: #b8872a;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #01000D;
   text-decoration: none;
-  font-weight: 500;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border-bottom: 1px solid #01000D;
+  padding-bottom: 2px;
+  transition: opacity 0.2s;
 }
-
-.lp-back-link a:hover {
-  text-decoration: underline;
-}
+.lp-back-link a:hover { opacity: 0.5; }

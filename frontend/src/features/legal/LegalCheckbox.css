@@ -1,34 +1,35 @@
-/* LegalCheckbox.css */
+/* LegalCheckbox.css — Editorial light theme matching Dashboard.css */
+
 .lc-wrapper {
-  padding: 1rem 1.25rem;
-  border-radius: 8px;
-  background: #faf8f5;
-  border: 1px solid #e8e0d5;
-  transition: border-color 0.2s;
+  padding: 16px 20px;
+  border-radius: 10px;
+  background: rgba(1, 0, 13, 0.03);
+  border: 0.5px solid rgba(1, 0, 13, 0.14);
+  transition: border-color 0.2s, background 0.2s;
 }
 
 .lc-wrapper.lc-has-error {
-  border-color: #c0392b;
-  background: #fff8f7;
+  border-color: rgba(220, 38, 38, 0.35);
+  background: rgba(220, 38, 38, 0.03);
 }
 
 .lc-label {
   display: flex;
   align-items: flex-start;
-  gap: 0.75rem;
+  gap: 12px;
   cursor: pointer;
   user-select: none;
 }
 
 .lc-label.lc-disabled {
   cursor: not-allowed;
-  opacity: 0.6;
+  opacity: 0.5;
 }
 
 .lc-checkbox-wrap {
   position: relative;
   flex-shrink: 0;
-  margin-top: 2px;
+  margin-top: 1px;
 }
 
 .lc-input {
@@ -42,54 +43,57 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
-  border: 2px solid #c9b99a;
+  width: 18px;
+  height: 18px;
+  border: 1.5px solid rgba(1, 0, 13, 0.25);
   border-radius: 4px;
   background: #fff;
   transition: background 0.15s, border-color 0.15s, transform 0.1s;
 }
 
 .lc-custom-checkbox.lc-checked {
-  background: #b8872a;
-  border-color: #b8872a;
+  background: #01000D;
+  border-color: #01000D;
   transform: scale(1.05);
 }
 
 .lc-custom-checkbox svg {
-  width: 11px;
-  height: 10px;
+  width: 10px;
+  height: 9px;
 }
 
 .lc-text {
-  font-family: "DM Sans", "Segoe UI", sans-serif;
-  font-size: 0.88rem;
-  color: #3d3020;
-  line-height: 1.6;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  color: #535252;
+  line-height: 1.65;
 }
 
 .lc-link {
-  color: #b8872a;
+  color: #01000D;
   font-weight: 600;
   text-decoration: none;
-  border-bottom: 1px dotted #b8872a;
-  transition: color 0.15s, border-color 0.15s;
+  border-bottom: 1px solid rgba(1, 0, 13, 0.3);
+  transition: opacity 0.15s;
 }
 
 .lc-link:hover {
-  color: #8a6020;
-  border-color: #8a6020;
+  opacity: 0.6;
 }
 
 .lc-version {
-  font-size: 0.68rem;
-  color: #8a7a68;
+  font-size: 9px;
+  color: #909090;
   font-weight: 400;
+  font-family: 'DM Mono', monospace;
+  letter-spacing: 0.04em;
 }
 
 .lc-error {
-  margin: 0.5rem 0 0 2rem;
-  font-size: 0.8rem;
-  color: #c0392b;
-  font-family: "DM Sans", sans-serif;
+  margin: 8px 0 0 30px;
+  font-size: 11px;
+  color: #DC2626;
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 500;
+  letter-spacing: 0.02em;
 }

@@ -1,4 +1,5 @@
 import React from "react";
+import { FileText, AlertTriangle, Loader } from "lucide-react";
 import "./LegalViewer.css";
 
 /**
@@ -13,18 +14,21 @@ import "./LegalViewer.css";
 const LegalViewer = ({ document, loading, error }) => {
   if (loading) {
     return (
-      <div className="lv-state lv-loading">
+      <div className="lv-state">
         <div className="lv-spinner" />
-        <p>Loading document…</p>
+        <p className="lv-state-label">Loading document</p>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="lv-state lv-error">
-        <span className="lv-error-icon">⚠</span>
-        <p>{error}</p>
+      <div className="lv-state">
+        <div className="lv-state-icon">
+          <AlertTriangle size={18} />
+        </div>
+        <p className="lv-state-label">Unable to load</p>
+        <p className="lv-state-msg">{error}</p>
       </div>
     );
   }
@@ -41,19 +45,16 @@ const LegalViewer = ({ document, loading, error }) => {
 
   return (
     <article className="lv-wrapper">
-      {/* Header */}
       <header className="lv-header">
         <h1 className="lv-title">{document.title}</h1>
         <div className="lv-meta">
-          <span className="lv-badge">Version {document.version}</span>
-          <span className="lv-divider">•</span>
-          <span className="lv-updated">Last updated: {updatedDate}</span>
+          <span className="lv-badge">v{document.version}</span>
+          <span className="lv-divider">·</span>
+          <span className="lv-updated">Updated {updatedDate}</span>
         </div>
       </header>
 
-      {/* Scrollable Content */}
       <div className="lv-content-area">
-        {/* Render as HTML if content has tags, otherwise plain paragraphs */}
         {document.content.includes("<") ? (
           <div
             className="lv-content"

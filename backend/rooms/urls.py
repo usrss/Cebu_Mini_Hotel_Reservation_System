@@ -31,6 +31,6 @@ urlpatterns = [
     path("trending/", views.TrendingRoomsView.as_view(), name="trending-rooms"),
     path("by-view/", views.RoomsByViewTypeView.as_view(), name="rooms-by-view"),
 
-    path("reviews/token/<uuid:token>/", views.ReviewTokenValidateView.as_view(),  name="review-token-validate"),
+    path("reviews/token/<uuid:token>/", views.ReviewTokenView.as_view(), name="review-token"),
     path("hotel/settings/", HotelSettingsView.as_view(), name="hotel-settings"),
 ]

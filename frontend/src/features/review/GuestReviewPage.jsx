@@ -21,6 +21,7 @@
 
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
+import { Star, ChevronDown, ChevronUp } from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
@@ -32,10 +33,10 @@ function StarRating({ value, onChange, disabled }) {
   return (
     <div
       style={{
-        display:    'flex',
-        gap:        8,
+        display:        'flex',
+        gap:            6,
         justifyContent: 'center',
-        margin:     '8px 0 20px',
+        margin:         '8px 0 20px',
       }}
       role="group"
       aria-label="Star rating"
@@ -50,15 +51,15 @@ function StarRating({ value, onChange, disabled }) {
           onClick={() => !disabled && onChange(star)}
           aria-label={`${star} star${star !== 1 ? 's' : ''}`}
           style={{
-            background: 'none',
-            border:     'none',
-            cursor:     disabled ? 'default' : 'pointer',
-            padding:    '4px',
-            fontSize:   40,
-            color:      (hovered || value) >= star ? '#C9A84C' : 'rgba(201,168,76,0.2)',
-            transition: 'color 0.15s, transform 0.15s',
-            transform:  !disabled && (hovered || value) >= star ? 'scale(1.1)' : 'scale(1)',
-            lineHeight: 1,
+            background:  'none',
+            border:      'none',
+            cursor:      disabled ? 'default' : 'pointer',
+            padding:     '2px',
+            fontSize:    36,
+            color:       (hovered || value) >= star ? '#f59e0b' : '#e5e7eb',
+            transition:  'color 0.15s, transform 0.15s',
+            transform:   !disabled && (hovered || value) >= star ? 'scale(1.12)' : 'scale(1)',
+            lineHeight:  1,
           }}
         >
           ★
@@ -144,168 +145,43 @@ export default function GuestReviewPage() {
     }
   }
 
-  // ── Styles (inline — this page has no imported CSS) ───────────────────────
-  const s = {
-    page: {
-      minHeight:       '100vh',
-      background:      '#0A0E1A',
-      display:         'flex',
-      alignItems:      'center',
-      justifyContent:  'center',
-      padding:         '32px 16px',
-      fontFamily:      "'Raleway', 'Helvetica Neue', sans-serif",
-      color:           '#F8F6F0',
-    },
-    card: {
-      background:   '#111827',
-      border:       '1px solid rgba(201,168,76,0.22)',
-      maxWidth:     520,
-      width:        '100%',
-      padding:      '40px 36px',
-      position:     'relative',
-      overflow:     'hidden',
-    },
-    topBar: {
-      position:   'absolute',
-      top:        0,
-      left:       0,
-      right:      0,
-      height:     3,
-      background: 'linear-gradient(90deg, #C9A84C, transparent)',
-    },
-    eyebrow: {
-      fontSize:      10,
-      fontWeight:    600,
-      letterSpacing: 3,
-      textTransform: 'uppercase',
-      color:         '#C9A84C',
-      margin:        '0 0 10px',
-    },
-    title: {
-      fontFamily:  "'Playfair Display', Georgia, serif",
-      fontSize:    28,
-      fontWeight:  700,
-      color:       '#F8F6F0',
-      margin:      '0 0 6px',
-      lineHeight:  1.2,
-    },
-    subtitle: {
-      fontSize:   13,
-      color:      'rgba(248,246,240,0.55)',
-      margin:     '0 0 28px',
-      lineHeight: 1.5,
-    },
-    infoGrid: {
-      display:             'grid',
-      gridTemplateColumns: '1fr 1fr',
-      gap:                 '12px 20px',
-      background:          'rgba(201,168,76,0.07)',
-      border:              '1px solid rgba(201,168,76,0.15)',
-      padding:             '16px 18px',
-      marginBottom:        28,
-    },
-    infoLabel: {
-      fontSize:      10,
-      letterSpacing: 1.5,
-      textTransform: 'uppercase',
-      color:         '#C9A84C',
-      marginBottom:  2,
-    },
-    infoValue: {
-      fontSize:   14,
-      fontWeight: 600,
-      color:      '#F8F6F0',
-      margin:     0,
-    },
-    label: {
-      display:       'block',
-      fontSize:      10,
-      fontWeight:    600,
-      letterSpacing: 1.5,
-      textTransform: 'uppercase',
-      color:         '#C9A84C',
-      marginBottom:  8,
-    },
-    textarea: {
-      width:       '100%',
-      background:  '#0F1729',
-      border:      '1px solid rgba(201,168,76,0.22)',
-      color:       '#F8F6F0',
-      fontFamily:  "'Raleway', sans-serif",
-      fontSize:    13,
-      padding:     '12px 14px',
-      outline:     'none',
-      resize:      'vertical',
-      minHeight:   100,
-      lineHeight:  1.6,
-      boxSizing:   'border-box',
-      marginBottom: 20,
-    },
-    btn: {
-      width:         '100%',
-      background:    'rgba(201,168,76,0.12)',
-      border:        '1px solid #C9A84C',
-      color:         '#C9A84C',
-      fontFamily:    "'Raleway', sans-serif",
-      fontSize:      11,
-      fontWeight:    700,
-      letterSpacing: 2,
-      textTransform: 'uppercase',
-      padding:       '14px',
-      cursor:        'pointer',
-      transition:    'background 0.18s',
-    },
-    error: {
-      background:   'rgba(248,113,113,0.08)',
-      border:       '1px solid rgba(248,113,113,0.3)',
-      color:        '#F87171',
-      fontSize:     13,
-      padding:      '10px 14px',
-      marginBottom: 16,
-    },
-    successIcon: {
-      width:          72,
-      height:         72,
-      borderRadius:   '50%',
-      background:     'rgba(52,211,153,0.1)',
-      border:         '2px solid rgba(52,211,153,0.4)',
-      display:        'flex',
-      alignItems:     'center',
-      justifyContent: 'center',
-      fontSize:       32,
-      margin:         '0 auto 20px',
-    },
-    successTitle: {
-      fontFamily: "'Playfair Display', serif",
-      fontSize:   26,
-      color:      '#34D399',
-      margin:     '0 0 8px',
-      textAlign:  'center',
-    },
-    successSub: {
-      fontSize:   14,
-      color:      'rgba(248,246,240,0.55)',
-      textAlign:  'center',
-      lineHeight: 1.6,
-      margin:     0,
-    },
+  // ── Shared styles ──────────────────────────────────────────────────────────
+  const page = {
+    minHeight:       '100vh',
+    background:      '#f9fafb',
+    display:         'flex',
+    alignItems:      'center',
+    justifyContent:  'center',
+    padding:         '32px 16px',
+    fontFamily:      "'Raleway', 'Helvetica Neue', sans-serif",
+    color:           '#1a1a1a',
+  };
+
+  const card = {
+    background:   '#ffffff',
+    border:       '1px solid #e5e7eb',
+    borderRadius: 12,
+    maxWidth:     520,
+    width:        '100%',
+    padding:      '36px 32px',
   };
 
   // ── Loading ────────────────────────────────────────────────────────────────
   if (phase === 'loading') {
     return (
-      <div style={s.page}>
-        <div style={s.card}>
-          <div style={s.topBar} />
-          <div style={{ textAlign: 'center', padding: '20px 0' }}>
+      <div style={page}>
+        <div style={card}>
+          <div style={{ textAlign: 'center', padding: '24px 0' }}>
             <div style={{
-              width: 32, height: 32, margin: '0 auto 16px',
-              border: '2px solid rgba(201,168,76,0.3)',
-              borderTopColor: '#C9A84C',
-              borderRadius: '50%',
-              animation: 'spin 0.8s linear infinite',
+              width:          32,
+              height:         32,
+              margin:         '0 auto 16px',
+              border:         '2px solid #e5e7eb',
+              borderTopColor: '#f59e0b',
+              borderRadius:   '50%',
+              animation:      'spin 0.8s linear infinite',
             }} />
-            <p style={{ color: 'rgba(248,246,240,0.55)', fontSize: 13 }}>Verifying your review link…</p>
+            <p style={{ color: '#888', fontSize: 13, margin: 0 }}>Verifying your review link…</p>
           </div>
           <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
         </div>
@@ -316,22 +192,28 @@ export default function GuestReviewPage() {
   // ── Invalid / Error ────────────────────────────────────────────────────────
   if (phase === 'invalid' || phase === 'error') {
     return (
-      <div style={s.page}>
-        <div style={s.card}>
-          <div style={{ ...s.topBar, background: 'linear-gradient(90deg, #F87171, transparent)' }} />
-          <div style={{ textAlign: 'center', padding: '20px 0' }}>
+      <div style={page}>
+        <div style={card}>
+          <div style={{ textAlign: 'center', padding: '24px 0' }}>
             <div style={{
-              width: 64, height: 64, borderRadius: '50%',
-              background: 'rgba(248,113,113,0.1)', border: '2px solid rgba(248,113,113,0.3)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 28, margin: '0 auto 18px',
+              width:          64,
+              height:         64,
+              borderRadius:   '50%',
+              background:     '#fef2f2',
+              border:         '2px solid #fecaca',
+              display:        'flex',
+              alignItems:     'center',
+              justifyContent: 'center',
+              fontSize:       26,
+              margin:         '0 auto 18px',
+              color:          '#ef4444',
             }}>
               ✕
             </div>
-            <h2 style={{ ...s.title, color: '#F87171', textAlign: 'center', marginBottom: 10 }}>
+            <h2 style={{ fontSize: 20, fontWeight: 700, color: '#ef4444', margin: '0 0 8px' }}>
               Link Not Valid
             </h2>
-            <p style={s.successSub}>{errorMsg}</p>
+            <p style={{ fontSize: 14, color: '#888', margin: 0, lineHeight: 1.6 }}>{errorMsg}</p>
           </div>
         </div>
       </div>
@@ -341,19 +223,34 @@ export default function GuestReviewPage() {
   // ── Submitted ──────────────────────────────────────────────────────────────
   if (phase === 'submitted') {
     return (
-      <div style={s.page}>
-        <div style={s.card}>
-          <div style={s.topBar} />
-          <div style={{ textAlign: 'center', padding: '20px 0' }}>
-            <div style={s.successIcon}>✓</div>
-            <h2 style={s.successTitle}>Thank You!</h2>
-            <p style={s.successSub}>
+      <div style={page}>
+        <div style={card}>
+          <div style={{ textAlign: 'center', padding: '24px 0' }}>
+            <div style={{
+              width:          72,
+              height:         72,
+              borderRadius:   '50%',
+              background:     '#f0fdf4',
+              border:         '2px solid #bbf7d0',
+              display:        'flex',
+              alignItems:     'center',
+              justifyContent: 'center',
+              fontSize:       30,
+              margin:         '0 auto 20px',
+              color:          '#16a34a',
+            }}>
+              ✓
+            </div>
+            <h2 style={{ fontSize: 22, fontWeight: 700, color: '#16a34a', margin: '0 0 8px' }}>
+              Thank You!
+            </h2>
+            <p style={{ fontSize: 14, color: '#555', lineHeight: 1.6, margin: 0 }}>
               Your review has been submitted successfully.{' '}
               {bookingInfo && (
                 <>We appreciate your feedback about your stay in Room <strong>{bookingInfo.room_number}</strong>.</>
               )}
             </p>
-            <p style={{ ...s.successSub, marginTop: 12, fontSize: 12 }}>
+            <p style={{ fontSize: 12, color: '#aaa', marginTop: 10 }}>
               Your review helps future guests and helps us improve.
             </p>
           </div>
@@ -362,22 +259,49 @@ export default function GuestReviewPage() {
     );
   }
 
-  // ── Valid — show review form ────────────────────────────────────────────────
+  // ── Valid — show review form ───────────────────────────────────────────────
   return (
-    <div style={s.page}>
-      <div style={s.card}>
-        <div style={s.topBar} />
+    <div style={page}>
+      <div style={card}>
 
         {/* Header */}
-        <p style={s.eyebrow}>Post-Stay Review</p>
-        <h1 style={s.title}>How Was Your Stay?</h1>
-        <p style={s.subtitle}>
-          Your feedback is completely anonymous and helps us serve future guests better.
-        </p>
+        <div style={{ marginBottom: 24 }}>
+          <p style={{
+            fontSize:      10,
+            fontWeight:    600,
+            letterSpacing: 2,
+            textTransform: 'uppercase',
+            color:         '#a78b6f',
+            margin:        '0 0 6px',
+          }}>
+            Post-Stay Review
+          </p>
+          <h1 style={{
+            fontSize:   22,
+            fontWeight: 700,
+            color:      '#1a1a1a',
+            margin:     '0 0 6px',
+            lineHeight: 1.2,
+          }}>
+            How Was Your Stay?
+          </h1>
+          <p style={{ fontSize: 13, color: '#888', margin: 0, lineHeight: 1.5 }}>
+            Your feedback is completely anonymous and helps us serve future guests better.
+          </p>
+        </div>
 
-        {/* Booking info */}
+        {/* Booking info grid */}
         {bookingInfo && (
-          <div style={s.infoGrid}>
+          <div style={{
+            display:             'grid',
+            gridTemplateColumns: '1fr 1fr',
+            gap:                 '10px 16px',
+            background:          '#f9fafb',
+            border:              '1px solid #e5e7eb',
+            borderRadius:        8,
+            padding:             '14px 16px',
+            marginBottom:        24,
+          }}>
             {[
               ['Room',      `Room ${bookingInfo.room_number} — ${bookingInfo.room_type}`],
               ['Guest',     bookingInfo.full_name],
@@ -385,70 +309,160 @@ export default function GuestReviewPage() {
               ['Check-Out', new Date(bookingInfo.check_out + 'T00:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })],
             ].map(([label, value]) => (
               <div key={label}>
-                <p style={s.infoLabel}>{label}</p>
-                <p style={s.infoValue}>{value}</p>
+                <p style={{
+                  fontSize:      10,
+                  letterSpacing: 1.2,
+                  textTransform: 'uppercase',
+                  color:         '#a78b6f',
+                  margin:        '0 0 2px',
+                  fontWeight:    600,
+                }}>
+                  {label}
+                </p>
+                <p style={{ fontSize: 13, fontWeight: 600, color: '#1a1a1a', margin: 0 }}>
+                  {value}
+                </p>
               </div>
             ))}
           </div>
         )}
 
-        {/* Form */}
+        {/* Rating summary display (mirrors RoomReviews rating-score) */}
+        <div style={{ borderTop: '1px solid #f3f4f6', paddingTop: 20, marginBottom: 4 }}>
+
+          {/* Label */}
+          <p style={{
+            fontSize:      10,
+            fontWeight:    600,
+            letterSpacing: 1.5,
+            textTransform: 'uppercase',
+            color:         '#555',
+            margin:        '0 0 4px',
+            textAlign:     'center',
+          }}>
+            Your Rating *
+          </p>
+
+          {/* Interactive stars */}
+          <StarRating value={rating} onChange={setRating} disabled={submitting} />
+
+          {/* Score label (mirrors score-number + review-count style) */}
+          {rating > 0 && (
+            <div style={{ textAlign: 'center', marginTop: -12, marginBottom: 20 }}>
+              <span style={{
+                fontSize:    28,
+                fontWeight:  700,
+                color:       '#1a1a1a',
+                lineHeight:  1,
+                display:     'block',
+              }}>
+                {rating}.0
+              </span>
+              <span style={{
+                fontSize:   12,
+                color:      '#888',
+                fontWeight: 500,
+              }}>
+                {STAR_LABELS[rating]}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Review form */}
         <form onSubmit={handleSubmit}>
 
-          {/* Star rating */}
-          <label style={{ ...s.label, textAlign: 'center', display: 'block' }}>
-            Your Rating *
-          </label>
-          <StarRating value={rating} onChange={setRating} disabled={submitting} />
-          {rating > 0 && (
-            <p style={{
-              textAlign:   'center',
-              fontSize:    13,
-              color:       '#C9A84C',
-              fontWeight:  600,
-              letterSpacing: 1,
-              marginBottom: 20,
-              marginTop:   -12,
-            }}>
-              {STAR_LABELS[rating]}
-            </p>
-          )}
-
           {/* Review text */}
-          <label style={s.label}>
-            Your Review <span style={{ color: 'rgba(248,246,240,0.4)', fontWeight: 400 }}>(optional)</span>
-          </label>
-          <textarea
-            style={s.textarea}
-            value={reviewText}
-            onChange={(e) => setReviewText(e.target.value)}
-            placeholder="Tell us about your experience — what did you enjoy? What could be improved?"
-            maxLength={1000}
-            disabled={submitting}
-          />
-          {reviewText.length > 0 && (
-            <p style={{ fontSize: 11, color: 'rgba(248,246,240,0.3)', textAlign: 'right', marginTop: -16, marginBottom: 16 }}>
-              {reviewText.length}/1000
-            </p>
-          )}
+          <div style={{ borderTop: '1px solid #f3f4f6', paddingTop: 20 }}>
+            <label style={{
+              display:       'block',
+              fontSize:      10,
+              fontWeight:    600,
+              letterSpacing: 1.5,
+              textTransform: 'uppercase',
+              color:         '#555',
+              marginBottom:  8,
+            }}>
+              Your Review{' '}
+              <span style={{ color: '#aaa', fontWeight: 400 }}>(optional)</span>
+            </label>
+            <textarea
+              style={{
+                width:        '100%',
+                background:   '#f9fafb',
+                border:       '1px solid #e5e7eb',
+                borderRadius: 8,
+                color:        '#1a1a1a',
+                fontFamily:   "'Raleway', sans-serif",
+                fontSize:     13,
+                padding:      '12px 14px',
+                outline:      'none',
+                resize:       'vertical',
+                minHeight:    100,
+                lineHeight:   1.6,
+                boxSizing:    'border-box',
+                marginBottom: 4,
+                transition:   'border-color 0.15s',
+              }}
+              value={reviewText}
+              onChange={(e) => setReviewText(e.target.value)}
+              placeholder="Tell us about your experience — what did you enjoy? What could be improved?"
+              maxLength={1000}
+              disabled={submitting}
+              onFocus={e  => e.target.style.borderColor = '#f59e0b'}
+              onBlur={e   => e.target.style.borderColor = '#e5e7eb'}
+            />
+            {reviewText.length > 0 && (
+              <p style={{ fontSize: 11, color: '#bbb', textAlign: 'right', margin: '0 0 16px' }}>
+                {reviewText.length}/1000
+              </p>
+            )}
+          </div>
 
           {/* Error */}
-          {submitError && <div style={s.error}>{submitError}</div>}
+          {submitError && (
+            <div style={{
+              background:   '#fef2f2',
+              border:       '1px solid #fecaca',
+              borderRadius: 6,
+              color:        '#dc2626',
+              fontSize:     13,
+              padding:      '10px 14px',
+              marginBottom: 16,
+            }}>
+              {submitError}
+            </div>
+          )}
 
-          {/* Submit */}
+          {/* Submit — mirrors show-more-btn style */}
           <button
             type="submit"
             style={{
-              ...s.btn,
-              opacity: submitting || rating === 0 ? 0.5 : 1,
-              cursor:  submitting || rating === 0 ? 'not-allowed' : 'pointer',
+              display:       'flex',
+              alignItems:    'center',
+              justifyContent:'center',
+              width:         '100%',
+              padding:       '0.65rem',
+              background:    rating > 0 && !submitting ? '#f59e0b' : 'none',
+              border:        '1px solid #e5e7eb',
+              borderColor:   rating > 0 && !submitting ? '#f59e0b' : '#e5e7eb',
+              borderRadius:  8,
+              fontFamily:    "'Raleway', sans-serif",
+              fontSize:      '0.88rem',
+              fontWeight:    700,
+              color:         rating > 0 && !submitting ? '#fff' : '#aaa',
+              cursor:        submitting || rating === 0 ? 'not-allowed' : 'pointer',
+              opacity:       submitting || rating === 0 ? 0.6 : 1,
+              transition:    'background 0.18s, border-color 0.18s, color 0.18s',
+              letterSpacing: 0.5,
+              marginTop:     8,
             }}
             disabled={submitting || rating === 0}
           >
             {submitting ? 'Submitting…' : 'Submit Review'}
           </button>
 
-          <p style={{ fontSize: 11, color: 'rgba(248,246,240,0.3)', textAlign: 'center', marginTop: 14 }}>
+          <p style={{ fontSize: 11, color: '#bbb', textAlign: 'center', marginTop: 12, marginBottom: 0 }}>
             This link can only be used once. Your review will appear on our room listing.
           </p>
         </form>
@@ -459,8 +473,7 @@ export default function GuestReviewPage() {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Raleway:wght@400;500;600;700&display=swap');
         * { box-sizing: border-box; }
-        body { margin: 0; }
-        textarea:focus { border-color: #C9A84C !important; outline: none; }
+        body { margin: 0; background: #f9fafb; }
         @keyframes spin { to { transform: rotate(360deg); } }
       `}</style>
     </div>

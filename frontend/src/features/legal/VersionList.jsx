@@ -1,18 +1,10 @@
 // src/features/legal/VersionList.jsx
+import { Scale, ShieldCheck, Pencil, CheckCircle2, FileText, Plus } from 'lucide-react';
 import './VersionList.css';
 
 /**
  * VersionList
  * Displays a table of legal document versions with actions.
- *
- * Props:
- *   documents      - array of LegalDocument objects
- *   loading        - boolean
- *   onEdit         - (doc) => void
- *   onActivate     - (doc) => void
- *   onNew          - () => void
- *   filterType     - 'terms' | 'privacy' | ''
- *   onFilterChange - (type: string) => void
  */
 export default function VersionList({
   documents = [],
@@ -38,29 +30,42 @@ export default function VersionList({
       {/* Toolbar */}
       <div className="vl-toolbar">
         <div className="vl-filters">
-          {['', 'terms', 'privacy'].map(t => (
+          {[
+            { value: '',        label: 'All' },
+            { value: 'terms',   label: 'Terms' },
+            { value: 'privacy', label: 'Privacy' },
+          ].map(t => (
             <button
-              key={t}
-              className={`vl-filter-btn ${filterType === t ? 'vl-filter-active' : ''}`}
-              onClick={() => onFilterChange?.(t)}
+              key={t.value}
+              className={`vl-filter-btn ${filterType === t.value ? 'vl-filter-active' : ''}`}
+              onClick={() => onFilterChange?.(t.value)}
             >
-              {t === '' ? 'All' : t === 'terms' ? 'Terms & Conditions' : 'Privacy Policy'}
+              {t.label}
             </button>
           ))}
         </div>
-        <button className="vl-btn-new" onClick={onNew}>+ New Document</button>
+        <button className="vl-btn-new" onClick={onNew}>
+          <Plus size={12} />
+          New Document
+        </button>
       </div>
 
       {/* Table */}
       {loading ? (
         <div className="vl-loading">
           <div className="vl-spinner" />
-          <span>Loading documents…</span>
+          <span>Loading documents</span>
         </div>
       ) : filteredDocs.length === 0 ? (
         <div className="vl-empty">
-          <span>No documents found.</span>
-          <button className="vl-btn-new vl-btn-sm" onClick={onNew}>Create the first one →</button>
+          <div className="vl-empty-icon">
+            <FileText size={20} />
+          </div>
+          <p className="vl-empty-label">No documents found</p>
+          <button className="vl-btn-new vl-btn-sm" onClick={onNew}>
+            <Plus size={11} />
+            Create the first one
+          </button>
         </div>
       ) : (
         <div className="vl-table-wrap">
@@ -81,15 +86,17 @@ export default function VersionList({
                 <tr key={doc.id} className={doc.is_active ? 'vl-row-active' : ''}>
                   <td>
                     <span className={`vl-type-badge vl-type-${doc.type}`}>
-                      {doc.type === 'terms' ? 'Terms' : 'Privacy'}
+                      {doc.type === 'terms'
+                        ? <><Scale size={10} /> Terms</>
+                        : <><ShieldCheck size={10} /> Privacy</>}
                     </span>
                   </td>
-                  <td className="vl-title-cell">{doc.title}</td>
+                  <td className="vl-title-cell" title={doc.title}>{doc.title}</td>
                   <td><code className="vl-version">v{doc.version}</code></td>
                   <td>
                     {doc.is_active
-                      ? <span className="vl-status vl-status-active">● Active</span>
-                      : <span className="vl-status vl-status-inactive">○ Inactive</span>}
+                      ? <span className="vl-status vl-status-active"><CheckCircle2 size={11} /> Active</span>
+                      : <span className="vl-status vl-status-inactive">Inactive</span>}
                   </td>
                   <td className="vl-date">{formatDate(doc.created_at)}</td>
                   <td className="vl-date">{formatDate(doc.updated_at)}</td>
@@ -99,14 +106,14 @@ export default function VersionList({
                         className="vl-action-btn vl-action-edit"
                         onClick={() => onEdit?.(doc)}
                       >
-                        Edit
+                        <Pencil size={10} /> Edit
                       </button>
                       {!doc.is_active && (
                         <button
                           className="vl-action-btn vl-action-activate"
                           onClick={() => onActivate?.(doc)}
                         >
-                          Activate
+                          <CheckCircle2 size={10} /> Activate
                         </button>
                       )}
                     </div>
@@ -119,7 +126,7 @@ export default function VersionList({
       )}
 
       <div className="vl-footer">
-        <span>{filteredDocs.length} document{filteredDocs.length !== 1 ? 's' : ''}</span>
+        {filteredDocs.length} document{filteredDocs.length !== 1 ? 's' : ''}
       </div>
 
     </div>

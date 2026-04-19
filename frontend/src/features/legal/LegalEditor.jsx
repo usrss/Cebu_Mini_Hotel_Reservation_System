@@ -1,5 +1,6 @@
 // src/features/legal/LegalEditor.jsx
 import { useState, useEffect } from 'react';
+import { Scale, ShieldCheck, CheckCircle2, AlertCircle, Save, Zap, X } from 'lucide-react';
 import {
   createLegalDocument,
   updateLegalDocument,
@@ -46,8 +47,8 @@ export default function LegalEditor({ document: doc = null, onSuccess, onCancel 
 
   const validate = () => {
     const e = {};
-    if (!form.type)          e.type    = 'Document type is required.';
-    if (!form.title.trim())  e.title   = 'Title is required.';
+    if (!form.type)           e.type    = 'Document type is required.';
+    if (!form.title.trim())   e.title   = 'Title is required.';
     if (!form.version.trim()) e.version = 'Version is required.';
     if (!form.content.trim()) e.content = 'Content cannot be empty.';
     setErrors(e);
@@ -106,17 +107,25 @@ export default function LegalEditor({ document: doc = null, onSuccess, onCancel 
   return (
     <div className="le-wrapper">
       <div className="le-header">
-        <h2 className="le-title">{isEditMode ? 'Edit Document' : 'New Legal Document'}</h2>
+        <div className="le-header-left">
+          <span className="le-eyebrow">Legal Editor</span>
+          <h2 className="le-title">{isEditMode ? 'Edit Document' : 'New Document'}</h2>
+        </div>
         {isEditMode && (
           <span className={`le-status-badge ${doc.is_active ? 'le-active' : 'le-inactive'}`}>
-            {doc.is_active ? '● Active' : '○ Inactive'}
+            {doc.is_active
+              ? <><CheckCircle2 size={11} /> Active</>
+              : 'Inactive'}
           </span>
         )}
       </div>
 
       {feedback && (
         <div className={`le-feedback le-feedback-${feedback.type}`} role="alert">
-          {feedback.type === 'success' ? '✓' : '✕'} {feedback.message}
+          {feedback.type === 'success'
+            ? <CheckCircle2 size={14} style={{ flexShrink: 0 }} />
+            : <AlertCircle size={14} style={{ flexShrink: 0 }} />}
+          {feedback.message}
         </div>
       )}
 
@@ -127,8 +136,8 @@ export default function LegalEditor({ document: doc = null, onSuccess, onCancel 
           <label className="le-label">Document Type</label>
           <div className="le-radio-group">
             {[
-              { value: 'terms',   label: 'Terms & Conditions' },
-              { value: 'privacy', label: 'Privacy Policy' },
+              { value: 'terms',   label: 'Terms & Conditions', icon: <Scale size={13} /> },
+              { value: 'privacy', label: 'Privacy Policy',     icon: <ShieldCheck size={13} /> },
             ].map(opt => (
               <label
                 key={opt.value}
@@ -142,6 +151,7 @@ export default function LegalEditor({ document: doc = null, onSuccess, onCancel 
                   onChange={() => handleChange('type', opt.value)}
                   disabled={isEditMode}
                 />
+                {opt.icon}
                 {opt.label}
               </label>
             ))}
@@ -187,7 +197,7 @@ export default function LegalEditor({ document: doc = null, onSuccess, onCancel 
         <div className="le-field">
           <label className="le-label" htmlFor="le-content">
             Content <span className="le-required">*</span>
-            <span className="le-hint"> (plain text or HTML)</span>
+            <span className="le-hint"> — plain text or HTML</span>
           </label>
           <textarea
             id="le-content"
@@ -197,7 +207,7 @@ export default function LegalEditor({ document: doc = null, onSuccess, onCancel 
             placeholder="Enter the full document content here…"
             rows={14}
           />
-          <div className="le-char-count">{form.content.length} characters</div>
+          <div className="le-char-count">{form.content.length.toLocaleString()} characters</div>
           {errors.content && <span className="le-error">{errors.content}</span>}
         </div>
 
@@ -218,7 +228,7 @@ export default function LegalEditor({ document: doc = null, onSuccess, onCancel 
         {/* Actions */}
         <div className="le-actions">
           <button type="button" className="le-btn le-btn-ghost" onClick={onCancel} disabled={loading}>
-            Cancel
+            <X size={12} /> Cancel
           </button>
           {isEditMode && !doc.is_active && (
             <button
@@ -227,10 +237,12 @@ export default function LegalEditor({ document: doc = null, onSuccess, onCancel 
               onClick={handleActivate}
               disabled={activating}
             >
+              <Zap size={12} />
               {activating ? 'Activating…' : 'Set as Active'}
             </button>
           )}
           <button type="submit" className="le-btn le-btn-primary" disabled={loading || activating}>
+            <Save size={12} />
             {loading ? 'Saving…' : isEditMode ? 'Save Changes' : 'Create Document'}
           </button>
         </div>

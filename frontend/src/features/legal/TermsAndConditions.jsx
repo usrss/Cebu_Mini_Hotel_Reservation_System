@@ -1,6 +1,7 @@
 // src/features/legal/TermsAndConditions.jsx
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Scale, ChevronRight } from 'lucide-react';
 import { getActiveTerms } from '../../services/legalApi';
 import { isAuthenticated, getStoredUser } from '../../services/api';
 import LegalViewer from './LegalViewer';
@@ -32,26 +33,30 @@ export default function TermsAndConditions() {
 
   const backRoute = getBackRoute();
   const backLabel = backRoute === '/'
-    ? 'Back to Home'
+    ? 'Home'
     : backRoute.includes('admin')
-      ? 'Back to Admin Dashboard'
-      : 'Back to Dashboard';
+      ? 'Admin Dashboard'
+      : 'Dashboard';
 
   return (
     <div className="lp-page">
+
+      {/* Breadcrumb */}
       <nav className="lp-breadcrumb" aria-label="Breadcrumb">
-        <Link to={backRoute} className="lp-breadcrumb-link">Home</Link>
+        <Link to={backRoute} className="lp-breadcrumb-link">{backLabel}</Link>
         <span className="lp-breadcrumb-sep">›</span>
         <span>Terms &amp; Conditions</span>
       </nav>
-      <div className="lp-brand-strip">
-        <span className="lp-brand-icon">⚖</span>
-        <span className="lp-brand-label">Legal — Cebu Mini Hotel</span>
-      </div>
+
       <LegalViewer document={document} loading={loading} error={error} />
+
       <p className="lp-back-link">
-        <Link to={backRoute}>← {backLabel}</Link>
+        <Link to={backRoute}>
+          <ChevronRight size={12} style={{ transform: 'rotate(180deg)' }} />
+          Back to {backLabel}
+        </Link>
       </p>
+
     </div>
   );
 }

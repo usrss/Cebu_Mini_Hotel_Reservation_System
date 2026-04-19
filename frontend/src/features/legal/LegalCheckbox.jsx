@@ -61,7 +61,7 @@ const LegalCheckbox = ({
             className="lc-link"
             onClick={(e) => e.stopPropagation()}
           >
-            Terms & Conditions
+            Terms &amp; Conditions
             {termsVersion && <sup className="lc-version"> v{termsVersion}</sup>}
           </a>{" "}
           and{" "}
@@ -75,7 +75,7 @@ const LegalCheckbox = ({
             Privacy Policy
             {privacyVersion && <sup className="lc-version"> v{privacyVersion}</sup>}
           </a>{" "}
-          of Cebu Mene Hotel.
+          of Cebu Mini Hotel.
         </span>
       </label>
 

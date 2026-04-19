@@ -1,33 +1,22 @@
 import React, { useEffect, useState } from "react";
+import { Hotel, CheckCircle2, AlertTriangle, ArrowRight } from "lucide-react";
 import { getActiveTerms, getActivePrivacy, acceptLegal } from "../../services/legalApi";
 import LegalCheckbox from "./LegalCheckbox";
 import "./BookingCheckout.css";
 
 /**
  * BookingCheckout — Example booking page with legal agreement integration.
- *
- * Usage: Import this into your existing booking/checkout page and
- * replace the relevant sections. The key integration points are:
- *   1. Fetch active terms/privacy versions on mount
- *   2. Render <LegalCheckbox /> in your form
- *   3. Call acceptLegal() before or alongside your booking submission
- *
- * Route: /booking/checkout (adapt to your router config)
  */
 const BookingCheckout = () => {
-  // ── Legal state ───────────────────────────────────────────────
-  const [termsDoc, setTermsDoc] = useState(null);
-  const [privacyDoc, setPrivacyDoc] = useState(null);
+  const [termsDoc,     setTermsDoc]     = useState(null);
+  const [privacyDoc,   setPrivacyDoc]   = useState(null);
   const [legalLoading, setLegalLoading] = useState(true);
-  const [legalAgreed, setLegalAgreed] = useState(false);
-  const [legalError, setLegalError] = useState(null);
+  const [legalAgreed,  setLegalAgreed]  = useState(false);
+  const [legalError,   setLegalError]   = useState(null);
+  const [submitting,   setSubmitting]   = useState(false);
+  const [confirmed,    setConfirmed]    = useState(false);
+  const [submitError,  setSubmitError]  = useState(null);
 
-  // ── Form / booking state ─────────────────────────────────────
-  const [submitting, setSubmitting] = useState(false);
-  const [confirmed, setConfirmed] = useState(false);
-  const [submitError, setSubmitError] = useState(null);
-
-  // Fetch active legal documents on mount
   useEffect(() => {
     const fetchLegal = async () => {
       try {
@@ -38,7 +27,7 @@ const BookingCheckout = () => {
         setTermsDoc(termsRes.data);
         setPrivacyDoc(privacyRes.data);
       } catch {
-        // Legal docs missing — we still allow rendering but will block submission
+        // Legal docs missing — block submission
       } finally {
         setLegalLoading(false);
       }
@@ -50,7 +39,6 @@ const BookingCheckout = () => {
     e.preventDefault();
     setSubmitError(null);
 
-    // Legal agreement validation
     if (!legalAgreed) {
       setLegalError("You must agree to the Terms & Conditions and Privacy Policy to proceed.");
       return;
@@ -63,15 +51,12 @@ const BookingCheckout = () => {
 
     setSubmitting(true);
     try {
-      // 1. Record legal acceptance
       await acceptLegal({
         terms_version: termsDoc.version,
         privacy_version: privacyDoc.version,
       });
-
-      // 2. TODO: Submit your actual booking data here
+      // TODO: Submit your actual booking data here
       // await createBooking({ ...bookingData });
-
       setConfirmed(true);
     } catch (err) {
       const data = err.response?.data;
@@ -85,20 +70,22 @@ const BookingCheckout = () => {
     }
   };
 
-  // ── Confirmation screen ────────────────────────────────────────
   if (confirmed) {
     return (
       <div className="bc-page">
         <div className="bc-confirmation">
-          <div className="bc-confirm-icon">✓</div>
-          <h2 className="bc-confirm-title">Booking Confirmed!</h2>
+          <div className="bc-confirm-icon">
+            <CheckCircle2 size={24} />
+          </div>
+          <p className="bc-confirm-eyebrow">Reservation Confirmed</p>
+          <h2 className="bc-confirm-title">Booking Confirmed</h2>
           <p className="bc-confirm-text">
-            Your reservation at Cebu Mene Hotel has been submitted. You agreed to
+            Your reservation at Cebu Mini Hotel has been submitted. You agreed to
             Terms &amp; Conditions <strong>v{termsDoc?.version}</strong> and Privacy
             Policy <strong>v{privacyDoc?.version}</strong>.
           </p>
           <a href="/" className="bc-btn bc-btn-primary">
-            Return to Home
+            Return to Home <ArrowRight size={13} />
           </a>
         </div>
       </div>
@@ -108,32 +95,36 @@ const BookingCheckout = () => {
   return (
     <div className="bc-page">
       <div className="bc-container">
+
         <header className="bc-header">
-          <div className="bc-hotel-logo">🏨</div>
+          <div className="bc-header-icon">
+            <Hotel size={20} />
+          </div>
           <div>
+            <span className="bc-eyebrow">Cebu Mini Hotel</span>
             <h1 className="bc-title">Complete Your Booking</h1>
-            <p className="bc-subtitle">Cebu Mene Hotel — Checkout</p>
           </div>
         </header>
 
         <form className="bc-form" onSubmit={handleSubmit} noValidate>
-          {/* ── Booking details section (placeholder) ── */}
+
+          {/* Booking details section (placeholder) */}
           <section className="bc-section">
-            <h2 className="bc-section-title">Guest Information</h2>
+            <p className="bc-section-title">Guest Information</p>
             <p className="bc-section-note">
-              {/* Replace this with your actual booking form fields */}
-              ✦ Your existing booking form fields go here (room selection, guest
-              details, check-in/out dates, payment, etc.)
+              Your existing booking form fields go here — room selection, guest
+              details, check-in / check-out dates, payment information, etc.
             </p>
           </section>
 
-          {/* ── Legal agreement section ── */}
+          {/* Legal agreement section */}
           <section className="bc-section">
-            <h2 className="bc-section-title">Legal Agreement</h2>
+            <p className="bc-section-title">Legal Agreement</p>
 
             {legalLoading ? (
               <div className="bc-legal-loading">
-                <div className="bc-spinner" /> Loading legal documents…
+                <div className="bc-spinner" />
+                Loading legal documents
               </div>
             ) : (
               <LegalCheckbox
@@ -150,7 +141,8 @@ const BookingCheckout = () => {
 
             {(!termsDoc || !privacyDoc) && !legalLoading && (
               <p className="bc-legal-warn">
-                ⚠ Legal documents are not yet published. Booking may be unavailable.
+                <AlertTriangle size={13} />
+                Legal documents are not yet published. Booking may be unavailable.
               </p>
             )}
           </section>
@@ -158,27 +150,29 @@ const BookingCheckout = () => {
           {/* Submit error */}
           {submitError && (
             <div className="bc-submit-error" role="alert">
+              <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
               {submitError}
             </div>
           )}
 
-          {/* Submit button */}
+          {/* Submit */}
           <div className="bc-submit-row">
             <button
               type="submit"
-              className="bc-btn bc-btn-primary bc-btn-lg"
+              className="bc-btn bc-btn-primary"
               disabled={submitting || legalLoading || !legalAgreed}
             >
               {submitting ? (
-                <><span className="bc-btn-spinner" /> Processing…</>
+                <><span className="bc-btn-spinner" /> Processing</>
               ) : (
-                "Confirm Booking"
+                <>Confirm Booking <ArrowRight size={13} /></>
               )}
             </button>
             <p className="bc-submit-note">
-              By clicking "Confirm Booking" you agree to all terms listed above.
+              By confirming, you agree to all terms listed above.
             </p>
           </div>
+
         </form>
       </div>
     </div>
