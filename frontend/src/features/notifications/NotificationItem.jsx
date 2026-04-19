@@ -17,9 +17,34 @@ import { Link } from 'react-router-dom';
 import {
   CalendarCheck, CreditCard, CheckCircle2, XCircle,
   Bell, AlertCircle, Sparkles, Wrench, Shield,
-  LogIn, LogOut, AlertTriangle, DollarSign, RefreshCw,
+  LogIn, LogOut, AlertTriangle, RefreshCw,
 } from 'lucide-react';
 import './NotificationItem.css';
+
+
+// ── PHP Peso icon (lucide has no PhilippinePeso) ─────────────────────────────
+function PhpIcon({ size = 18 }) {
+  return (
+    <svg
+      width={size} height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <text
+        x="3" y="17"
+        fontSize="15"
+        fontWeight="bold"
+        fontFamily="serif"
+        stroke="none"
+        fill="currentColor"
+      >₱</text>
+    </svg>
+  );
+}
 
 // ── Event → icon ──────────────────────────────────────────────────────────────
 const EVENT_ICONS = {
@@ -28,9 +53,9 @@ const EVENT_ICONS = {
   booking_cancelled:      <XCircle        size={18} />,
   booking_modified:       <RefreshCw      size={18} />,
   deposit_received:       <CreditCard     size={18} />,
-  full_payment_received:  <DollarSign     size={18} />,
+  full_payment_received:  <PhpIcon        size={18} />,
   payment_failed:         <AlertTriangle  size={18} />,
-  balance_collected:      <DollarSign     size={18} />,
+  balance_collected:      <PhpIcon        size={18} />,
   guest_checked_in:       <LogIn          size={18} />,
   guest_checked_out:      <LogOut         size={18} />,
   checkin_reminder:       <Bell           size={18} />,

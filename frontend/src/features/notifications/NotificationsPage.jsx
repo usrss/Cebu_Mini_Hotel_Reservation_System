@@ -15,7 +15,7 @@ import {
   Bell, CheckCheck, X,
   CalendarCheck, CreditCard, CheckCircle2, XCircle,
   AlertCircle, Sparkles, Wrench, Shield,
-  LogIn, LogOut, AlertTriangle, DollarSign, RefreshCw, Clock,
+  LogIn, LogOut, AlertTriangle, RefreshCw, Clock,
   Hash, ArrowRight,
 } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
@@ -27,6 +27,31 @@ import Navbar from '../../components/UIComponents/Navbar';
 import Footer from '../../components/UIComponents/Footer';
 import './NotificationsPage.css';
 
+
+/* ── PHP Peso icon ───────────────────────────────────────── */
+function PhpIcon({ size = 18 }) {
+  return (
+    <svg
+      width={size} height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <text
+        x="3" y="17"
+        fontSize="15"
+        fontWeight="bold"
+        fontFamily="serif"
+        stroke="none"
+        fill="currentColor"
+      >₱</text>
+    </svg>
+  );
+}
+
 /* ── Event → icon map ─────────────────────────────────── */
 const EVENT_ICONS = {
   booking_created:        CalendarCheck,
@@ -34,9 +59,9 @@ const EVENT_ICONS = {
   booking_cancelled:      XCircle,
   booking_modified:       RefreshCw,
   deposit_received:       CreditCard,
-  full_payment_received:  DollarSign,
+  full_payment_received:  PhpIcon,
   payment_failed:         AlertTriangle,
-  balance_collected:      DollarSign,
+  balance_collected:      PhpIcon,
   guest_checked_in:       LogIn,
   guest_checked_out:      LogOut,
   checkin_reminder:       Bell,
