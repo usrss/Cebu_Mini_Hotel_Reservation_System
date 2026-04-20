@@ -8,7 +8,7 @@ import { cleaningApi, staffMembersApi, PRIORITY_LABELS } from '../../staff/servi
 import { adminGetRooms } from '../../../services/roomService';
 import { useStaffRole } from '../../staff/hooks/useStaffRole';
 import '../../staff/Staff.css';
-import '../../staff/housekeeping/HousekeepingDashboard.css';
+import '../../staff/housekeeping/HouseKeepingDashboard.css';
 
 const STATUS_LABELS = { dirty: 'Pending', cleaning: 'In Progress', clean: 'Done' };
 const STATUS_CLASS  = { dirty: 'sf-badge-red', cleaning: 'sf-badge-amber', clean: 'sf-badge-green' };
