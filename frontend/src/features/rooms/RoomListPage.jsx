@@ -81,63 +81,52 @@ function applyPriceFilter(rooms, minPrice, maxPrice) {
 /* ── Validation ──────────────────────────────────────── */
 function validateFilters(filters) {
   const errors = {};
-
   if (filters.check_in && filters.check_out) {
     const nights = calculateNights(filters.check_in, filters.check_out);
     if (nights < 1) errors.check_out = 'Check-out must be after check-in';
   }
-
   if (filters.min_price && filters.max_price) {
     if (Number(filters.min_price) > Number(filters.max_price)) {
       errors.max_price = 'Max price must be greater than min price';
     }
   }
-
   return errors;
 }
 
 /* ══════════════════════════════════════════════════════
-   ROOM DETAIL MODAL
+   ROOM DETAIL MODAL — with full-screen gallery
    ══════════════════════════════════════════════════════ */
-function RoomDetailModal({ room: listRoom, onClose }) {
-  const [room,     setRoom]     = useState(null);
-  const [fetching, setFetching] = useState(true);
-  const [activeImg, setActiveImg] = useState(0);
-  const [show360,   setShow360]   = useState(false);
+function RoomDetailModal({ room: listRoom, onClose, prefillCheckIn, prefillCheckOut }) {
+  const [room,           setRoom]           = useState(null);
+  const [fetching,       setFetching]       = useState(true);
+  const [activeImg,      setActiveImg]      = useState(0);
+  const [show360,        setShow360]        = useState(false);
   const [showAllReviews, setShowAllReviews] = useState(false);
+  const [showGallery,    setShowGallery]    = useState(false);
+  const [galleryIndex,   setGalleryIndex]   = useState(0);
 
-  /** Vote on review helpfulness (thumbs up / down / remove) */
   const handleHelpfulnessVote = async (reviewId, isHelpful) => {
     try {
       if (isHelpful === null) {
         const res = await fetch(`${API_BASE}/rooms/reviews/${reviewId}/helpful/`, {
-          method: 'DELETE',
-          headers: authHeaders(),
+          method: 'DELETE', headers: authHeaders(),
         });
-        if (!res.ok) {
-          const errData = await res.json().catch(() => ({}));
-          console.error('Vote remove failed:', res.status, errData);
-          throw new Error(errData.error || errData.detail || 'Failed to remove vote');
-        }
+        if (!res.ok) throw new Error('Failed to remove vote');
         return await res.json();
       } else {
         const res = await fetch(`${API_BASE}/rooms/reviews/${reviewId}/helpful/`, {
-          method: 'POST',
-          headers: authHeaders(),
+          method: 'POST', headers: authHeaders(),
           body: JSON.stringify({ is_helpful: isHelpful }),
         });
-        if (!res.ok) {
-          const errData = await res.json().catch(() => ({}));
-          console.error('Vote failed:', res.status, errData);
-          throw new Error(errData.error || errData.detail || 'Failed to vote');
-        }
+        if (!res.ok) throw new Error('Failed to vote');
         return await res.json();
       }
     } catch (err) {
-      console.error('Helpfulness vote error:', err.message);
+      console.error('Helpfulness vote error:', err);
       return null;
     }
   };
+
   useEffect(() => {
     setFetching(true);
     setActiveImg(0);
@@ -152,6 +141,23 @@ function RoomDetailModal({ room: listRoom, onClose }) {
     document.body.style.overflow = 'hidden';
     return () => { document.body.style.overflow = ''; };
   }, []);
+
+  // Keyboard navigation for gallery
+  useEffect(() => {
+    if (!showGallery) return;
+    const handleKey = (e) => {
+      if (e.key === 'ArrowRight') setGalleryIndex(i => Math.min(i + 1, (room?.images?.length ?? 1) - 1));
+      if (e.key === 'ArrowLeft')  setGalleryIndex(i => Math.max(i - 1, 0));
+      if (e.key === 'Escape')     setShowGallery(false);
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [showGallery, room?.images?.length]);
+
+  const openGallery = (index = 0) => {
+    setGalleryIndex(index);
+    setShowGallery(true);
+  };
 
   const handleBackdrop = (e) => {
     if (e.target === e.currentTarget) onClose();
@@ -183,16 +189,10 @@ function RoomDetailModal({ room: listRoom, onClose }) {
   }
 
   const images = room.images || [];
-  const amenitiesByCategory = (room.amenities || []).reduce((acc, a) => {
-    const cat = a.category || 'Other';
-    if (!acc[cat]) acc[cat] = [];
-    acc[cat].push(a);
-    return acc;
-  }, {});
-
   const reviews = room.reviews || [];
   const displayedReviews = showAllReviews ? reviews : reviews.slice(0, 4);
   const hasDiscount = Number(room.discount_percentage) > 0;
+  const remainingCount = images.length > 5 ? images.length - 5 : 0;
 
   return (
     <>
@@ -209,8 +209,14 @@ function RoomDetailModal({ room: listRoom, onClose }) {
           </div>
 
           <div className="rdm-body">
+            {/* ── Photo grid ── */}
             <div className="rdm-photo-grid">
-              <div className="rdm-photo-main">
+              {/* Main image */}
+              <div
+                className="rdm-photo-main"
+                style={{ cursor: images.length > 0 ? 'pointer' : 'default' }}
+                onClick={() => images.length > 0 && openGallery(activeImg)}
+              >
                 {images[activeImg]?.image_url ? (
                   <img src={images[activeImg].image_url} alt={`${room.room_type_display} Room`} className="rdm-photo-img" />
                 ) : room.primary_image?.image_url ? (
@@ -219,24 +225,49 @@ function RoomDetailModal({ room: listRoom, onClose }) {
                   <div className="rdm-photo-placeholder"><Bed size={56} /></div>
                 )}
               </div>
+
+              {/* Side thumbnails */}
               <div className="rdm-photo-side">
                 {[1, 2, 3, 4].map((i) => (
                   <div
                     key={i}
                     className={`rdm-photo-thumb${activeImg === i ? ' rdm-photo-thumb-active' : ''}`}
-                    onClick={() => images[i] && setActiveImg(i)}
-                    style={{ cursor: images[i] ? 'pointer' : 'default' }}
+                    onClick={() => {
+                      if (images[i]) {
+                        setActiveImg(i);
+                        if (i === 4 && remainingCount > 0) openGallery(i);
+                      }
+                    }}
+                    style={{ cursor: images[i] ? 'pointer' : 'default', position: 'relative' }}
                   >
                     {images[i]?.image_url ? (
-                      <img src={images[i].image_url} alt={`Room view ${i + 1}`} className="rdm-photo-img" />
+                      <>
+                        <img src={images[i].image_url} alt={`Room view ${i + 1}`} className="rdm-photo-img" />
+                        {i === 4 && remainingCount > 0 && (
+                          <div
+                            style={{
+                              position: 'absolute', inset: 0,
+                              background: 'rgba(1,0,13,0.6)',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              color: '#fff', fontWeight: 700, fontSize: 15,
+                              cursor: 'pointer',
+                            }}
+                            onClick={(e) => { e.stopPropagation(); openGallery(4); }}
+                          >
+                            +{remainingCount} more
+                          </div>
+                        )}
+                      </>
                     ) : (
                       <div className="rdm-photo-placeholder small"><Bed size={22} /></div>
                     )}
                   </div>
                 ))}
               </div>
-              {images.length > 5 && (
-                <button className="rdm-all-photos-btn">
+
+              {/* All photos button — visible if >1 image */}
+              {images.length > 1 && (
+                <button className="rdm-all-photos-btn" onClick={() => openGallery(0)}>
                   <Bed size={13} /> All Photos ({images.length})
                 </button>
               )}
@@ -287,7 +318,7 @@ function RoomDetailModal({ room: listRoom, onClose }) {
                   </>
                 )}
 
-                {Object.keys(amenitiesByCategory).length > 0 && (
+                {(room.amenities || []).length > 0 && (
                   <>
                     <div className="rdm-section-title">What this room offers</div>
                     <div className="rdm-amenities-grid">
@@ -373,13 +404,121 @@ function RoomDetailModal({ room: listRoom, onClose }) {
                   <div className="rdm-discount-badge"><Tag size={11} /> {Number(room.discount_percentage)}% off</div>
                 )}
                 <div className="rdm-booking-form-wrap">
-                  <BookingForm room={room} />
+                  <BookingForm
+                    room={room}
+                    prefillCheckIn={prefillCheckIn}
+                    prefillCheckOut={prefillCheckOut}
+                  />
                 </div>
               </div>
             </div>
           </div>
         </div>
       </div>
+
+      {/* ── Full-screen Gallery ── */}
+      {showGallery && images.length > 0 && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, zIndex: 9999,
+            background: 'rgba(1,0,13,0.96)',
+            display: 'flex', flexDirection: 'column',
+            alignItems: 'center', justifyContent: 'center',
+          }}
+          onClick={() => setShowGallery(false)}
+        >
+          {/* Close */}
+          <button
+            onClick={() => setShowGallery(false)}
+            style={{
+              position: 'absolute', top: 20, right: 20,
+              width: 40, height: 40,
+              background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)',
+              borderRadius: 8, color: '#fff', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              zIndex: 10,
+            }}
+          >
+            <X size={18} />
+          </button>
+
+          {/* Counter */}
+          <div style={{
+            position: 'absolute', top: 24, left: '50%', transform: 'translateX(-50%)',
+            color: 'rgba(255,255,255,0.7)', fontSize: 12, fontWeight: 600, letterSpacing: '0.08em',
+          }}>
+            {galleryIndex + 1} / {images.length}
+          </div>
+
+          {/* Prev button */}
+          {galleryIndex > 0 && (
+            <button
+              onClick={(e) => { e.stopPropagation(); setGalleryIndex(i => i - 1); }}
+              style={{
+                position: 'absolute', left: 20, top: '50%', transform: 'translateY(-50%)',
+                width: 44, height: 44, borderRadius: 8,
+                background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)',
+                color: '#fff', cursor: 'pointer', fontSize: 20,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}
+            >‹</button>
+          )}
+
+          {/* Main image */}
+          <img
+            src={images[galleryIndex]?.image_url}
+            alt={`Room photo ${galleryIndex + 1}`}
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: '85vw', maxHeight: '78vh',
+              objectFit: 'contain', borderRadius: 4,
+              boxShadow: '0 8px 40px rgba(0,0,0,0.5)',
+            }}
+          />
+
+          {/* Next button */}
+          {galleryIndex < images.length - 1 && (
+            <button
+              onClick={(e) => { e.stopPropagation(); setGalleryIndex(i => i + 1); }}
+              style={{
+                position: 'absolute', right: 20, top: '50%', transform: 'translateY(-50%)',
+                width: 44, height: 44, borderRadius: 8,
+                background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)',
+                color: '#fff', cursor: 'pointer', fontSize: 20,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}
+            >›</button>
+          )}
+
+          {/* Thumbnail strip */}
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              position: 'absolute', bottom: 20,
+              display: 'flex', gap: 8, overflowX: 'auto',
+              maxWidth: '90vw', padding: '4px 8px',
+            }}
+          >
+            {images.map((img, i) => (
+              <img
+                key={i}
+                src={img.image_url}
+                alt={`Thumb ${i + 1}`}
+                onClick={() => setGalleryIndex(i)}
+                style={{
+                  width: 60, height: 44, objectFit: 'cover', borderRadius: 4,
+                  cursor: 'pointer', flexShrink: 0,
+                  border: i === galleryIndex
+                    ? '2px solid #fff'
+                    : '2px solid rgba(255,255,255,0.2)',
+                  opacity: i === galleryIndex ? 1 : 0.6,
+                  transition: 'all 150ms',
+                }}
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       {show360 && room.panorama_image_url && (
         <Suspense fallback={null}>
@@ -396,9 +535,6 @@ function RoomDetailModal({ room: listRoom, onClose }) {
 
 /* ══════════════════════════════════════════════════════
    FLOATING FILTER BAR
-   Auto-search fires when check_in + check_out are both set.
-   Guests default to 1 if not explicitly set.
-   Search button still available for manual re-trigger.
    ══════════════════════════════════════════════════════ */
 function FilterDropdown({ children, style }) {
   return <div className="filter-dropdown" style={style}>{children}</div>;
@@ -419,14 +555,13 @@ function FloatingFilterBar({ filters, onChange, onSearch, validationErrors, isSe
   const toggle = (seg) => setOpenSegment(openSegment === seg ? null : seg);
   const update = (key, value) => {
     const next = { ...filters, [key]: value || undefined };
-    // Clear check_out if new check_in is >= check_out
     if (key === 'check_in' && next.check_out && next.check_out <= value) {
       next.check_out = undefined;
     }
     onChange(next);
   };
 
-  const nights       = calculateNights(filters.check_in, filters.check_out);
+  const nights        = calculateNights(filters.check_in, filters.check_out);
   const roomTypeLabel = filters.room_type ? cap(filters.room_type) : 'All Rooms';
   const checkInLabel  = filters.check_in  || 'Add date';
   const checkOutLabel = filters.check_out || 'Add date';
@@ -655,22 +790,17 @@ function FloatingFilterBar({ filters, onChange, onSearch, validationErrors, isSe
           )}
         </div>
 
-        {/* Search button — shows spinner when auto-searching */}
+        {/* Search button */}
         <button
           className={`filter-search-btn${isSearching ? ' filter-search-btn--searching' : ''}`}
           onClick={() => { setOpenSegment(null); onSearch(); }}
           disabled={isSearching}
         >
-          {isSearching ? (
-            <span className="filter-search-spinner" />
-          ) : (
-            <Search size={16} />
-          )}
+          {isSearching ? <span className="filter-search-spinner" /> : <Search size={16} />}
           {isSearching ? 'Searching…' : 'Search'}
         </button>
       </div>
 
-      {/* Availability mode indicator */}
       {isAvailabilityMode && !isSearching && (
         <div className="filter-availability-bar">
           <Calendar size={13} />
@@ -678,7 +808,6 @@ function FloatingFilterBar({ filters, onChange, onSearch, validationErrors, isSe
         </div>
       )}
 
-      {/* Date error */}
       {checkOutError && (
         <div className="filter-validation-bar">
           <AlertCircle size={14} />
@@ -724,12 +853,7 @@ function RoomCardItem({ room, onViewDetails, availabilityDates }) {
             <div className="room-card-image-placeholder"><Bed size={48} /></div>
           )}
           <div className="room-card-overlay" />
-
-          {/* Restore original status badge with real status class */}
-          <div className={`room-card-status status-${status}`}>
-            {status_display}
-          </div>
-
+          <div className={`room-card-status status-${status}`}>{status_display}</div>
           {hasDiscount && (
             <div className="room-card-discount-badge"><Tag size={10} /> {Number(discount_percentage)}% OFF</div>
           )}
@@ -791,36 +915,38 @@ function RoomCardItem({ room, onViewDetails, availabilityDates }) {
    MAIN PAGE
    ══════════════════════════════════════════════════════ */
 export default function RoomListPage() {
-  const [filters,         setFilters]         = useState({});
+  const [filters,          setFilters]          = useState({});
   const [validationErrors, setValidationErrors] = useState({});
-  const [selectedRoom,    setSelectedRoom]    = useState(null);
+  const [selectedRoom,     setSelectedRoom]     = useState(null);
+  // Dates at the time the modal was opened — used to prefill BookingForm
+  const [modalDates,       setModalDates]       = useState({ checkIn: '', checkOut: '' });
 
-  // Track whether we're in availability mode (dates filled)
+  const openModal = (room) => {
+    setSelectedRoom(room);
+    setModalDates({
+      checkIn:  filters.check_in  || '',
+      checkOut: filters.check_out || '',
+    });
+  };
+
   const hasDates = Boolean(filters.check_in && filters.check_out);
 
-  // Build params for the regular rooms endpoint
   const regularParams = (() => {
     const p = {};
-    if (filters.room_type)   p.room_type    = filters.room_type;
-    if (filters.bed_type)    p.bed_type     = filters.bed_type;
-    if (filters.min_price)   p.min_price    = filters.min_price;
-    if (filters.max_price)   p.max_price    = filters.max_price;
-    if (filters.min_capacity && !hasDates) p.min_capacity = filters.min_capacity;
+    if (filters.room_type)                    p.room_type    = filters.room_type;
+    if (filters.bed_type)                     p.bed_type     = filters.bed_type;
+    if (filters.min_price)                    p.min_price    = filters.min_price;
+    if (filters.max_price)                    p.max_price    = filters.max_price;
+    if (filters.min_capacity && !hasDates)    p.min_capacity = filters.min_capacity;
     return p;
   })();
 
-  // Only fetch regular rooms when NOT in date-search mode
   const { rooms: regularRooms, loading: regularLoading, error: regularError } = useRooms(
     hasDates ? null : regularParams
   );
 
   const { results: availabilityResults, loading: availLoading, error: availError, search } = useAvailability();
 
-  /* ── Auto-search logic ───────────────────────────────
-     Fires automatically when both check_in and check_out
-     are set. Debounced 400ms so rapid date changes don't
-     hammer the API. Guests default to 1 if not set.
-  ─────────────────────────────────────────────────── */
   const autoSearchTimerRef = useRef(null);
 
   const runAvailabilitySearch = useCallback((currentFilters) => {
@@ -831,7 +957,6 @@ export default function RoomListPage() {
     const payload = {
       check_in:     currentFilters.check_in,
       check_out:    currentFilters.check_out,
-      // Default to 1 guest if not specified — availability search still runs
       guests_count: currentFilters.min_capacity || 1,
       ...(currentFilters.room_type && { room_type: currentFilters.room_type }),
       ...(currentFilters.bed_type  && { bed_type:  currentFilters.bed_type }),
@@ -840,64 +965,44 @@ export default function RoomListPage() {
   }, [search]);
 
   useEffect(() => {
-    // Only auto-search when BOTH dates are present
     if (!filters.check_in || !filters.check_out) return;
-
-    // Cancel any pending search
     if (autoSearchTimerRef.current) clearTimeout(autoSearchTimerRef.current);
-
-    // Debounce 400ms
     autoSearchTimerRef.current = setTimeout(() => {
       runAvailabilitySearch(filters);
     }, 400);
-
     return () => {
       if (autoSearchTimerRef.current) clearTimeout(autoSearchTimerRef.current);
     };
   }, [filters.check_in, filters.check_out, filters.min_capacity, filters.room_type, filters.bed_type]);
 
-  /* ── Manual search (Search button) ──────────────────── */
   const handleSearch = () => {
-    if (hasDates) {
-      runAvailabilitySearch(filters);
-    }
-    // If no dates, button is a no-op (regular list already updates reactively)
+    if (hasDates) runAvailabilitySearch(filters);
   };
 
-  /* ── Filter change handler ───────────────────────────── */
   const handleFiltersChange = (newFilters) => {
     setFilters(newFilters);
-    // Clear errors when dates are cleared
-    if (!newFilters.check_in || !newFilters.check_out) {
-      setValidationErrors({});
-    }
+    if (!newFilters.check_in || !newFilters.check_out) setValidationErrors({});
   };
 
-  /* ── Clear search ────────────────────────────────────── */
   const handleClearSearch = () => {
     setFilters({});
     setValidationErrors({});
   };
 
-  /* ── Derive displayed rooms ──────────────────────────── */
   let rooms   = [];
   let loading = false;
   let error   = null;
 
   if (hasDates && availabilityResults) {
-    // Availability mode: server returns only available rooms
-    // Apply client-side price filter on top
     const raw = availabilityResults.available_rooms || [];
     rooms   = applyPriceFilter(raw, filters.min_price, filters.max_price);
     loading = availLoading;
     error   = availError;
   } else if (hasDates && availLoading) {
-    // Still searching
     rooms   = [];
     loading = true;
     error   = null;
   } else if (!hasDates) {
-    // No dates: show all rooms (server-filtered by type/bed/price/capacity)
     rooms   = regularRooms || [];
     loading = regularLoading;
     error   = regularError;
@@ -906,7 +1011,6 @@ export default function RoomListPage() {
   const hasResults    = rooms.length > 0;
   const showNoResults = !loading && !error && !hasResults && (hasDates ? !!availabilityResults : true);
 
-  /* ── Summary text ─────────────────────────────────────── */
   const summaryText = (() => {
     if (hasDates && availabilityResults) {
       const nights = calculateNights(filters.check_in, filters.check_out);
@@ -989,7 +1093,7 @@ export default function RoomListPage() {
               <RoomCardItem
                 key={room.id}
                 room={room}
-                onViewDetails={setSelectedRoom}
+                onViewDetails={openModal}
                 availabilityDates={hasDates ? { check_in: filters.check_in, check_out: filters.check_out } : null}
               />
             ))}
@@ -1000,7 +1104,12 @@ export default function RoomListPage() {
       <Footer />
 
       {selectedRoom && (
-        <RoomDetailModal room={selectedRoom} onClose={() => setSelectedRoom(null)} />
+        <RoomDetailModal
+          room={selectedRoom}
+          onClose={() => setSelectedRoom(null)}
+          prefillCheckIn={modalDates.checkIn}
+          prefillCheckOut={modalDates.checkOut}
+        />
       )}
     </div>
   );

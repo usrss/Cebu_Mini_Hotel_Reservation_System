@@ -1,8 +1,7 @@
-/* ============================================================
-   RoomImageModal.css — Cebu Mini Hotel · Luxury Dark Theme
-   ============================================================ */
+/* RoomImageModal.css — Light theme matching AdminRoomsPage */
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=DM+Serif+Display:ital@0;1&display=swap');
 
-/* ── Overlay ───────────────────────────────────────────────── */
+/* ── Overlay ── */
 .rim-overlay {
   position: fixed;
   inset: 0;
@@ -11,300 +10,489 @@
   align-items: center;
   justify-content: center;
   padding: 16px;
-  background: rgba(10,14,26,0.82);
-  backdrop-filter: blur(8px);
+  background: rgba(1, 0, 13, 0.45);
+  backdrop-filter: blur(6px);
 }
 
-/* ── Modal ─────────────────────────────────────────────────── */
+/* ── Modal ── */
 .rim-modal {
-  background: var(--navy-card);
-  border: 1px solid var(--gold-border);
+  background: #FFFFFF;
+  border: 1.5px solid #E4E6ED;
+  border-radius: 16px;
   width: 100%;
-  max-width: 760px;
+  max-width: 780px;
   max-height: 90vh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  position: relative;
-  animation: rim-in 0.22s ease;
+  box-shadow: 0 20px 60px rgba(1, 0, 13, 0.15), 0 4px 16px rgba(1, 0, 13, 0.08);
+  animation: rim-in 0.2s cubic-bezier(0.25, 0, 0.15, 1);
+  font-family: 'DM Sans', sans-serif;
 }
-.rim-modal::before {
-  content: '';
-  position: absolute;
-  top: 0; left: 0; right: 0;
-  height: 1px;
-  background: linear-gradient(90deg, var(--gold), transparent);
-}
+
 @keyframes rim-in {
-  from { opacity: 0; transform: translateY(-12px) scale(0.98); }
+  from { opacity: 0; transform: translateY(-10px) scale(0.98); }
   to   { opacity: 1; transform: none; }
 }
 
-/* ── Header ────────────────────────────────────────────────── */
+/* ── Header ── */
 .rim-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 18px 24px;
-  border-bottom: 1px solid var(--gold-border);
-  background: var(--gold-dim);
+  padding: 20px 24px;
+  border-bottom: 1.5px solid #E4E6ED;
+  background: #FFFFFF;
   flex-shrink: 0;
 }
+
 .rim-title {
-  font-family: 'Playfair Display', serif;
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--white);
-  margin: 0 0 2px;
+  font-family: 'DM Serif Display', serif;
+  font-size: 20px;
+  font-weight: 400;
+  color: #01000D;
+  margin: 0 0 3px;
+  letter-spacing: -0.01em;
 }
+
 .rim-subtitle {
   font-size: 12px;
-  color: var(--white-dim);
+  color: #7A7987;
   margin: 0;
 }
-.rim-close {
-  width: 32px; height: 32px;
-  display: flex; align-items: center; justify-content: center;
-  background: none;
-  border: 1px solid var(--gold-border);
-  color: var(--white-dim);
-  cursor: pointer;
-  transition: all 0.15s;
-}
-.rim-close:hover { border-color: var(--gold); color: var(--gold); background: var(--gold-dim); }
 
-/* ── Body ──────────────────────────────────────────────────── */
+.rim-close {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #FFFFFF;
+  border: 1.5px solid #E4E6ED;
+  border-radius: 8px;
+  color: #52515E;
+  cursor: pointer;
+  transition: all 170ms cubic-bezier(0.25, 0, 0.15, 1);
+}
+.rim-close:hover {
+  background: #01000D;
+  border-color: #01000D;
+  color: #FFFFFF;
+}
+
+/* ── Tabs ── */
+.rim-tabs {
+  display: flex;
+  gap: 0;
+  padding: 0 24px;
+  border-bottom: 1.5px solid #E4E6ED;
+  background: #F2F3F7;
+  flex-shrink: 0;
+}
+
+.rim-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 11px 16px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: #7A7987;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 170ms;
+  margin-bottom: -1.5px;
+}
+.rim-tab:hover { color: #01000D; }
+.rim-tab--active {
+  color: #01000D;
+  border-bottom-color: #01000D;
+  background: #FFFFFF;
+}
+
+/* ── Body ── */
 .rim-body {
   padding: 24px;
   overflow-y: auto;
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 20px;
   scrollbar-width: thin;
-  scrollbar-color: var(--gold-border) transparent;
+  scrollbar-color: #E4E6ED transparent;
+  background: #F2F3F7;
 }
 .rim-body::-webkit-scrollbar { width: 4px; }
-.rim-body::-webkit-scrollbar-thumb { background: var(--gold-border); }
+.rim-body::-webkit-scrollbar-thumb { background: #E4E6ED; border-radius: 2px; }
 
-/* ── Upload zone ───────────────────────────────────────────── */
+/* ── Section label ── */
+.rim-section-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #52515E;
+  margin-bottom: 10px;
+  display: block;
+}
+
+/* ── Upload zone ── */
 .rim-upload-zone {
-  border: 1px dashed var(--gold-border);
-  padding: 36px 24px;
+  border: 1.5px dashed #C8CAD4;
+  border-radius: 12px;
+  padding: 32px 24px;
   text-align: center;
   cursor: pointer;
-  transition: all 0.18s;
-  background: var(--navy-mid);
+  background: #FFFFFF;
+  transition: all 170ms cubic-bezier(0.25, 0, 0.15, 1);
 }
 .rim-upload-zone:hover {
-  border-color: var(--gold);
-  background: var(--gold-dim);
+  border-color: #01000D;
+  background: #F2F3F7;
 }
+
 .rim-upload-icon {
-  color: var(--gold);
-  margin: 0 auto 12px;
+  color: #7A7987;
+  margin: 0 auto 10px;
+  display: block;
 }
+.rim-upload-zone:hover .rim-upload-icon { color: #01000D; }
+
 .rim-upload-title {
   font-size: 13px;
   font-weight: 600;
-  color: var(--white);
+  color: #01000D;
   margin: 0 0 4px;
 }
 .rim-upload-sub {
   font-size: 11px;
-  color: var(--white-dim);
+  color: #7A7987;
   margin: 0;
-  letter-spacing: 0.3px;
 }
 
-/* ── Preview section ───────────────────────────────────────── */
+/* ── Preview section ── */
+.rim-preview-section {
+  background: #FFFFFF;
+  border: 1.5px solid #E4E6ED;
+  border-radius: 12px;
+  padding: 16px;
+}
+
 .rim-preview-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-bottom: 12px;
 }
-.rim-preview-label {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 1.5px;
-  text-transform: uppercase;
-  color: var(--gold);
-}
+
 .rim-upload-btn {
   display: flex;
   align-items: center;
-  gap: 7px;
-  padding: 8px 18px;
-  background: var(--gold-dim);
-  border: 1px solid var(--gold-border);
-  color: var(--gold);
-  font-family: 'Raleway', sans-serif;
+  gap: 6px;
+  padding: 8px 16px;
+  background: #01000D;
+  border: 1.5px solid #01000D;
+  border-radius: 8px;
+  color: #FFFFFF;
+  font-family: 'DM Sans', sans-serif;
   font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 1px;
-  text-transform: uppercase;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.18s;
+  transition: all 170ms;
 }
-.rim-upload-btn:hover { background: rgba(201,168,76,0.18); border-color: var(--gold); color: var(--gold-l); }
-.rim-upload-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.rim-upload-btn:hover { background: #2D2C3A; border-color: #2D2C3A; }
+.rim-upload-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.rim-outline-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: #FFFFFF;
+  border: 1.5px solid #E4E6ED;
+  border-radius: 8px;
+  color: #52515E;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 170ms;
+}
+.rim-outline-btn:hover { border-color: #01000D; color: #01000D; }
+
 .rim-preview-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
+  gap: 10px;
 }
+
 .rim-preview-item { position: relative; }
+
 .rim-preview-img {
   width: 100%;
-  height: 90px;
+  height: 80px;
   object-fit: cover;
-  border: 1px solid var(--gold-border);
+  border-radius: 8px;
+  border: 1.5px solid #E4E6ED;
   display: block;
 }
+
 .rim-preview-remove {
   position: absolute;
-  top: 4px; right: 4px;
-  width: 20px; height: 20px;
-  display: flex; align-items: center; justify-content: center;
-  background: rgba(10,14,26,0.85);
-  border: 1px solid var(--gold-border);
-  color: var(--white-dim);
+  top: 4px;
+  right: 4px;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(1, 0, 13, 0.8);
+  border: none;
+  border-radius: 4px;
+  color: #FFFFFF;
   cursor: pointer;
   opacity: 0;
-  transition: opacity 0.15s;
+  transition: opacity 150ms;
 }
 .rim-preview-item:hover .rim-preview-remove { opacity: 1; }
-.rim-preview-remove:hover { color: var(--red); border-color: rgba(248,113,113,0.4); }
+
 .rim-preview-name {
   font-size: 10px;
-  color: var(--white-dim);
+  color: #7A7987;
   margin-top: 4px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-/* ── Error ─────────────────────────────────────────────────── */
+/* ── Error ── */
 .rim-error {
-  padding: 12px 16px;
-  background: rgba(248,113,113,0.08);
-  border: 1px solid rgba(248,113,113,0.3);
-  color: var(--red);
+  padding: 10px 14px;
+  background: rgba(220, 38, 38, 0.07);
+  border: 1.5px solid rgba(220, 38, 38, 0.2);
+  border-radius: 8px;
+  color: #DC2626;
   font-size: 12px;
+  font-weight: 500;
 }
 
-/* ── Images section ────────────────────────────────────────── */
-.rim-section-label {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 1.5px;
-  text-transform: uppercase;
-  color: var(--gold);
-  margin-bottom: 12px;
-}
+/* ── Images grid ── */
 .rim-images-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
+  gap: 12px;
 }
+
 .rim-image-card {
   position: relative;
-  border: 1px solid var(--gold-border);
+  border: 1.5px solid #E4E6ED;
+  border-radius: 10px;
   overflow: hidden;
-  background: var(--navy-mid);
+  background: #FFFFFF;
+  transition: border-color 170ms;
 }
-.rim-image-card:hover { border-color: var(--gold); }
+.rim-image-card:hover { border-color: #01000D; }
+
 .rim-image-img {
   width: 100%;
-  height: 140px;
+  height: 130px;
   object-fit: cover;
   display: block;
 }
+
 .rim-primary-badge {
   position: absolute;
-  top: 8px; left: 8px;
+  top: 7px;
+  left: 7px;
   display: flex;
   align-items: center;
-  gap: 4px;
-  background: rgba(201,168,76,0.85);
-  color: var(--navy);
-  font-size: 10px;
+  gap: 3px;
+  background: #01000D;
+  color: #FFFFFF;
+  font-size: 9px;
   font-weight: 700;
-  letter-spacing: 0.5px;
-  padding: 3px 8px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 3px 7px;
+  border-radius: 4px;
 }
+
 .rim-caption {
   padding: 6px 10px;
   font-size: 11px;
-  color: var(--white-dim);
-  background: var(--navy-mid);
-  border-top: 1px solid var(--gold-border);
+  color: #52515E;
+  background: #FFFFFF;
+  border-top: 1px solid #F2F3F7;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
 .rim-delete-btn {
   position: absolute;
-  top: 8px; right: 8px;
-  width: 28px; height: 28px;
-  display: flex; align-items: center; justify-content: center;
-  background: rgba(10,14,26,0.85);
-  border: 1px solid rgba(248,113,113,0.4);
-  color: var(--red);
+  top: 7px;
+  right: 7px;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1.5px solid rgba(220, 38, 38, 0.3);
+  border-radius: 6px;
+  color: #DC2626;
   cursor: pointer;
   opacity: 0;
-  transition: opacity 0.15s, background 0.15s;
+  transition: opacity 150ms, background 150ms;
 }
 .rim-image-card:hover .rim-delete-btn { opacity: 1; }
-.rim-delete-btn:hover { background: rgba(248,113,113,0.15); }
+.rim-delete-btn:hover { background: rgba(220, 38, 38, 0.08); }
 .rim-delete-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
-/* Empty state */
-.rim-no-images {
+/* ── Empty state ── */
+.rim-empty {
   text-align: center;
-  padding: 48px 20px;
-  border: 1px dashed var(--gold-border);
-  color: var(--white-dim);
+  padding: 40px 20px;
+  border: 1.5px dashed #C8CAD4;
+  border-radius: 12px;
+  background: #FFFFFF;
+  color: #7A7987;
   font-size: 13px;
-  letter-spacing: 0.5px;
 }
 
-/* Spinner */
+/* ── Panorama tab ── */
+.rim-pano-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.rim-pano-info {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px 14px;
+  background: #FFFFFF;
+  border: 1.5px solid #E4E6ED;
+  border-radius: 10px;
+  font-size: 12px;
+  color: #52515E;
+  line-height: 1.5;
+}
+.rim-pano-info svg { flex-shrink: 0; margin-top: 1px; color: #01000D; }
+
+.rim-pano-current { display: flex; flex-direction: column; gap: 10px; }
+
+.rim-pano-wrap {
+  position: relative;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1.5px solid #E4E6ED;
+}
+
+.rim-pano-img {
+  width: 100%;
+  height: 180px;
+  object-fit: cover;
+  display: block;
+}
+
+.rim-pano-actions {
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px;
+  background: #FFFFFF;
+  border-top: 1px solid #F2F3F7;
+}
+
+.rim-pano-replace-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  background: #01000D;
+  border: 1.5px solid #01000D;
+  border-radius: 7px;
+  color: #FFFFFF;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 170ms;
+}
+.rim-pano-replace-btn:hover { background: #2D2C3A; }
+
+.rim-pano-delete-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  background: #FFFFFF;
+  border: 1.5px solid rgba(220, 38, 38, 0.3);
+  border-radius: 7px;
+  color: #DC2626;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 170ms;
+}
+.rim-pano-delete-btn:hover { background: rgba(220, 38, 38, 0.07); border-color: rgba(220, 38, 38, 0.5); }
+.rim-pano-delete-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.rim-pano-preview-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* ── Spinner ── */
 .rim-spinner {
-  width: 12px; height: 12px;
-  border: 2px solid var(--gold-border);
-  border-top-color: var(--gold);
+  width: 11px;
+  height: 11px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #FFFFFF;
   border-radius: 50%;
   animation: rim-spin 0.7s linear infinite;
+  display: inline-block;
+}
+.rim-outline-btn .rim-spinner,
+.rim-pano-delete-btn .rim-spinner {
+  border-color: rgba(1, 0, 13, 0.2);
+  border-top-color: #01000D;
 }
 @keyframes rim-spin { to { transform: rotate(360deg); } }
 
-/* ── Footer ────────────────────────────────────────────────── */
+/* ── Footer ── */
 .rim-footer {
   display: flex;
   justify-content: flex-end;
-  padding: 16px 24px;
-  border-top: 1px solid var(--gold-border);
-  background: var(--navy-mid);
+  padding: 14px 24px;
+  border-top: 1.5px solid #E4E6ED;
+  background: #FFFFFF;
   flex-shrink: 0;
 }
-.rim-btn-done {
-  padding: 10px 26px;
-  background: var(--gold-dim);
-  border: 1px solid var(--gold-border);
-  color: var(--gold);
-  font-family: 'Raleway', sans-serif;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 1.5px;
-  text-transform: uppercase;
-  cursor: pointer;
-  transition: all 0.18s;
-}
-.rim-btn-done:hover { background: rgba(201,168,76,0.18); border-color: var(--gold); color: var(--gold-l); }
 
+.rim-btn-done {
+  padding: 9px 24px;
+  background: #01000D;
+  border: 1.5px solid #01000D;
+  border-radius: 9px;
+  color: #FFFFFF;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 170ms;
+}
+.rim-btn-done:hover { background: #2D2C3A; border-color: #2D2C3A; }
+
+/* ── Responsive ── */
 @media (max-width: 640px) {
-  .rim-preview-grid { grid-template-columns: repeat(2, 1fr); }
-  .rim-images-grid  { grid-template-columns: repeat(2, 1fr); }
+  .rim-preview-grid  { grid-template-columns: repeat(2, 1fr); }
+  .rim-images-grid   { grid-template-columns: repeat(2, 1fr); }
+  .rim-pano-img      { height: 130px; }
 }
