@@ -1,27 +1,49 @@
+# 1. Create a proper .gitignore
+@"
 # Python
 __pycache__/
-*.pyc
-.env
-venv/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# Virtual environment
 .venv/
+venv/
+env/
 
 # Django
+*.log
+local_settings.py
 db.sqlite3
+db.sqlite3-journal
 media/
+
+# Environment variables - NEVER commit these
+.env
+.env.*
+!.env.example
+
+# Static files
 staticfiles/
 
-# Node / Frontend
+# Node
 node_modules/
 dist/
-build/
-
-# OS
-.DS_Store
-Thumbs.db
+.next/
 
 # IDE
 .vscode/
 .idea/
+*.swp
+"@ | Set-Content -Path ".gitignore" -Encoding UTF8
 
-# Logs
-*.log
+# 2. Remove .env and __pycache__ from staging
+git rm -r --cached backend/backend/.env 2>$null
+git rm -r --cached "backend/**/__pycache__" 2>$null
+git rm -r --cached backend/media/ 2>$null
+
+# 3. Reset and re-add cleanly
+git restore --staged .
+git add .
+git status

@@ -1086,7 +1086,7 @@ export default function CustomReportPage() {
           <p className="sf-page-subtitle">
             Build, save, and schedule reports with custom metrics and filters.
           </p>
-          <div className="sf-divider" />
+
         </div>
 
         {/* Tabs */}

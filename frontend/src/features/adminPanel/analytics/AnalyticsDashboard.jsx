@@ -172,7 +172,7 @@ export default function AnalyticsDashboard() {
           ))}
         </div>
       </div>
-      <div className="an-divider" />
+
 
       {/* KPI Cards */}
       <div className="an-kpis">

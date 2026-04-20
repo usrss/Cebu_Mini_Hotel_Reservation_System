@@ -213,7 +213,7 @@ export default function StaffManagement() {
           <Plus size={15} /> Add Staff
         </button>
       </div>
-      <div className="sm-divider" />
+
 
       {/* KPIs */}
       <div className="sm-kpis">
