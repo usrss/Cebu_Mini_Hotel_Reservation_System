@@ -21,7 +21,7 @@ import { cleaningApi, staffMembersApi, PRIORITY_LABELS } from '../services/staff
 import { adminGetRooms } from '../../../services/roomService';
 import { useStaffRole } from '../hooks/useStaffRole';
 import '../Staff.css';
-import './HousekeepingDashboard.css';
+import './HouseKeepingDashboard.css';
 
 // ── Status display ─────────────────────────────────────────────────────────────
 const STATUS_LABELS = {
