@@ -6,7 +6,7 @@ import Dashboard         from './features/dashboard/Dashboard';
 import ProtectedRoute    from './components/ProtectedRoute';
 import { isAuthenticated, getStoredUser } from './services/api';
 import ForgotPassword    from './features/auth/ForgotPassword.jsx';
-import AccountSettings   from './features/auth/Accountsettings.jsx';
+import AccountSettings   from './features/auth/AccountSettings.jsx';
 import RoomListPage      from './features/rooms/RoomListPage';
 import RoomDetailPage    from './features/rooms/RoomDetailPage';
 import { bookingRoutes }      from './features/bookings/BookingRoutes';
