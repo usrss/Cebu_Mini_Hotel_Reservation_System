@@ -311,7 +311,7 @@ function InclusionPicker({ available, selected, onChange }) {
    For NEW rooms  → queues files locally; uploaded after room is created.
    For EDIT rooms → immediately calls the API to upload / delete.
 ─────────────────────────────────────────────────────────────── */
-function ImagesTab({ roomId, existingImages, queuedFiles, onQueueChange, onExistingChange }) {
+function ImagesTab({ roomId, existingImages, queuedFiles, onQueueChange, onExistingChange, onUploadComplete }) {
   const fileRef   = useRef();
   const [deletingId, setDeletingId] = useState(null);
   const [uploading,  setUploading]  = useState(false);
@@ -345,6 +345,8 @@ function ImagesTab({ roomId, existingImages, queuedFiles, onQueueChange, onExist
       const res = await adminUploadRoomImages(roomId, formData);
       const uploaded = Array.isArray(res.data) ? res.data : [];
       onExistingChange(prev => [...prev, ...uploaded]);
+      // Notify parent so it can re-fetch the room list and show images immediately
+      onUploadComplete?.();
     } catch {
       setImgError('Upload failed. Please try again.');
     } finally {
@@ -368,6 +370,8 @@ function ImagesTab({ roomId, existingImages, queuedFiles, onQueueChange, onExist
     try {
       await adminDeleteRoomImage(roomId, imageId);
       onExistingChange(prev => prev.filter(img => img.id !== imageId));
+      // Notify parent so the room list re-fetches and reflects the deletion
+      onUploadComplete?.();
     } catch {
       setImgError('Failed to delete image. Please try again.');
     } finally {
@@ -584,6 +588,7 @@ export default function RoomFormModal({
   room,
   onSave,
   onClose,
+  onAfterSave,
   submitting,
   availableAmenities  = [],
   availableInclusions = [],
@@ -667,7 +672,9 @@ export default function RoomFormModal({
 
     const result = await onSave(payload);
 
-    // After a successful CREATE, upload any queued images
+    // After a successful CREATE, upload any queued images then trigger a
+    // final re-fetch so the room list reflects the uploaded images immediately
+    // without requiring a page reload.
     if (result?.success && !isEdit && queuedFiles.length > 0) {
       const newRoomId = result.data?.id;
       if (newRoomId) {
@@ -681,6 +688,8 @@ export default function RoomFormModal({
         }
         // Revoke blob URLs to avoid memory leaks
         queuedFiles.forEach(item => URL.revokeObjectURL(item.previewUrl));
+        // Re-fetch the room list so uploaded images appear without a page reload
+        onAfterSave?.();
       }
     }
   };
@@ -914,6 +923,7 @@ export default function RoomFormModal({
               queuedFiles={queuedFiles}
               onQueueChange={setQueuedFiles}
               onExistingChange={setExistingImages}
+              onUploadComplete={onAfterSave}
             />
           )}
 

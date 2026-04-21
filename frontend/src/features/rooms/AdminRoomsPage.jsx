@@ -292,6 +292,7 @@ export default function AdminRoomsPage() {
           room={modal.room}
           onSave={handleSave}
           onClose={() => setModal({ open: false, room: null })}
+          onAfterSave={fetchRooms}
           submitting={submitting}
           availableAmenities={amenities}
           availableInclusions={inclusions}
