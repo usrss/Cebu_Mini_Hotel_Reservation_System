@@ -20,9 +20,9 @@ import api from "../../services/api";
 
 // ─── useRooms ─────────────────────────────────────────────────────────────────
 export function useRooms(initialFilters = {}) {
-  const [rooms, setRooms] = useState([]);
+  const [rooms,   setRooms]   = useState([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [error,   setError]   = useState(null);
   const [filters, setFilters] = useState(initialFilters);
 
   const fetchRooms = useCallback(async (params = filters) => {
@@ -48,9 +48,9 @@ export function useRooms(initialFilters = {}) {
 // ─── useRoomDetail ────────────────────────────────────────────────────────────
 export function useRoomDetail(id) {
   const navigate = useNavigate();
-  const [room, setRoom] = useState(null);
+  const [room,    setRoom]    = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [error,   setError]   = useState(null);
 
   useEffect(() => {
     if (!id) return;
@@ -64,10 +64,7 @@ export function useRoomDetail(id) {
         if (!cancelled) setRoom(data);
       } catch (err) {
         if (cancelled) return;
-        if (err.response?.status === 401) {
-          navigate("/login");
-          return;
-        }
+        if (err.response?.status === 401) { navigate("/login"); return; }
         setError(err.response?.data?.detail || "Room not found.");
       } finally {
         if (!cancelled) setLoading(false);
@@ -85,7 +82,7 @@ export function useRoomDetail(id) {
 export function useAvailability() {
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [error,   setError]   = useState(null);
 
   const search = useCallback(async (payload) => {
     setLoading(true);
@@ -118,10 +115,10 @@ export function useAvailability() {
 
 // ─── useRoomLock ──────────────────────────────────────────────────────────────
 export function useRoomLock() {
-  const [locked, setLocked] = useState(false);
+  const [locked,   setLocked]   = useState(false);
   const [lockInfo, setLockInfo] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [loading,  setLoading]  = useState(false);
+  const [error,    setError]    = useState(null);
   const timerRef = useRef(null);
 
   const sessionKey = useRef(
@@ -138,9 +135,9 @@ export function useRoomLock() {
     setError(null);
     try {
       const { data } = await lockRoom({
-        room_id: roomId,
-        check_in: checkIn,
-        check_out: checkOut,
+        room_id:     roomId,
+        check_in:    checkIn,
+        check_out:   checkOut,
         session_key: sessionKey.current,
       });
       setLocked(true);
@@ -171,11 +168,7 @@ export function useRoomLock() {
     }
   }, []);
 
-  useEffect(() => {
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-    };
-  }, []);
+  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
 
   return {
     locked, lockInfo, loading, error,
@@ -210,6 +203,7 @@ export function useAdminRooms() {
   const [amenities,  setAmenities]  = useState([]);
   const [inclusions, setInclusions] = useState([]);
 
+  // ── fetchRooms ────────────────────────────────────────────────────────────
   const fetchRooms = useCallback(async (params) => {
     setLoading(true);
     setError(null);
@@ -231,18 +225,14 @@ export function useAdminRooms() {
     try {
       const { data } = await amenityApi.list();
       setAmenities(data.results || data);
-    } catch (_) {
-      // non-fatal
-    }
+    } catch (_) { /* non-fatal */ }
   }, []);
 
   const fetchInclusions = useCallback(async () => {
     try {
       const { data } = await inclusionApi.list();
       setInclusions(data.results || data);
-    } catch (_) {
-      // non-fatal
-    }
+    } catch (_) { /* non-fatal */ }
   }, []);
 
   useEffect(() => {
@@ -251,19 +241,20 @@ export function useAdminRooms() {
     fetchInclusions();
   }, []);
 
-  // ── Room CRUD ────────────────────────────────────────────────────────────
+  // ── Room CRUD ─────────────────────────────────────────────────────────────
   const createRoom = useCallback(async (formData) => {
     setSubmitting(true);
     try {
       const res = await adminCreateRoom(formData);
-      setRooms(function(prev) { return [res.data].concat(prev); });
+      // Re-fetch so the list shows the fresh server state (with images, etc.)
+      await fetchRooms();
       return { success: true, data: res.data };
     } catch (err) {
       return { success: false, errors: err.response ? err.response.data : {} };
     } finally {
       setSubmitting(false);
     }
-  }, []);
+  }, [fetchRooms]);
 
   const updateRoom = useCallback(async (id, formData, partial) => {
     setSubmitting(true);
@@ -271,9 +262,8 @@ export function useAdminRooms() {
       const res = partial
         ? await adminPatchRoom(id, formData)
         : await adminUpdateRoom(id, formData);
-      setRooms(function(prev) {
-        return prev.map(function(r) { return r.id === id ? res.data : r; });
-      });
+      // FIX: replace local state with fresh server data
+      setRooms((prev) => prev.map((r) => (r.id === id ? res.data : r)));
       return { success: true, data: res.data };
     } catch (err) {
       return { success: false, errors: err.response ? err.response.data : {} };
@@ -285,76 +275,87 @@ export function useAdminRooms() {
   const updateStatus = useCallback(async (id, newStatus) => {
     try {
       const res = await adminUpdateRoomStatus(id, newStatus);
-      setRooms(function(prev) {
-        return prev.map(function(r) {
-          return r.id === id ? Object.assign({}, r, { status: res.data.status }) : r;
-        });
-      });
+      setRooms((prev) =>
+        prev.map((r) => (r.id === id ? { ...r, status: res.data.status } : r))
+      );
       return { success: true };
     } catch (_) {
       return { success: false };
     }
   }, []);
 
-  // FIX: capture and return the actual backend error instead of swallowing it
+  /**
+   * Soft-delete a room.
+   *
+   * FIX: the backend sets is_active=False and returns 200. The frontend
+   * removes the room from local state immediately. Because adminGetRooms
+   * now only returns is_active=True rooms, the room stays gone on reload.
+   */
   const deleteRoom = useCallback(async (id) => {
     try {
       await adminDeleteRoom(id);
-      setRooms(function(prev) { return prev.filter(function(r) { return r.id !== id; }); });
+      // Remove from local state immediately — no reload needed
+      setRooms((prev) => prev.filter((r) => r.id !== id));
       return { success: true };
     } catch (err) {
-      const detail = err.response?.data?.detail
-        || err.response?.data?.error
-        || "Failed to delete room.";
+      const detail =
+        err.response?.data?.detail ||
+        err.response?.data?.error ||
+        "Failed to delete room.";
       return { success: false, error: detail };
     }
   }, []);
 
-  const uploadImages = useCallback(async (roomId, files) => {
-    const formData = new FormData();
-    files.forEach(function(file) { formData.append("images", file); });
+  /**
+   * Upload images for a room.
+   *
+   * FIX: accepts either an array of File objects or an already-built FormData.
+   * After upload, re-fetches the room to get fresh image data with correct URLs.
+   */
+  const uploadImages = useCallback(async (roomId, filesOrFormData) => {
     try {
-      const res = await adminUploadRoomImages(roomId, formData);
+      const res = await adminUploadRoomImages(roomId, filesOrFormData);
       const uploaded = Array.isArray(res.data) ? res.data : [];
-      setRooms(function(prev) {
-        return prev.map(function(r) {
+      setRooms((prev) =>
+        prev.map((r) => {
           if (r.id !== roomId) return r;
-          return Object.assign({}, r, { images: (r.images || []).concat(uploaded) });
-        });
-      });
+          return { ...r, images: [...(r.images || []), ...uploaded] };
+        })
+      );
       return { success: true, images: res.data };
     } catch (_) {
       return { success: false };
     }
   }, []);
 
-  // FIX: capture and return the actual backend error instead of swallowing it
   const deleteImage = useCallback(async (roomId, imageId) => {
     try {
       await adminDeleteRoomImage(roomId, imageId);
-      setRooms(function(prev) {
-        return prev.map(function(r) {
+      setRooms((prev) =>
+        prev.map((r) => {
           if (r.id !== roomId) return r;
-          return Object.assign({}, r, {
-            images: (r.images || []).filter(function(img) { return img.id !== imageId; })
-          });
-        });
-      });
+          return {
+            ...r,
+            images: (r.images || []).filter((img) => img.id !== imageId),
+          };
+        })
+      );
       return { success: true };
     } catch (err) {
-      const detail = err.response?.data?.detail
-        || err.response?.data?.error
-        || "Failed to delete image.";
+      const detail =
+        err.response?.data?.detail ||
+        err.response?.data?.error ||
+        "Failed to delete image.";
       return { success: false, error: detail };
     }
   }, []);
 
-  // ── Amenity CRUD ─────────────────────────────────────────────────────────
+  // ── Amenity CRUD ──────────────────────────────────────────────────────────
   const createAmenity = useCallback(async (item) => {
     try {
       const { data } = await amenityApi.create(item);
-      setAmenities(function(prev) { return prev.concat([data]); });
-      return { success: true, data: data };
+      setAmenities((prev) => [...prev, data]);
+      return { success: true, data };
     } catch (err) {
       return { success: false, errors: err.response ? err.response.data : {} };
     }
@@ -363,10 +364,8 @@ export function useAdminRooms() {
   const updateAmenity = useCallback(async (item) => {
     try {
       const { data } = await amenityApi.update(item.id, item);
-      setAmenities(function(prev) {
-        return prev.map(function(a) { return a.id === item.id ? data : a; });
-      });
-      return { success: true, data: data };
+      setAmenities((prev) => prev.map((a) => (a.id === item.id ? data : a)));
+      return { success: true, data };
     } catch (err) {
       return { success: false, errors: err.response ? err.response.data : {} };
     }
@@ -375,19 +374,19 @@ export function useAdminRooms() {
   const deleteAmenity = useCallback(async (id) => {
     try {
       await amenityApi.delete(id);
-      setAmenities(function(prev) { return prev.filter(function(a) { return a.id !== id; }); });
+      setAmenities((prev) => prev.filter((a) => a.id !== id));
       return { success: true };
     } catch (_) {
       return { success: false };
     }
   }, []);
 
-  // ── Inclusion CRUD ───────────────────────────────────────────────────────
+  // ── Inclusion CRUD ────────────────────────────────────────────────────────
   const createInclusion = useCallback(async (item) => {
     try {
       const { data } = await inclusionApi.create(item);
-      setInclusions(function(prev) { return prev.concat([data]); });
-      return { success: true, data: data };
+      setInclusions((prev) => [...prev, data]);
+      return { success: true, data };
     } catch (err) {
       return { success: false, errors: err.response ? err.response.data : {} };
     }
@@ -396,10 +395,8 @@ export function useAdminRooms() {
   const updateInclusion = useCallback(async (item) => {
     try {
       const { data } = await inclusionApi.update(item.id, item);
-      setInclusions(function(prev) {
-        return prev.map(function(i) { return i.id === item.id ? data : i; });
-      });
-      return { success: true, data: data };
+      setInclusions((prev) => prev.map((i) => (i.id === item.id ? data : i)));
+      return { success: true, data };
     } catch (err) {
       return { success: false, errors: err.response ? err.response.data : {} };
     }
@@ -408,7 +405,7 @@ export function useAdminRooms() {
   const deleteInclusion = useCallback(async (id) => {
     try {
       await inclusionApi.delete(id);
-      setInclusions(function(prev) { return prev.filter(function(i) { return i.id !== id; }); });
+      setInclusions((prev) => prev.filter((i) => i.id !== id));
       return { success: true };
     } catch (_) {
       return { success: false };
@@ -417,7 +414,8 @@ export function useAdminRooms() {
 
   return {
     rooms, loading, error, submitting,
-    fetchRooms, createRoom, updateRoom, updateStatus, deleteRoom,
+    fetchRooms,
+    createRoom, updateRoom, updateStatus, deleteRoom,
     uploadImages, deleteImage,
     amenities,
     createAmenity, updateAmenity, deleteAmenity,
@@ -435,9 +433,9 @@ export function usePriceHistory(roomId) {
     if (!roomId) return;
     setLoading(true);
     adminGetPriceHistory(roomId)
-      .then(function(res) { setHistory(res.data); })
-      .catch(function() { setHistory([]); })
-      .finally(function() { setLoading(false); });
+      .then((res) => setHistory(res.data))
+      .catch(() => setHistory([]))
+      .finally(() => setLoading(false));
   }, [roomId]);
 
   return { history, loading };

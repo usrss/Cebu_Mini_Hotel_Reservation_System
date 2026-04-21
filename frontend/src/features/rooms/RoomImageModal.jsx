@@ -23,21 +23,19 @@ export default function RoomImageModal({ room, onUpload, onClose, onRoomUpdate }
     let cancelled = false;
     setFetching(true);
     adminGetRoom(room.id)
-      .then(res => {
+      .then((res) => {
         if (cancelled) return;
         setImages(res.data.images ?? []);
-        setPanorama(res.data.panorama_image ?? null);
+        // FIX: panorama_image_url from the serializer (not the raw field)
+        setPanorama(res.data.panorama_image_url ?? res.data.panorama_image ?? null);
       })
       .catch(() => {
         if (!cancelled) {
-          // Fallback to props if fetch fails
           setImages(room.images ?? []);
-          setPanorama(room.panorama_image ?? null);
+          setPanorama(room.panorama_image_url ?? room.panorama_image ?? null);
         }
       })
-      .finally(() => {
-        if (!cancelled) setFetching(false);
-      });
+      .finally(() => { if (!cancelled) setFetching(false); });
     return () => { cancelled = true; };
   }, [room.id]);
 
@@ -45,8 +43,7 @@ export default function RoomImageModal({ room, onUpload, onClose, onRoomUpdate }
   const handleFiles = (e) => {
     const files = Array.from(e.target.files);
     if (!files.length) return;
-    setPreview(files.map(f => ({ file: f, url: URL.createObjectURL(f) })));
-    // Reset so same file can be re-selected
+    setPreview(files.map((f) => ({ file: f, url: URL.createObjectURL(f) })));
     if (fileRef.current) fileRef.current.value = '';
   };
 
@@ -55,16 +52,18 @@ export default function RoomImageModal({ room, onUpload, onClose, onRoomUpdate }
     setUploading(true);
     setError(null);
     try {
-      const files  = preview.map(p => p.file);
+      // FIX: pass plain File array to onUpload — AdminRoomsPage.handleImageUpload
+      // builds the FormData itself. But RoomImageModal can also call the service
+      // directly and pass the result back via onRoomUpdate.
+      const files = preview.map((p) => p.file);
       const result = await onUpload(room.id, files);
 
       if (result.success) {
-        // Re-fetch the room to get server-assigned IDs and image_url values
+        // Re-fetch to get server-assigned IDs and absolute image_url values
         const res = await adminGetRoom(room.id);
         const freshImages = res.data.images ?? [];
         setImages(freshImages);
-        // Revoke blob URLs
-        preview.forEach(p => URL.revokeObjectURL(p.url));
+        preview.forEach((p) => URL.revokeObjectURL(p.url));
         setPreview([]);
         onRoomUpdate?.({ ...room, images: freshImages });
       } else {
@@ -82,10 +81,10 @@ export default function RoomImageModal({ room, onUpload, onClose, onRoomUpdate }
     setDeletingId(imageId);
     setError(null);
     try {
+      // FIX: call the service directly — no need to route through AdminRoomsPage
       await adminDeleteRoomImage(room.id, imageId);
-      // Update state directly — no need to re-fetch for a delete
-      setImages(prev => {
-        const updated = prev.filter(img => img.id !== imageId);
+      setImages((prev) => {
+        const updated = prev.filter((img) => img.id !== imageId);
         onRoomUpdate?.({ ...room, images: updated });
         return updated;
       });
@@ -97,7 +96,7 @@ export default function RoomImageModal({ room, onUpload, onClose, onRoomUpdate }
   }, [room, onRoomUpdate]);
 
   const removeQueued = (index) => {
-    setPreview(prev => {
+    setPreview((prev) => {
       URL.revokeObjectURL(prev[index].url);
       return prev.filter((_, i) => i !== index);
     });
@@ -116,12 +115,14 @@ export default function RoomImageModal({ room, onUpload, onClose, onRoomUpdate }
     setUploadingPano(true);
     setError(null);
     try {
+      // FIX: adminPatchRoom detects File → sends multipart automatically
       const res = await adminPatchRoom(room.id, { panorama_image: panoPreview.file });
-      const newPano = res.data.panorama_image ?? null;
-      setPanorama(newPano);
+      // Use the URL from the response (panorama_image_url from serializer)
+      const newPanoUrl = res.data.panorama_image_url ?? res.data.panorama_image ?? null;
+      setPanorama(newPanoUrl);
       URL.revokeObjectURL(panoPreview.url);
       setPanoPreview(null);
-      onRoomUpdate?.({ ...room, panorama_image: newPano });
+      onRoomUpdate?.({ ...room, panorama_image: newPanoUrl, panorama_image_url: newPanoUrl });
     } catch {
       setError('Panorama upload failed. Please try again.');
     } finally {
@@ -134,9 +135,11 @@ export default function RoomImageModal({ room, onUpload, onClose, onRoomUpdate }
     setUploadingPano(true);
     setError(null);
     try {
+      // FIX: send panorama_image="" — roomService.adminPatchRoom detects this
+      // and sends it as multipart so the backend can clear the field
       await adminPatchRoom(room.id, { panorama_image: '' });
       setPanorama(null);
-      onRoomUpdate?.({ ...room, panorama_image: null });
+      onRoomUpdate?.({ ...room, panorama_image: null, panorama_image_url: null });
     } catch {
       setError('Failed to remove panorama. Please try again.');
     } finally {
@@ -185,10 +188,8 @@ export default function RoomImageModal({ room, onUpload, onClose, onRoomUpdate }
 
         <div className="rim-body">
 
-          {/* Global error */}
           {error && <div className="rim-error">{error}</div>}
 
-          {/* Loading state */}
           {fetching && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '20px 0', color: '#7A7987', fontSize: 13 }}>
               <div className="rim-spinner" style={{ borderTopColor: '#01000D', borderColor: '#E4E6ED' }} />
@@ -199,7 +200,6 @@ export default function RoomImageModal({ room, onUpload, onClose, onRoomUpdate }
           {/* ── PHOTOS TAB ── */}
           {!fetching && tab === 'photos' && (
             <>
-              {/* Upload zone */}
               <div className="rim-upload-zone" onClick={() => fileRef.current?.click()}>
                 <Upload size={24} className="rim-upload-icon" />
                 <p className="rim-upload-title">Click to select images</p>
@@ -214,7 +214,6 @@ export default function RoomImageModal({ room, onUpload, onClose, onRoomUpdate }
                 onChange={handleFiles}
               />
 
-              {/* Preview queue */}
               {preview.length > 0 && (
                 <div className="rim-preview-section">
                   <div className="rim-preview-header">
@@ -246,19 +245,23 @@ export default function RoomImageModal({ room, onUpload, onClose, onRoomUpdate }
                 </div>
               )}
 
-              {/* Existing photos */}
               <div>
                 <p className="rim-section-label">Current Photos</p>
                 {images.length === 0 ? (
                   <div className="rim-empty">No photos yet. Upload some above.</div>
                 ) : (
                   <div className="rim-images-grid">
-                    {images.map(img => (
+                    {images.map((img) => (
                       <div key={img.id} className="rim-image-card">
+                        {/* FIX: use image_url (absolute) with fallback to image (relative) */}
                         <img
                           src={img.image_url ?? img.image}
                           alt={img.caption || 'Room photo'}
                           className="rim-image-img"
+                          onError={(e) => {
+                            // If the URL fails, hide the broken image gracefully
+                            e.currentTarget.style.display = 'none';
+                          }}
                         />
                         {img.is_primary && (
                           <span className="rim-primary-badge">
@@ -299,7 +302,6 @@ export default function RoomImageModal({ room, onUpload, onClose, onRoomUpdate }
                 </span>
               </div>
 
-              {/* Current panorama — show when set and not in replace preview */}
               {panorama && !panoPreview && (
                 <div className="rim-pano-current">
                   <p className="rim-section-label">Current Panorama</p>
@@ -329,7 +331,6 @@ export default function RoomImageModal({ room, onUpload, onClose, onRoomUpdate }
                 </div>
               )}
 
-              {/* Upload zone — show when no panorama */}
               {!panorama && !panoPreview && (
                 <div className="rim-upload-zone" onClick={() => panoRef.current?.click()}>
                   <Camera size={24} className="rim-upload-icon" />
@@ -338,17 +339,12 @@ export default function RoomImageModal({ room, onUpload, onClose, onRoomUpdate }
                 </div>
               )}
 
-              {/* Panorama preview — show when file selected */}
               {panoPreview && (
                 <div className="rim-pano-preview-section">
                   <div className="rim-preview-header">
                     <span className="rim-section-label">Panorama ready to upload</span>
                     <div style={{ display: 'flex', gap: 8 }}>
-                      <button
-                        className="rim-outline-btn"
-                        onClick={cancelPanoPreview}
-                        type="button"
-                      >
+                      <button className="rim-outline-btn" onClick={cancelPanoPreview} type="button">
                         Cancel
                       </button>
                       <button
@@ -382,7 +378,6 @@ export default function RoomImageModal({ room, onUpload, onClose, onRoomUpdate }
           )}
         </div>
 
-        {/* Footer */}
         <div className="rim-footer">
           <button className="rim-btn-done" onClick={onClose} type="button">Done</button>
         </div>

@@ -8,7 +8,7 @@ from .models import ReviewHelpfulness
 from .models import (
     Inclusion,
     RoomInclusion,
-    SeasonalPrice
+    SeasonalPrice,
 )
 
 
@@ -29,23 +29,26 @@ class RoomImageSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         if obj.image and request:
             return request.build_absolute_uri(obj.image.url)
+        # FIX: fall back to a relative URL when no request in context
+        if obj.image:
+            return obj.image.url
         return None
 
 
 class RoomListSerializer(serializers.ModelSerializer):
-    primary_image     = serializers.SerializerMethodField()
-    room_type_display = serializers.CharField(source="get_room_type_display", read_only=True)
-    status_display    = serializers.CharField(source="get_status_display",    read_only=True)
-    bed_type_display  = serializers.CharField(source="get_bed_type_display",  read_only=True)
-    view_type_display = serializers.CharField(source="get_view_type_display", read_only=True)
-    amenity_names     = serializers.SerializerMethodField()
+    primary_image      = serializers.SerializerMethodField()
+    room_type_display  = serializers.CharField(source="get_room_type_display", read_only=True)
+    status_display     = serializers.CharField(source="get_status_display",    read_only=True)
+    bed_type_display   = serializers.CharField(source="get_bed_type_display",  read_only=True)
+    view_type_display  = serializers.CharField(source="get_view_type_display", read_only=True)
+    amenity_names      = serializers.SerializerMethodField()
     panorama_image_url = serializers.SerializerMethodField()
-    average_rating    = serializers.ReadOnlyField()
-    review_count      = serializers.ReadOnlyField()
-    discounted_price  = serializers.ReadOnlyField()
-    is_trending       = serializers.ReadOnlyField()
-    total_capacity    = serializers.ReadOnlyField()
-    inclusion_names   = serializers.SerializerMethodField()
+    average_rating     = serializers.ReadOnlyField()
+    review_count       = serializers.ReadOnlyField()
+    discounted_price   = serializers.ReadOnlyField()
+    is_trending        = serializers.ReadOnlyField()
+    total_capacity     = serializers.ReadOnlyField()
+    inclusion_names    = serializers.SerializerMethodField()
 
     class Meta:
         model = Room
@@ -80,27 +83,42 @@ class RoomListSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         if obj.panorama_image and request:
             return request.build_absolute_uri(obj.panorama_image.url)
+        if obj.panorama_image:
+            return obj.panorama_image.url
         return None
 
 
+class SeasonalPriceSerializer(serializers.ModelSerializer):
+    priority_display = serializers.CharField(source="get_priority_display", read_only=True)
+
+    class Meta:
+        model  = SeasonalPrice
+        fields = [
+            "id", "name", "start_date", "end_date",
+            "price_per_night", "priority", "priority_display",
+            "is_weekend_only", "is_active",
+        ]
+
+
 class RoomDetailSerializer(serializers.ModelSerializer):
-    images            = RoomImageSerializer(many=True, read_only=True)
-    amenities         = serializers.SerializerMethodField()
-    inclusions        = serializers.SerializerMethodField()
+    images             = RoomImageSerializer(many=True, read_only=True)
+    amenities          = serializers.SerializerMethodField()
+    inclusions         = serializers.SerializerMethodField()
     panorama_image_url = serializers.SerializerMethodField()
-    room_type_display = serializers.CharField(source="get_room_type_display", read_only=True)
-    status_display    = serializers.CharField(source="get_status_display",    read_only=True)
-    bed_type_display  = serializers.CharField(source="get_bed_type_display",  read_only=True)
-    view_type_display = serializers.CharField(source="get_view_type_display", read_only=True)
-    reviews           = serializers.SerializerMethodField()
-    average_rating    = serializers.ReadOnlyField()
-    review_count      = serializers.ReadOnlyField()
-    rating_breakdown  = serializers.ReadOnlyField()
-    discounted_price  = serializers.ReadOnlyField()
-    is_trending       = serializers.ReadOnlyField()
-    total_capacity    = serializers.ReadOnlyField()
-    checkin_time      = serializers.TimeField(format="%H:%M", allow_null=True)
-    checkout_time     = serializers.TimeField(format="%H:%M", allow_null=True)
+    room_type_display  = serializers.CharField(source="get_room_type_display", read_only=True)
+    status_display     = serializers.CharField(source="get_status_display",    read_only=True)
+    bed_type_display   = serializers.CharField(source="get_bed_type_display",  read_only=True)
+    view_type_display  = serializers.CharField(source="get_view_type_display", read_only=True)
+    reviews            = serializers.SerializerMethodField()
+    average_rating     = serializers.ReadOnlyField()
+    review_count       = serializers.ReadOnlyField()
+    rating_breakdown   = serializers.ReadOnlyField()
+    discounted_price   = serializers.ReadOnlyField()
+    is_trending        = serializers.ReadOnlyField()
+    total_capacity     = serializers.ReadOnlyField()
+    checkin_time       = serializers.TimeField(format="%H:%M", allow_null=True)
+    checkout_time      = serializers.TimeField(format="%H:%M", allow_null=True)
+    seasonal_prices    = SeasonalPriceSerializer(many=True, read_only=True)
 
     class Meta:
         model = Room
@@ -117,23 +135,26 @@ class RoomDetailSerializer(serializers.ModelSerializer):
             "images", "amenities", "inclusions",
             "panorama_image_url", "reviews",
             "average_rating", "review_count", "rating_breakdown",
+            "seasonal_prices",
         ]
 
     def get_panorama_image_url(self, obj):
         request = self.context.get("request")
         if obj.panorama_image and request:
             return request.build_absolute_uri(obj.panorama_image.url)
+        if obj.panorama_image:
+            return obj.panorama_image.url
         return None
 
     def get_amenities(self, obj):
         assignments = obj.amenity_assignments.select_related("amenity").all()
         return [
             {
-                "id": a.amenity.id,
-                "name": a.amenity.name,
-                "icon": a.amenity.icon,
+                "id":       a.amenity.id,
+                "name":     a.amenity.name,
+                "icon":     a.amenity.icon,
                 "category": a.amenity.category,
-                "notes": a.notes,
+                "notes":    a.notes,
             }
             for a in assignments
         ]
@@ -142,13 +163,13 @@ class RoomDetailSerializer(serializers.ModelSerializer):
         assignments = obj.room_inclusions.select_related("inclusion").all()
         return [
             {
-                "id": ri.inclusion.id,
-                "name": ri.inclusion.name,
-                "icon": ri.inclusion.icon,
-                "category": ri.inclusion.category,
-                "description": ri.inclusion.description,
+                "id":             ri.inclusion.id,
+                "name":           ri.inclusion.name,
+                "icon":           ri.inclusion.icon,
+                "category":       ri.inclusion.category,
+                "description":    ri.inclusion.description,
                 "is_highlighted": ri.inclusion.is_highlighted,
-                "notes": ri.notes,
+                "notes":          ri.notes,
             }
             for ri in assignments
         ]
@@ -159,7 +180,15 @@ class RoomDetailSerializer(serializers.ModelSerializer):
 
 
 class RoomCreateUpdateSerializer(serializers.ModelSerializer):
-    """Used by admin/staff to create or update rooms."""
+    """
+    Used by admin/staff to create or update rooms.
+
+    FIX: added seasonal_prices write support — accepts a list of dicts
+         and creates/replaces SeasonalPrice rows in one transaction.
+    FIX: panorama_image accepts an empty string to clear the field.
+    FIX: inclusion_notes dict maps inclusion_id → notes string for
+         individual per-room notes on inclusions.
+    """
 
     amenity_ids = serializers.PrimaryKeyRelatedField(
         many=True,
@@ -170,6 +199,18 @@ class RoomCreateUpdateSerializer(serializers.ModelSerializer):
     inclusion_ids = serializers.PrimaryKeyRelatedField(
         many=True,
         queryset=Inclusion.objects.all(),
+        write_only=True,
+        required=False,
+    )
+    # FIX: seasonal_prices accepted as writable nested list
+    seasonal_prices = serializers.ListField(
+        child=serializers.DictField(),
+        write_only=True,
+        required=False,
+    )
+    # FIX: inclusion_notes is an optional dict {inclusion_id: "note text"}
+    inclusion_notes = serializers.DictField(
+        child=serializers.CharField(allow_blank=True),
         write_only=True,
         required=False,
     )
@@ -199,6 +240,8 @@ class RoomCreateUpdateSerializer(serializers.ModelSerializer):
             "panorama_image",
             "amenity_ids",
             "inclusion_ids",
+            "seasonal_prices",
+            "inclusion_notes",
         ]
 
     def validate_room_number(self, value):
@@ -220,24 +263,65 @@ class RoomCreateUpdateSerializer(serializers.ModelSerializer):
             )
         return data
 
+    def validate_panorama_image(self, value):
+        # FIX: empty string → clear the field (set to None/blank)
+        if value == "" or value is None:
+            return None
+        return value
+
+    # ── helpers ───────────────────────────────────────────────────────────────
+
+    def _save_seasonal_prices(self, room, prices_data):
+        """Replace all seasonal prices for this room with the supplied list."""
+        if prices_data is None:
+            return
+        # Delete existing rows, then create fresh ones
+        room.seasonal_prices.all().delete()
+        for row in prices_data:
+            # Strip internal frontend keys like _id that aren't model fields
+            clean = {k: v for k, v in row.items() if k not in ("_id", "id") and v not in ("", None) or k in ("is_weekend_only", "is_active")}
+            # Only create if we have the minimum required fields
+            if not clean.get("name") or not clean.get("start_date") or not clean.get("end_date") or not clean.get("price_per_night"):
+                continue
+            SeasonalPrice.objects.create(room=room, **clean)
+
+    def _save_amenities(self, room, amenities):
+        if amenities is None:
+            return
+        room.amenity_assignments.all().delete()
+        for amenity in amenities:
+            RoomAmenityAssignment.objects.create(room=room, amenity=amenity)
+
+    def _save_inclusions(self, room, inclusions, notes_map):
+        if inclusions is None:
+            return
+        room.room_inclusions.all().delete()
+        for inclusion in inclusions:
+            note = (notes_map or {}).get(str(inclusion.id), "")
+            RoomInclusion.objects.create(room=room, inclusion=inclusion, notes=note)
+
+    # ── create / update ───────────────────────────────────────────────────────
+
     def create(self, validated_data):
-        amenity_ids   = validated_data.pop("amenity_ids",   [])
-        inclusion_ids = validated_data.pop("inclusion_ids", [])
+        amenity_ids     = validated_data.pop("amenity_ids",     [])
+        inclusion_ids   = validated_data.pop("inclusion_ids",   [])
+        seasonal_prices = validated_data.pop("seasonal_prices", None)
+        inclusion_notes = validated_data.pop("inclusion_notes", {})
 
         room = Room.objects.create(**validated_data)
 
-        for amenity in amenity_ids:
-            RoomAmenityAssignment.objects.create(room=room, amenity=amenity)
-
-        for inclusion in inclusion_ids:
-            RoomInclusion.objects.create(room=room, inclusion=inclusion)
+        self._save_amenities(room, amenity_ids)
+        self._save_inclusions(room, inclusion_ids, inclusion_notes)
+        self._save_seasonal_prices(room, seasonal_prices)
 
         return room
 
     def update(self, instance, validated_data):
-        amenity_ids   = validated_data.pop("amenity_ids",   None)
-        inclusion_ids = validated_data.pop("inclusion_ids", None)
-        new_price     = validated_data.get("price_per_night")
+        amenity_ids     = validated_data.pop("amenity_ids",     None)
+        inclusion_ids   = validated_data.pop("inclusion_ids",   None)
+        seasonal_prices = validated_data.pop("seasonal_prices", None)
+        inclusion_notes = validated_data.pop("inclusion_notes", {})
+        new_price       = validated_data.get("price_per_night")
 
         if new_price and new_price != instance.price_per_night:
             request = self.context.get("request")
@@ -248,33 +332,39 @@ class RoomCreateUpdateSerializer(serializers.ModelSerializer):
                 changed_by=request.user if request and request.user.is_authenticated else None,
             )
 
+        # FIX: handle panorama_image clear (empty string → blank the field)
+        panorama = validated_data.get("panorama_image")
+        if panorama is None and "panorama_image" in validated_data:
+            # Explicitly clearing
+            if instance.panorama_image:
+                instance.panorama_image.delete(save=False)
+            instance.panorama_image = None
+            validated_data.pop("panorama_image")
+
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
 
-        if amenity_ids is not None:
-            instance.amenity_assignments.all().delete()
-            for amenity in amenity_ids:
-                RoomAmenityAssignment.objects.create(room=instance, amenity=amenity)
-
-        if inclusion_ids is not None:
-            instance.room_inclusions.all().delete()
-            for inclusion in inclusion_ids:
-                RoomInclusion.objects.create(room=instance, inclusion=inclusion)
+        self._save_amenities(instance, amenity_ids)
+        self._save_inclusions(instance, inclusion_ids, inclusion_notes)
+        self._save_seasonal_prices(instance, seasonal_prices)
 
         return instance
 
 
 class RoomAvailabilityRequestSerializer(serializers.Serializer):
-    check_in  = serializers.DateField()
-    check_out = serializers.DateField()
-    room_type = serializers.ChoiceField(
+    check_in     = serializers.DateField()
+    check_out    = serializers.DateField()
+    room_type    = serializers.ChoiceField(
         choices=[("", "Any")] + [(v, l) for v, l in RoomType.choices],
         required=False,
         allow_blank=True,
     )
-    capacity  = serializers.IntegerField(min_value=1, required=False)
-    max_price = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
+    capacity     = serializers.IntegerField(min_value=1, required=False)
+    # FIX: also accept guests_count (sent by the frontend availability search)
+    guests_count = serializers.IntegerField(min_value=1, required=False)
+    max_price    = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
+    bed_type     = serializers.CharField(required=False, allow_blank=True)
 
     def validate(self, data):
         check_in  = data["check_in"]
@@ -287,6 +377,11 @@ class RoomAvailabilityRequestSerializer(serializers.Serializer):
             raise serializers.ValidationError({"check_out": "Check-out must be after check-in."})
         if (check_out - check_in).days > 90:
             raise serializers.ValidationError("Booking duration cannot exceed 90 nights.")
+
+        # FIX: normalise guests_count → capacity so the view only checks one field
+        if "guests_count" in data and "capacity" not in data:
+            data["capacity"] = data["guests_count"]
+
         return data
 
 
@@ -358,7 +453,6 @@ class RoomReviewCreateSerializer(serializers.ModelSerializer):
         request = self.context.get('request')
         if not request or not request.user.is_authenticated:
             raise serializers.ValidationError("You must be logged in to submit a review.")
-
         booking = data.get('booking')
         if booking.user != request.user:
             raise serializers.ValidationError("You can only review your own bookings.")
@@ -390,18 +484,6 @@ class RoomInclusionSerializer(serializers.ModelSerializer):
         fields = ["id", "inclusion", "notes"]
 
 
-class SeasonalPriceSerializer(serializers.ModelSerializer):
-    priority_display = serializers.CharField(source="get_priority_display", read_only=True)
-
-    class Meta:
-        model  = SeasonalPrice
-        fields = [
-            "id", "name", "start_date", "end_date",
-            "price_per_night", "priority", "priority_display",
-            "is_weekend_only", "is_active",
-        ]
-
-
 class PriceCalculationRequestSerializer(serializers.Serializer):
     check_in  = serializers.DateField()
     check_out = serializers.DateField()
@@ -425,7 +507,6 @@ class PriceCalculationResponseSerializer(serializers.Serializer):
     nights     = serializers.IntegerField()
     base_total = serializers.DecimalField(max_digits=10, decimal_places=2)
     breakdown  = serializers.ListField(child=serializers.DictField())
-
 
 
 class HotelSettingsSerializer(serializers.ModelSerializer):

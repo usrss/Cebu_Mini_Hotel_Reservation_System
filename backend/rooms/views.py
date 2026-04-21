@@ -1,10 +1,11 @@
 # rooms/views.py
+import json
 from django.utils import timezone
 from datetime import timedelta
 from rest_framework import generics, status, filters
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from .models import ReviewHelpfulness
 from rooms.permissions import IsAdminRoomManager, IsAdminOrManagerRoom
@@ -34,12 +35,6 @@ LOCK_DURATION_MINUTES = 10
 
 
 class RoomListView(generics.ListAPIView):
-    """
-    GET /api/rooms/
-    Public endpoint — returns all active, available rooms.
-    Supports filtering by type, capacity, price, and date range.
-    Used for: room listings page, public search.
-    """
     serializer_class = RoomListSerializer
     permission_classes = [AllowAny]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter, filters.SearchFilter]
@@ -58,11 +53,6 @@ class RoomListView(generics.ListAPIView):
 
 
 class RoomDetailView(generics.RetrieveAPIView):
-    """
-    GET /api/rooms/<id>/
-    Public endpoint — returns full room details including images and amenities.
-    Used for: room detail page with booking button.
-    """
     serializer_class = RoomDetailSerializer
     permission_classes = [AllowAny]
     queryset = Room.objects.filter(is_active=True).prefetch_related(
@@ -71,24 +61,6 @@ class RoomDetailView(generics.RetrieveAPIView):
 
 
 class RoomAvailabilityView(APIView):
-    """
-    POST /api/rooms/availability/
-
-    Checks which rooms are available for a given date range.
-    Used by BOTH online booking flow and staff offline booking.
-
-    Availability is determined by THREE exclusion sets — never by room
-    status alone:
-
-    1. Active bookings that overlap the requested dates.
-    2. Temporary room locks (during checkout flow race-condition window).
-    3. Active cleaning schedules whose window overlaps the requested check-in.
-
-    A room in CLEANING status is still returned as available if its
-    cleaning window ends before the requested check-in date.
-
-    MAINTENANCE rooms are always excluded regardless of dates.
-    """
     permission_classes = [AllowAny]
 
     def post(self, request):
@@ -101,7 +73,6 @@ class RoomAvailabilityView(APIView):
         check_out = data["check_out"]
         now = timezone.now()
 
-        # ── Exclusion set 1: active booking overlap ───────────────────────────
         try:
             from bookings.models import Booking, BookingStatus
             booked_room_ids = Booking.objects.filter(
@@ -116,7 +87,6 @@ class RoomAvailabilityView(APIView):
         except ImportError:
             booked_room_ids = []
 
-        # ── Exclusion set 2: active temporary locks ───────────────────────────
         locked_room_ids = RoomTemporaryLock.objects.filter(
             check_in__lt=check_out,
             check_out__gt=check_in,
@@ -124,7 +94,6 @@ class RoomAvailabilityView(APIView):
             expires_at__gt=now,
         ).values_list("room_id", flat=True)
 
-        # ── Exclusion set 3: active cleaning schedule overlap ─────────────────
         from datetime import datetime, time as dt_time
         tz = timezone.get_current_timezone()
         check_in_dt = datetime.combine(check_in, dt_time.min).replace(tzinfo=tz)
@@ -132,24 +101,19 @@ class RoomAvailabilityView(APIView):
         try:
             from staff.models import CleaningTask, CleaningStatus
             cleaning_blocked_ids = CleaningTask.objects.filter(
-                status__in=[
-                    CleaningStatus.DIRTY,
-                    CleaningStatus.CLEANING,
-                ],
+                status__in=[CleaningStatus.DIRTY, CleaningStatus.CLEANING],
                 cleaning_end_at__isnull=False,
                 cleaning_end_at__gt=check_in_dt,
             ).values_list("room_id", flat=True)
         except Exception:
             cleaning_blocked_ids = []
 
-        # ── Combine all exclusion sets ────────────────────────────────────────
         excluded_ids = (
-                list(booked_room_ids)
-                + list(locked_room_ids)
-                + list(cleaning_blocked_ids)
+            list(booked_room_ids)
+            + list(locked_room_ids)
+            + list(cleaning_blocked_ids)
         )
 
-        # ── Base queryset — exclude MAINTENANCE always ────────────────────────
         queryset = Room.objects.filter(
             is_active=True,
         ).exclude(
@@ -158,7 +122,6 @@ class RoomAvailabilityView(APIView):
             id__in=excluded_ids,
         ).prefetch_related("images", "amenity_assignments__amenity")
 
-        # ── Optional filters ──────────────────────────────────────────────────
         if data.get("room_type"):
             queryset = queryset.filter(room_type=data["room_type"])
         if data.get("capacity"):
@@ -177,10 +140,6 @@ class RoomAvailabilityView(APIView):
 
 
 class RoomLockView(APIView):
-    """
-    POST /api/rooms/lock/
-    Temporarily locks a room for a session during booking process.
-    """
     permission_classes = [AllowAny]
 
     def post(self, request):
@@ -235,10 +194,6 @@ class RoomLockView(APIView):
 
 
 class RoomLockReleaseView(APIView):
-    """
-    POST /api/rooms/lock/release/
-    Releases a temporary room lock.
-    """
     permission_classes = [AllowAny]
 
     def post(self, request):
@@ -259,13 +214,17 @@ class RoomLockReleaseView(APIView):
 
 # ─── Admin / Staff Views ──────────────────────────────────────────────────────
 
-from rest_framework.permissions import IsAuthenticated
-from rooms.permissions import IsAdminRoomManager, IsAdminOrManagerRoom
-
 class AdminRoomListCreateView(generics.ListCreateAPIView):
     """
     GET  /api/rooms/admin/  — list all rooms (Admin or Manager)
     POST /api/rooms/admin/  — create a new room (Admin only)
+
+    FIX: get_queryset now filters is_active=True so soft-deleted rooms
+         don't reappear after reload.
+    FIX: serializer context always includes request so image_url builds
+         correct absolute URLs.
+    FIX: seasonal_prices JSON string from multipart FormData is parsed
+         before passing to the serializer.
     """
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter, filters.SearchFilter]
@@ -279,47 +238,104 @@ class AdminRoomListCreateView(generics.ListCreateAPIView):
         return RoomDetailSerializer
 
     def get_queryset(self):
-        return Room.objects.all().prefetch_related("images", "amenity_assignments__amenity")
+        # FIX: only return active rooms — soft-deleted rooms stay gone after reload
+        return (
+            Room.objects
+            .filter(is_active=True)
+            .prefetch_related(
+                "images",
+                "amenity_assignments__amenity",
+                "room_inclusions__inclusion",
+                "seasonal_prices",
+            )
+        )
 
     def get_permissions(self):
         if self.request.method == "POST":
             return [IsAuthenticated(), IsAdminRoomManager()]
         return [IsAuthenticated(), IsAdminOrManagerRoom()]
 
+    def get_serializer_context(self):
+        # FIX: always pass request so RoomImageSerializer.get_image_url works
+        ctx = super().get_serializer_context()
+        ctx["request"] = self.request
+        return ctx
+
+    def create(self, request, *args, **kwargs):
+        # FIX: when submitted as multipart/form-data, nested JSON fields
+        # (seasonal_prices, inclusion_notes) arrive as strings — parse them.
+        data = request.data.copy()
+        data = _parse_json_fields(data)
+        serializer = self.get_serializer(data=data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
 
 class AdminRoomDetailView(generics.RetrieveUpdateDestroyAPIView):
     """
-    GET    /api/rooms/admin/<id>/  — room detail
-    PUT    /api/rooms/admin/<id>/  — full update
-    PATCH  /api/rooms/admin/<id>/  — partial update
+    GET    /api/rooms/admin/<id>/
+    PUT    /api/rooms/admin/<id>/
+    PATCH  /api/rooms/admin/<id>/
     DELETE /api/rooms/admin/<id>/  — soft delete (sets is_active=False)
+
+    FIX: added IsAuthenticated alongside IsAdminRoomManager.
+    FIX: queryset includes inactive rooms so an in-progress edit still resolves.
+    FIX: serializer context includes request for image URLs.
+    FIX: seasonal_prices JSON string parsed on update.
     """
     parser_classes = [MultiPartParser, FormParser, JSONParser]
-    permission_classes = [IsAdminRoomManager]
-    queryset = Room.objects.all().prefetch_related("images", "amenity_assignments__amenity")
+    # FIX: was missing IsAuthenticated — any unauthenticated request would 403
+    permission_classes = [IsAuthenticated, IsAdminRoomManager]
+
+    def get_queryset(self):
+        # FIX: allow all rooms (including recently deactivated) so detail/edit works
+        return Room.objects.all().prefetch_related(
+            "images",
+            "amenity_assignments__amenity",
+            "room_inclusions__inclusion",
+            "seasonal_prices",
+        )
 
     def get_serializer_class(self):
         if self.request.method in ["PUT", "PATCH"]:
             return RoomCreateUpdateSerializer
         return RoomDetailSerializer
 
+    def get_serializer_context(self):
+        ctx = super().get_serializer_context()
+        ctx["request"] = self.request
+        return ctx
+
+    def update(self, request, *args, **kwargs):
+        # FIX: parse nested JSON fields from multipart payload
+        data = request.data.copy()
+        data = _parse_json_fields(data)
+        partial = kwargs.pop("partial", False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        return Response(serializer.data)
+
     def destroy(self, request, *args, **kwargs):
-        """Soft delete — deactivate rather than permanently delete."""
+        """
+        Soft delete — sets is_active=False instead of deleting the DB row.
+        FIX: returns 200 with a body so the frontend can confirm success,
+             and the list view now filters is_active=True so the room stays gone.
+        """
         room = self.get_object()
         room.is_active = False
         room.save(update_fields=["is_active"])
         return Response(
             {"detail": f"Room {room.room_number} has been deactivated."},
-            status=status.HTTP_200_OK
+            status=status.HTTP_200_OK,
         )
 
 
 class AdminRoomStatusView(APIView):
-    """
-    PATCH /api/rooms/admin/<id>/status/
-    Quick endpoint to update room status.
-    """
-    permission_classes = [IsAdminOrManagerRoom]
+    permission_classes = [IsAuthenticated, IsAdminOrManagerRoom]
 
     def patch(self, request, pk):
         try:
@@ -347,9 +363,13 @@ class AdminRoomImageUploadView(APIView):
     """
     POST   /api/rooms/admin/<id>/images/  — upload one or more images
     DELETE /api/rooms/admin/<id>/images/  — delete an image by image_id
+
+    FIX: serializer context now always includes request so image_url
+         returns an absolute URL instead of None.
+    FIX: DELETE now properly deletes the physical file from storage.
     """
-    permission_classes = [IsAdminRoomManager]
-    parser_classes = [MultiPartParser, FormParser]
+    permission_classes = [IsAuthenticated, IsAdminRoomManager]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def post(self, request, pk):
         try:
@@ -373,26 +393,30 @@ class AdminRoomImageUploadView(APIView):
             )
             created_images.append(img)
 
-        serializer = RoomImageSerializer(created_images, many=True, context={"request": request})
+        # FIX: pass request in context so image_url is an absolute URL
+        serializer = RoomImageSerializer(
+            created_images, many=True, context={"request": request}
+        )
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     def delete(self, request, pk):
+        # FIX: support image_id sent as JSON body or form data
         image_id = request.data.get("image_id")
+        if not image_id:
+            return Response({"error": "image_id is required."}, status=status.HTTP_400_BAD_REQUEST)
         try:
             image = RoomImage.objects.get(pk=image_id, room_id=pk)
-            image.image.delete(save=False)
+            # FIX: delete the actual file from storage, not just the DB row
+            if image.image:
+                image.image.delete(save=False)
             image.delete()
-            return Response({"deleted": True})
+            return Response({"deleted": True, "image_id": image_id})
         except RoomImage.DoesNotExist:
             return Response({"error": "Image not found."}, status=status.HTTP_404_NOT_FOUND)
 
 
 class AdminRoomPriceHistoryView(generics.ListAPIView):
-    """
-    GET /api/rooms/admin/<id>/price-history/
-    Returns historical price changes for a specific room.
-    """
-    permission_classes = [IsAdminOrManagerRoom]
+    permission_classes = [IsAuthenticated, IsAdminOrManagerRoom]
     serializer_class = RoomPriceHistorySerializer
 
     def get_queryset(self):
@@ -403,10 +427,6 @@ from .models import RoomReview
 
 
 class RoomReviewCreateView(APIView):
-    """
-    POST /api/rooms/reviews/
-    Authenticated guest review submission.
-    """
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
@@ -425,10 +445,6 @@ class RoomReviewCreateView(APIView):
 
 
 class GuestPendingReviewsView(APIView):
-    """
-    GET /api/rooms/reviews/pending/
-    Get list of completed bookings that need reviews.
-    """
     permission_classes = [AllowAny]
 
     def get(self, request):
@@ -471,10 +487,6 @@ class GuestPendingReviewsView(APIView):
 
 
 class ReviewHelpfulnessVoteView(APIView):
-    """
-    POST   /api/rooms/reviews/<review_id>/helpful/  — cast or update vote
-    DELETE /api/rooms/reviews/<review_id>/helpful/  — remove vote
-    """
     permission_classes = [AllowAny]
 
     def post(self, request, review_id):
@@ -494,10 +506,7 @@ class ReviewHelpfulnessVoteView(APIView):
         try:
             review = RoomReview.objects.get(id=review_id, is_visible=True)
         except RoomReview.DoesNotExist:
-            return Response(
-                {"error": "Review not found"},
-                status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"error": "Review not found"}, status=status.HTTP_404_NOT_FOUND)
 
         if review.guest == request.user:
             return Response(
@@ -511,53 +520,35 @@ class ReviewHelpfulnessVoteView(APIView):
             defaults={'is_helpful': is_helpful}
         )
 
-        helpful_count = review.helpful_count
-        not_helpful_count = review.not_helpful_count
-
         return Response({
             "success": True,
             "action": "created" if created else "updated",
             "vote": "up" if is_helpful else "down",
-            "helpful_count": helpful_count,
-            "not_helpful_count": not_helpful_count,
-            "total_votes": helpful_count + not_helpful_count
+            "helpful_count": review.helpful_count,
+            "not_helpful_count": review.not_helpful_count,
+            "total_votes": review.helpful_count + review.not_helpful_count,
         }, status=status.HTTP_200_OK)
 
     def delete(self, request, review_id):
         if not request.user.is_authenticated:
-            return Response(
-                {"detail": "Authentication required"},
-                status=status.HTTP_401_UNAUTHORIZED
-            )
+            return Response({"detail": "Authentication required"}, status=status.HTTP_401_UNAUTHORIZED)
 
         try:
-            vote = ReviewHelpfulness.objects.get(
-                review_id=review_id,
-                user=request.user
-            )
+            vote = ReviewHelpfulness.objects.get(review_id=review_id, user=request.user)
             vote.delete()
-
             review = RoomReview.objects.get(id=review_id)
-
             return Response({
                 "success": True,
                 "action": "deleted",
                 "helpful_count": review.helpful_count,
                 "not_helpful_count": review.not_helpful_count,
-                "total_votes": review.total_votes
+                "total_votes": review.total_votes,
             })
         except ReviewHelpfulness.DoesNotExist:
-            return Response(
-                {"error": "Vote not found"},
-                status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"error": "Vote not found"}, status=status.HTTP_404_NOT_FOUND)
 
 
 class RoomPriceCalculationView(APIView):
-    """
-    POST /api/rooms/<id>/calculate-price/
-    Calculate total price for a room across a date range.
-    """
     permission_classes = [AllowAny]
 
     def post(self, request, pk):
@@ -568,10 +559,7 @@ class RoomPriceCalculationView(APIView):
         try:
             room = Room.objects.get(pk=pk, is_active=True)
         except Room.DoesNotExist:
-            return Response(
-                {"error": "Room not found or inactive"},
-                status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"error": "Room not found or inactive"}, status=status.HTTP_404_NOT_FOUND)
 
         check_in = req_serializer.validated_data["check_in"]
         check_out = req_serializer.validated_data["check_out"]
@@ -585,55 +573,40 @@ class RoomPriceCalculationView(APIView):
             daily_price = room.get_price_for_date(current_date)
             total += daily_price
             base_total += room.price_per_night
-
             reason = self._get_price_reason(room, current_date, daily_price)
-
             breakdown.append({
                 "date": str(current_date),
                 "price": float(daily_price),
                 "reason": reason,
-                "is_weekend": current_date.weekday() in [4, 5]
+                "is_weekend": current_date.weekday() in [4, 5],
             })
-
             current_date += timedelta(days=1)
 
-        response_data = {
+        return Response({
             "total": float(total),
             "nights": len(breakdown),
             "base_total": float(base_total),
             "average_per_night": float(total / len(breakdown)) if breakdown else 0,
-            "breakdown": breakdown
-        }
-
-        return Response(response_data, status=status.HTTP_200_OK)
+            "breakdown": breakdown,
+        }, status=status.HTTP_200_OK)
 
     def _get_price_reason(self, room, date, price):
         if price == room.discounted_price and room.discount_percentage > 0:
             return f"Base Rate with {room.discount_percentage}% Discount"
-
         if price == room.price_per_night:
             return "Standard Rate"
-
-        matching_price = room.seasonal_prices.filter(
-            is_active=True,
-            start_date__lte=date,
-            end_date__gte=date
+        matching = room.seasonal_prices.filter(
+            is_active=True, start_date__lte=date, end_date__gte=date
         ).order_by('-priority').first()
-
-        if matching_price:
-            reason = matching_price.name
-            if matching_price.is_weekend_only:
-                reason += " (Weekend)"
-            return reason
-
+        if matching:
+            r = matching.name
+            if matching.is_weekend_only:
+                r += " (Weekend)"
+            return r
         return "Standard Rate"
 
 
 class FeaturedRoomsView(generics.ListAPIView):
-    """
-    GET /api/rooms/featured/
-    Returns all featured rooms for homepage carousel.
-    """
     serializer_class = RoomListSerializer
     permission_classes = [AllowAny]
 
@@ -647,37 +620,25 @@ class FeaturedRoomsView(generics.ListAPIView):
 
 
 class TrendingRoomsView(generics.ListAPIView):
-    """
-    GET /api/rooms/trending/
-    Returns trending rooms (high ratings + many reviews).
-    """
     serializer_class = RoomListSerializer
     permission_classes = [AllowAny]
 
     def get_queryset(self):
         from django.db.models import Count, Avg, Q
-
         return (
             Room.objects
             .filter(is_active=True, status="available")
             .annotate(
                 avg_rating=Avg('reviews__rating', filter=Q(reviews__is_visible=True)),
-                review_cnt=Count('reviews', filter=Q(reviews__is_visible=True))
+                review_cnt=Count('reviews', filter=Q(reviews__is_visible=True)),
             )
-            .filter(
-                review_cnt__gte=5,
-                avg_rating__gte=4.5
-            )
+            .filter(review_cnt__gte=5, avg_rating__gte=4.5)
             .prefetch_related("images", "amenity_assignments__amenity", "room_inclusions__inclusion")
             .order_by("-avg_rating", "-review_cnt")[:10]
         )
 
 
 class RoomsByViewTypeView(generics.ListAPIView):
-    """
-    GET /api/rooms/by-view/?view_type=sea
-    Returns rooms filtered by view type.
-    """
     serializer_class = RoomListSerializer
     permission_classes = [AllowAny]
     filter_backends = [DjangoFilterBackend]
@@ -693,19 +654,12 @@ class RoomsByViewTypeView(generics.ListAPIView):
 
 
 class ReviewTokenValidateView(APIView):
-    """
-    GET /api/rooms/reviews/token/<token>/
-    Validates a review token and returns booking snapshot data.
-    """
     permission_classes = [AllowAny]
 
     def get(self, request, token):
         from rooms.models import ReviewToken
-
         try:
-            rt = ReviewToken.objects.select_related(
-                "booking__room"
-            ).get(token=token)
+            rt = ReviewToken.objects.select_related("booking__room").get(token=token)
         except ReviewToken.DoesNotExist:
             return Response(
                 {"error": "Review link not found. It may have already been used or never existed."},
@@ -714,19 +668,12 @@ class ReviewTokenValidateView(APIView):
 
         if rt.is_used:
             return Response(
-                {"error": "This review link has already been used. Each booking allows one review."},
+                {"error": "This review link has already been used."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-
         if rt.is_expired:
             return Response(
-                {
-                    "error": (
-                        f"This review link expired on "
-                        f"{rt.expires_at.strftime('%B %d, %Y')}. "
-                        f"Review links are valid for {rt.EXPIRY_DAYS} days after checkout."
-                    )
-                },
+                {"error": f"This review link expired on {rt.expires_at.strftime('%B %d, %Y')}."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -748,50 +695,27 @@ class ReviewTokenValidateView(APIView):
 
 
 class ReviewTokenSubmitView(APIView):
-    """
-    POST /api/rooms/reviews/token/<token>/
-    Submits a review using a one-time review token.
-    """
     permission_classes = [AllowAny]
 
     def post(self, request, token):
         from rooms.models import ReviewToken, RoomReview
-
         try:
-            rt = ReviewToken.objects.select_related(
-                "booking__room"
-            ).get(token=token)
+            rt = ReviewToken.objects.select_related("booking__room").get(token=token)
         except ReviewToken.DoesNotExist:
-            return Response(
-                {"error": "Review link not found."},
-                status=status.HTTP_404_NOT_FOUND,
-            )
+            return Response({"error": "Review link not found."}, status=status.HTTP_404_NOT_FOUND)
 
         if rt.is_used:
-            return Response(
-                {"error": "This review link has already been used."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
+            return Response({"error": "This review link has already been used."}, status=status.HTTP_400_BAD_REQUEST)
         if rt.is_expired:
-            return Response(
-                {"error": "This review link has expired."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return Response({"error": "This review link has expired."}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             rating = int(request.data.get("rating", 0))
         except (TypeError, ValueError):
-            return Response(
-                {"error": "rating must be an integer between 1 and 5."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return Response({"error": "rating must be an integer between 1 and 5."}, status=status.HTTP_400_BAD_REQUEST)
 
         if not 1 <= rating <= 5:
-            return Response(
-                {"error": "rating must be between 1 and 5."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return Response({"error": "rating must be between 1 and 5."}, status=status.HTTP_400_BAD_REQUEST)
 
         review_text = str(request.data.get("review_text", "")).strip()
         booking = rt.booking
@@ -805,10 +729,7 @@ class ReviewTokenSubmitView(APIView):
 
         if RoomReview.objects.filter(booking=booking).exists():
             rt.mark_used()
-            return Response(
-                {"error": "A review for this booking has already been submitted."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return Response({"error": "A review for this booking has already been submitted."}, status=status.HTTP_400_BAD_REQUEST)
 
         from django.db import transaction as db_transaction
         with db_transaction.atomic():
@@ -825,23 +746,16 @@ class ReviewTokenSubmitView(APIView):
             )
             rt.mark_used()
 
-        return Response(
-            {
-                "message": "Thank you for your review!",
-                "review_id": review.pk,
-                "rating": review.rating,
-                "room": booking.room.room_number,
-                "is_verified": review.is_verified,
-            },
-            status=status.HTTP_201_CREATED,
-        )
+        return Response({
+            "message": "Thank you for your review!",
+            "review_id": review.pk,
+            "rating": review.rating,
+            "room": booking.room.room_number,
+            "is_verified": review.is_verified,
+        }, status=status.HTTP_201_CREATED)
 
 
 class ReviewTokenView(APIView):
-    """
-    GET  /api/rooms/reviews/token/<token>/ — validate token, get booking info
-    POST /api/rooms/reviews/token/<token>/ — submit review
-    """
     permission_classes = [AllowAny]
 
     def get(self, request, token):
@@ -852,10 +766,6 @@ class ReviewTokenView(APIView):
 
 
 class HotelSettingsView(APIView):
-    """
-    GET   /api/rooms/hotel/settings/  — return global hotel settings
-    PATCH /api/rooms/hotel/settings/  — update (admin/manager only)
-    """
     permission_classes = [IsAuthenticated]
 
     def _is_admin(self, request):
@@ -881,7 +791,7 @@ class HotelSettingsView(APIView):
         return Response(s.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-# ─── Amenity & Inclusion CRUD Views (FIX: were missing, caused 404) ───────────
+# ─── Amenity & Inclusion CRUD Views ──────────────────────────────────────────
 
 from .models import RoomAmenity, Inclusion
 from .serializers import RoomAmenitySerializer, InclusionSerializer
@@ -889,47 +799,97 @@ from .serializers import RoomAmenitySerializer, InclusionSerializer
 
 class AmenityListCreateView(generics.ListCreateAPIView):
     """
-    GET  /api/rooms/amenities/  — list all amenities
-    POST /api/rooms/amenities/  — create a new amenity
-    Admin/Manager only.
+    GET  /api/rooms/amenities/
+    POST /api/rooms/amenities/
     """
-    serializer_class   = RoomAmenitySerializer
-    permission_classes = [IsAuthenticated, IsAdminRoomManager]
-    queryset           = RoomAmenity.objects.all().order_by("category", "name")
+    serializer_class = RoomAmenitySerializer
+    # FIX: GET (list) is open to any authenticated admin/manager;
+    #      POST also requires IsAdminRoomManager but listing is allowed for managers too.
+    permission_classes = [IsAuthenticated, IsAdminOrManagerRoom]
+    queryset = RoomAmenity.objects.all().order_by("category", "name")
+
+    def get_permissions(self):
+        if self.request.method == "POST":
+            return [IsAuthenticated(), IsAdminRoomManager()]
+        return [IsAuthenticated(), IsAdminOrManagerRoom()]
 
 
 class AmenityDetailView(generics.RetrieveUpdateDestroyAPIView):
     """
-    GET    /api/rooms/amenities/<id>/  — retrieve
-    PUT    /api/rooms/amenities/<id>/  — full update
-    PATCH  /api/rooms/amenities/<id>/  — partial update
-    DELETE /api/rooms/amenities/<id>/  — delete
-    Admin/Manager only.
+    GET    /api/rooms/amenities/<id>/
+    PUT    /api/rooms/amenities/<id>/
+    PATCH  /api/rooms/amenities/<id>/
+    DELETE /api/rooms/amenities/<id>/
     """
-    serializer_class   = RoomAmenitySerializer
+    serializer_class = RoomAmenitySerializer
     permission_classes = [IsAuthenticated, IsAdminRoomManager]
-    queryset           = RoomAmenity.objects.all()
+    queryset = RoomAmenity.objects.all()
 
 
 class InclusionListCreateView(generics.ListCreateAPIView):
     """
-    GET  /api/rooms/inclusions/  — list all inclusions
-    POST /api/rooms/inclusions/  — create a new inclusion
-    Admin/Manager only.
+    GET  /api/rooms/inclusions/
+    POST /api/rooms/inclusions/
     """
-    serializer_class   = InclusionSerializer
-    permission_classes = [IsAuthenticated, IsAdminRoomManager]
-    queryset           = Inclusion.objects.all().order_by("category", "name")
+    serializer_class = InclusionSerializer
+    permission_classes = [IsAuthenticated, IsAdminOrManagerRoom]
+    queryset = Inclusion.objects.all().order_by("category", "name")
+
+    def get_permissions(self):
+        if self.request.method == "POST":
+            return [IsAuthenticated(), IsAdminRoomManager()]
+        return [IsAuthenticated(), IsAdminOrManagerRoom()]
 
 
 class InclusionDetailView(generics.RetrieveUpdateDestroyAPIView):
     """
-    GET    /api/rooms/inclusions/<id>/  — retrieve
-    PUT    /api/rooms/inclusions/<id>/  — full update
-    PATCH  /api/rooms/inclusions/<id>/  — partial update
-    DELETE /api/rooms/inclusions/<id>/  — delete
-    Admin/Manager only.
+    GET    /api/rooms/inclusions/<id>/
+    PUT    /api/rooms/inclusions/<id>/
+    PATCH  /api/rooms/inclusions/<id>/
+    DELETE /api/rooms/inclusions/<id>/
     """
-    serializer_class   = InclusionSerializer
+    serializer_class = InclusionSerializer
     permission_classes = [IsAuthenticated, IsAdminRoomManager]
-    queryset           = Inclusion.objects.all()
+    queryset = Inclusion.objects.all()
+
+
+# ─── Helpers ──────────────────────────────────────────────────────────────────
+
+def _parse_json_fields(data):
+    """
+    When a room form is submitted as multipart/form-data the frontend
+    JSON.stringifies nested fields before appending them to FormData.
+    This helper parses them back to Python objects so the serializer
+    receives the correct types.
+
+    Fields handled:
+      - seasonal_prices  (list of dicts)
+      - inclusion_notes  (dict)
+      - amenity_ids      (list of ints — may arrive as repeated strings)
+      - inclusion_ids    (list of ints — may arrive as repeated strings)
+    """
+    import json
+    from django.http import QueryDict
+
+    # QueryDict is immutable — copy to a plain dict so we can mutate it
+    if isinstance(data, QueryDict):
+        data = data.dict()
+
+    for field in ("seasonal_prices", "inclusion_notes"):
+        val = data.get(field)
+        if isinstance(val, str):
+            try:
+                data[field] = json.loads(val)
+            except (json.JSONDecodeError, ValueError):
+                pass  # leave as-is; serializer will surface the error
+
+    # amenity_ids / inclusion_ids may come as a single JSON array string
+    for field in ("amenity_ids", "inclusion_ids"):
+        val = data.get(field)
+        if isinstance(val, str):
+            try:
+                data[field] = json.loads(val)
+            except (json.JSONDecodeError, ValueError):
+                pass
+
+    return data

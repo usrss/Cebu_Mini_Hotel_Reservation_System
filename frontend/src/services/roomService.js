@@ -40,40 +40,54 @@ api.interceptors.response.use(
   }
 );
 
-// ─── Helper: build FormData when a File is present ───────────────────────────
-// Only panorama_image ever carries a real File in room payloads.
-// Nested objects (seasonal_prices, inclusion_notes) and arrays of objects
-// must be JSON-stringified so the backend can parse them from multipart.
+// ─── Helper: does the payload contain a real File? ────────────────────────────
+function hasFile(data) {
+  if (!data || typeof data !== "object") return false;
+  return Object.values(data).some((v) => v instanceof File || v instanceof Blob);
+}
+
+// ─── Helper: build FormData for multipart payloads ───────────────────────────
+/**
+ * Converts a plain JS object into a FormData instance.
+ *
+ * Rules:
+ *  - File / Blob  → appended as binary
+ *  - Array of objects → JSON-stringified (e.g. seasonal_prices)
+ *  - Array of primitives → each item appended individually (e.g. amenity_ids)
+ *  - Plain object → JSON-stringified (e.g. inclusion_notes)
+ *  - Empty string explicitly sent for panorama_image → appended as "" so the
+ *    backend can detect and clear the field
+ *  - null / undefined → skipped (unless it's panorama_image which needs clearing)
+ */
 function toFormData(data) {
   const fd = new FormData();
   Object.entries(data).forEach(([k, v]) => {
+    // FIX: panorama_image="" means "clear the panorama" — must be sent
+    if (k === "panorama_image" && (v === "" || v === null)) {
+      fd.append(k, "");
+      return;
+    }
     if (v === null || v === undefined) return;
-    if (v instanceof File) {
-      // Actual file — append as binary
+
+    if (v instanceof File || v instanceof Blob) {
       fd.append(k, v);
     } else if (Array.isArray(v)) {
-      // Arrays of objects (e.g. seasonal_prices) — JSON-stringify the whole array
-      // Arrays of primitives (e.g. amenity_ids: [1,2,3]) — append each item individually
-      const hasObjects = v.some(item => item !== null && typeof item === "object");
+      const hasObjects = v.some((item) => item !== null && typeof item === "object");
       if (hasObjects) {
+        // e.g. seasonal_prices — stringify the whole array
         fd.append(k, JSON.stringify(v));
       } else {
-        v.forEach(item => fd.append(k, item));
+        // e.g. amenity_ids: [1, 2, 3] — append each value
+        v.forEach((item) => fd.append(k, item));
       }
     } else if (typeof v === "object") {
-      // Plain objects (e.g. inclusion_notes) — JSON-stringify
+      // e.g. inclusion_notes: { "5": "note" } — stringify
       fd.append(k, JSON.stringify(v));
     } else {
       fd.append(k, v);
     }
   });
   return fd;
-}
-
-// Only treat a payload as multipart if it contains an actual File instance.
-// Arrays and plain objects are NOT files.
-function hasFile(data) {
-  return Object.values(data).some(v => v instanceof File);
 }
 
 // ─── Public Endpoints ─────────────────────────────────────────────────────────
@@ -88,7 +102,7 @@ export const lockRoom = (payload) =>
 export const releaseRoomLock = (roomId, sessionKey) =>
   api.post("/rooms/lock/release/", { room_id: roomId, session_key: sessionKey });
 
-// ─── Admin Endpoints ──────────────────────────────────────────────────────────
+// ─── Admin: rooms ─────────────────────────────────────────────────────────────
 export const adminGetRooms = (params = {}) => api.get("/rooms/admin/", { params });
 export const adminGetRoom  = (id)          => api.get(`/rooms/admin/${id}/`);
 
@@ -111,7 +125,13 @@ export const adminUpdateRoom = (id, data) => {
 };
 
 export const adminPatchRoom = (id, data) => {
-  if (hasFile(data)) {
+  // FIX: if data contains panorama_image="" (clear) we still need multipart
+  // so the empty string reaches the backend as a field, not lost in JSON null.
+  const needsMultipart =
+    hasFile(data) ||
+    ("panorama_image" in data && (data.panorama_image === "" || data.panorama_image === null));
+
+  if (needsMultipart) {
     return api.patch(`/rooms/admin/${id}/`, toFormData(data), {
       headers: { "Content-Type": "multipart/form-data" },
     });
@@ -125,13 +145,40 @@ export const adminDeleteRoom = (id) =>
 export const adminUpdateRoomStatus = (id, newStatus) =>
   api.patch(`/rooms/admin/${id}/status/`, { status: newStatus });
 
-export const adminUploadRoomImages = (id, formData) =>
-  api.post(`/rooms/admin/${id}/images/`, formData, {
+// ─── Admin: images ────────────────────────────────────────────────────────────
+/**
+ * Upload one or more images for a room.
+ *
+ * FIX: accepts either a plain array of File objects or an already-built
+ * FormData instance (RoomImageModal passes FormData directly).
+ * Always sends as multipart/form-data.
+ */
+export const adminUploadRoomImages = (id, filesOrFormData) => {
+  let fd;
+  if (filesOrFormData instanceof FormData) {
+    fd = filesOrFormData;
+  } else {
+    // Array of File objects
+    fd = new FormData();
+    const files = Array.isArray(filesOrFormData) ? filesOrFormData : [filesOrFormData];
+    files.forEach((file) => fd.append("images", file));
+  }
+  return api.post(`/rooms/admin/${id}/images/`, fd, {
     headers: { "Content-Type": "multipart/form-data" },
   });
+};
 
+/**
+ * Delete a single image.
+ *
+ * FIX: sends image_id as JSON body (axios DELETE with `data`).
+ * The backend AdminRoomImageUploadView.delete() reads request.data.get("image_id").
+ */
 export const adminDeleteRoomImage = (roomId, imageId) =>
-  api.delete(`/rooms/admin/${roomId}/images/`, { data: { image_id: imageId } });
+  api.delete(`/rooms/admin/${roomId}/images/`, {
+    data: { image_id: imageId },
+    headers: { "Content-Type": "application/json" },
+  });
 
 export const adminGetPriceHistory = (id) =>
   api.get(`/rooms/admin/${id}/price-history/`);
