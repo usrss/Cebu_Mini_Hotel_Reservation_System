@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  X, Plus, Trash2, Edit2,
+  X, Plus, Trash2,
   Calendar, Package, Settings, Info, Percent,
-  Star, Check, ExternalLink, ShieldCheck,
+  Star, Check, ExternalLink, ShieldCheck, Image, Upload,
 } from 'lucide-react';
+import { adminUploadRoomImages, adminDeleteRoomImage, adminGetRoom } from '../../services/roomService';
 import './RoomFormModal.css';
 
 /* ─── Constants ─────────────────────────────────────────── */
@@ -21,6 +22,7 @@ const TABS = [
   { key:'seasonal',  label:'Seasonal Prices', icon:<Calendar size={14}/> },
   { key:'amenities', label:'Amenities',       icon:<Star size={14}/> },
   { key:'inclusions',label:'Inclusions',      icon:<Package size={14}/> },
+  { key:'images',    label:'Images',          icon:<Image size={14}/> },
   { key:'policy',    label:'Policy',          icon:<Settings size={14}/> },
 ];
 
@@ -305,23 +307,198 @@ function InclusionPicker({ available, selected, onChange }) {
   );
 }
 
+/* ─── ImagesTab ──────────────────────────────────────────────
+   For NEW rooms  → queues files locally; uploaded after room is created.
+   For EDIT rooms → immediately calls the API to upload / delete.
+─────────────────────────────────────────────────────────────── */
+function ImagesTab({ roomId, existingImages, queuedFiles, onQueueChange, onExistingChange }) {
+  const fileRef   = useRef();
+  const [deletingId, setDeletingId] = useState(null);
+  const [uploading,  setUploading]  = useState(false);
+  const [imgError,   setImgError]   = useState(null);
+
+  const isNew = !roomId;
+
+  /* ── Select files ── */
+  const handleFiles = (e) => {
+    const files = Array.from(e.target.files);
+    if (!files.length) return;
+    if (isNew) {
+      // Queue them with local preview URLs — uploaded after room is saved
+      const items = files.map(f => ({ file: f, previewUrl: URL.createObjectURL(f) }));
+      onQueueChange(prev => [...prev, ...items]);
+    } else {
+      // Edit mode — upload immediately
+      handleUploadNow(files);
+    }
+    // Reset input so same file can be re-selected
+    if (fileRef.current) fileRef.current.value = '';
+  };
+
+  /* ── Immediate upload (edit mode) ── */
+  const handleUploadNow = async (files) => {
+    setUploading(true);
+    setImgError(null);
+    try {
+      const formData = new FormData();
+      files.forEach(f => formData.append('images', f));
+      const res = await adminUploadRoomImages(roomId, formData);
+      const uploaded = Array.isArray(res.data) ? res.data : [];
+      onExistingChange(prev => [...prev, ...uploaded]);
+    } catch {
+      setImgError('Upload failed. Please try again.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  /* ── Remove queued (new room) ── */
+  const removeQueued = (index) => {
+    onQueueChange(prev => {
+      URL.revokeObjectURL(prev[index].previewUrl);
+      return prev.filter((_, i) => i !== index);
+    });
+  };
+
+  /* ── Delete existing (edit room) ── */
+  const handleDelete = async (imageId) => {
+    if (!window.confirm('Delete this image?')) return;
+    setDeletingId(imageId);
+    setImgError(null);
+    try {
+      await adminDeleteRoomImage(roomId, imageId);
+      onExistingChange(prev => prev.filter(img => img.id !== imageId));
+    } catch {
+      setImgError('Failed to delete image. Please try again.');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  return (
+    <div className="rfm-section">
+
+      {isNew && (
+        <div className="rfm-section-intro">
+          <p>Add photos now or skip — you can always add more after the room is created.</p>
+        </div>
+      )}
+
+      {imgError && (
+        <div style={{
+          padding: '10px 14px',
+          background: 'rgba(220,38,38,0.07)',
+          border: '1.5px solid rgba(220,38,38,0.2)',
+          borderRadius: 10,
+          color: '#DC2626',
+          fontSize: 12,
+          fontWeight: 500,
+        }}>
+          {imgError}
+        </div>
+      )}
+
+      {/* Upload zone */}
+      <div
+        className="rfm-img-upload-zone"
+        onClick={() => fileRef.current?.click()}
+        role="button"
+        tabIndex={0}
+        onKeyDown={e => e.key === 'Enter' && fileRef.current?.click()}
+      >
+        {uploading ? (
+          <span className="rfm-spinner" style={{ width: 20, height: 20 }} />
+        ) : (
+          <Upload size={22} className="rfm-img-upload-icon" />
+        )}
+        <p className="rfm-img-upload-title">
+          {uploading ? 'Uploading…' : 'Click to select images'}
+        </p>
+        <p className="rfm-img-upload-sub">JPG, PNG, WebP · Multiple files supported</p>
+      </div>
+
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*"
+        multiple
+        style={{ display: 'none' }}
+        onChange={handleFiles}
+        disabled={uploading}
+      />
+
+      {/* Queued previews (new room only) */}
+      {isNew && queuedFiles.length > 0 && (
+        <div>
+          <p className="rfm-img-section-label">
+            {queuedFiles.length} file{queuedFiles.length !== 1 ? 's' : ''} ready to upload after saving
+          </p>
+          <div className="rfm-img-grid">
+            {queuedFiles.map((item, i) => (
+              <div key={i} className="rfm-img-card">
+                <img src={item.previewUrl} alt={item.file.name} className="rfm-img-thumb" />
+                <button
+                  type="button"
+                  className="rfm-img-delete-btn"
+                  onClick={() => removeQueued(i)}
+                  title="Remove"
+                >
+                  <X size={11} />
+                </button>
+                <div className="rfm-img-caption">{item.file.name}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Existing images (edit mode) */}
+      {!isNew && (
+        <div>
+          <p className="rfm-img-section-label">
+            {existingImages.length} photo{existingImages.length !== 1 ? 's' : ''}
+          </p>
+          {existingImages.length === 0 ? (
+            <div className="rfm-seasonal-empty">No photos yet. Upload some above.</div>
+          ) : (
+            <div className="rfm-img-grid">
+              {existingImages.map(img => (
+                <div key={img.id} className="rfm-img-card">
+                  <img
+                    src={img.image_url ?? img.image}
+                    alt={img.caption || 'Room photo'}
+                    className="rfm-img-thumb"
+                  />
+                  {img.is_primary && (
+                    <span className="rfm-img-primary-badge">Primary</span>
+                  )}
+                  <button
+                    type="button"
+                    className="rfm-img-delete-btn"
+                    onClick={() => handleDelete(img.id)}
+                    disabled={deletingId === img.id}
+                    title="Delete image"
+                  >
+                    {deletingId === img.id
+                      ? <span className="rfm-spinner" style={{ width: 10, height: 10, borderTopColor: '#DC2626' }} />
+                      : <Trash2 size={11} />
+                    }
+                  </button>
+                  {img.caption && <div className="rfm-img-caption">{img.caption}</div>}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ─── PolicyTab ──────────────────────────────────────────── */
-/**
- * Cancellation policy in the room form is READ-ONLY by design.
- *
- * Why: The hotel has a single, globally-configured cancellation policy
- * (managed in Hotel Settings → Cancellation & Refund Tiers). Allowing
- * per-room overrides would create inconsistent guest experiences and
- * conflict with the refund calculation engine that reads from
- * `hotel_settings.cancellation_tiers`.
- *
- * This tab displays the live policy tiers fetched from settings so
- * the admin can verify what guests will see — and links directly to
- * Hotel Settings if a change is needed.
- */
 function PolicyTab() {
-  const [tiers,   setTiers]   = useState(null);   // null = loading
-  const [error,   setError]   = useState(false);
+  const [tiers,  setTiers]  = useState(null);
+  const [error,  setError]  = useState(false);
 
   useEffect(() => {
     fetchCancellationTiers().then(t => {
@@ -330,15 +507,12 @@ function PolicyTab() {
     });
   }, []);
 
-  // Sort descending (most generous first, catch-all last)
   const sorted = tiers
     ? [...tiers].sort((a, b) => Number(b.hours_before) - Number(a.hours_before))
     : [];
 
   return (
     <div className="rfm-section">
-
-      {/* Explanation banner */}
       <div className="rfm-policy-info-banner">
         <ShieldCheck size={16} className="rfm-policy-info-icon" />
         <div>
@@ -352,7 +526,6 @@ function PolicyTab() {
         </div>
       </div>
 
-      {/* Live tier display */}
       <div className="rfm-policy-tiers-wrap">
         <div className="rfm-policy-tiers-label">
           Live policy — what guests see during booking
@@ -374,34 +547,19 @@ function PolicyTab() {
           const isCatchAll = Number(tier.hours_before) === 0;
           const pct        = Number(tier.refund_pct);
           const color      = pct >= 80 ? '#059669' : pct >= 40 ? '#d97706' : '#52515E';
-          const bg         = pct >= 80
-            ? 'rgba(5,150,105,0.08)'
-            : pct >= 40
-            ? 'rgba(217,119,6,0.08)'
-            : 'rgba(1,0,13,0.04)';
-          const border     = pct >= 80
-            ? 'rgba(5,150,105,0.22)'
-            : pct >= 40
-            ? 'rgba(217,119,6,0.22)'
-            : '#E4E6ED';
+          const bg         = pct >= 80 ? 'rgba(5,150,105,0.08)' : pct >= 40 ? 'rgba(217,119,6,0.08)' : 'rgba(1,0,13,0.04)';
+          const border     = pct >= 80 ? 'rgba(5,150,105,0.22)' : pct >= 40 ? 'rgba(217,119,6,0.22)' : '#E4E6ED';
 
           return (
             <div key={i} className="rfm-policy-tier-row">
-              <div
-                className="rfm-policy-tier-badge"
-                style={{ background: bg, color, border: `1.5px solid ${border}` }}
-              >
+              <div className="rfm-policy-tier-badge" style={{ background: bg, color, border: `1.5px solid ${border}` }}>
                 {pct}%
               </div>
               <div className="rfm-policy-tier-text">
                 <span className="rfm-policy-tier-condition">
-                  {isCatchAll
-                    ? 'Same day / after check-in'
-                    : `≥ ${tier.hours_before}h before check-in`}
+                  {isCatchAll ? 'Same day / after check-in' : `≥ ${tier.hours_before}h before check-in`}
                 </span>
-                {tier.label && (
-                  <span className="rfm-policy-tier-label">{tier.label}</span>
-                )}
+                {tier.label && <span className="rfm-policy-tier-label">{tier.label}</span>}
               </div>
               <div className="rfm-policy-tier-refund">
                 {pct === 0 ? 'No refund' : `${pct}% refund`}
@@ -411,11 +569,7 @@ function PolicyTab() {
         })}
       </div>
 
-      {/* Link to settings */}
-      <Link
-        to="/admin/hotel-settings"
-        className="rfm-policy-settings-link"
-      >
+      <Link to="/admin/hotel-settings" className="rfm-policy-settings-link">
         <ExternalLink size={13} />
         Edit in Hotel Settings
       </Link>
@@ -439,9 +593,15 @@ export default function RoomFormModal({
   const [form,   setForm]   = useState(emptyRoom);
   const [errors, setErrors] = useState({});
 
-  const [seasonal,    setSeasonal]    = useState([]);
-  const [amenityIds,  setAmenityIds]  = useState([]);
-  const [inclusions,  setInclusions]  = useState([]);
+  const [seasonal,       setSeasonal]       = useState([]);
+  const [amenityIds,     setAmenityIds]     = useState([]);
+  const [inclusions,     setInclusions]     = useState([]);
+
+  // Images state
+  // existingImages = images already on the server (edit mode)
+  // queuedFiles    = files staged for upload (create mode, uploaded after save)
+  const [existingImages, setExistingImages] = useState([]);
+  const [queuedFiles,    setQueuedFiles]    = useState([]);
 
   /* seed form */
   useEffect(() => {
@@ -471,6 +631,7 @@ export default function RoomFormModal({
         inclusion_id: i.inclusion?.id ?? i.inclusion_id ?? i,
         notes: i.notes || '',
       })));
+      setExistingImages(room.images || []);
     }
   }, [room]);
 
@@ -493,6 +654,7 @@ export default function RoomFormModal({
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validate()) { setTab('basic'); return; }
+
     const payload = {
       ...form,
       seasonal_prices: seasonal.map(({ _id, ...rest }) => rest),
@@ -502,7 +664,25 @@ export default function RoomFormModal({
         acc[i.inclusion_id] = i.notes; return acc;
       }, {}),
     };
-    await onSave(payload);
+
+    const result = await onSave(payload);
+
+    // After a successful CREATE, upload any queued images
+    if (result?.success && !isEdit && queuedFiles.length > 0) {
+      const newRoomId = result.data?.id;
+      if (newRoomId) {
+        const formData = new FormData();
+        queuedFiles.forEach(item => formData.append('images', item.file));
+        try {
+          await adminUploadRoomImages(newRoomId, formData);
+        } catch {
+          // Images failed silently — room was still created.
+          // Admin can add images via the image modal later.
+        }
+        // Revoke blob URLs to avoid memory leaks
+        queuedFiles.forEach(item => URL.revokeObjectURL(item.previewUrl));
+      }
+    }
   };
 
   return (
@@ -726,7 +906,18 @@ export default function RoomFormModal({
             </div>
           )}
 
-          {/* POLICY — live read-only from hotel settings */}
+          {/* IMAGES */}
+          {tab === 'images' && (
+            <ImagesTab
+              roomId={isEdit ? room.id : null}
+              existingImages={existingImages}
+              queuedFiles={queuedFiles}
+              onQueueChange={setQueuedFiles}
+              onExistingChange={setExistingImages}
+            />
+          )}
+
+          {/* POLICY */}
           {tab === 'policy' && <PolicyTab />}
 
           {/* Footer */}

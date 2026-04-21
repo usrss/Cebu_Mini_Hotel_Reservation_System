@@ -762,3 +762,156 @@
   border-color: #01000D;
   color: #FFFFFF;
 }
+
+
+/* ============================================================
+   RoomFormModal.css — ADDITIONS for Images tab
+   Append these rules to the bottom of your existing RoomFormModal.css.
+   Do NOT replace any existing rules.
+   ============================================================ */
+
+/* ── Upload zone ── */
+.rfm-img-upload-zone {
+  border: 1.5px dashed #C8CAD4;
+  border-radius: 12px;
+  padding: 28px 20px;
+  text-align: center;
+  cursor: pointer;
+  background: #FFFFFF;
+  transition: all 170ms cubic-bezier(0.25, 0, 0.15, 1);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.rfm-img-upload-zone:hover {
+  border-color: #01000D;
+  background: #F2F3F7;
+}
+
+.rfm-img-upload-icon {
+  color: #7A7987;
+  transition: color 170ms;
+}
+
+.rfm-img-upload-zone:hover .rfm-img-upload-icon {
+  color: #01000D;
+}
+
+.rfm-img-upload-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #01000D;
+  margin: 0;
+}
+
+.rfm-img-upload-sub {
+  font-size: 11px;
+  color: #7A7987;
+  margin: 0;
+}
+
+/* ── Section label ── */
+.rfm-img-section-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #52515E;
+  margin-bottom: 10px;
+  display: block;
+}
+
+/* ── Image grid ── */
+.rfm-img-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+@media (max-width: 640px) {
+  .rfm-img-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* ── Image card ── */
+.rfm-img-card {
+  position: relative;
+  border: 1.5px solid #E4E6ED;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #FFFFFF;
+  transition: border-color 170ms;
+}
+
+.rfm-img-card:hover {
+  border-color: #01000D;
+}
+
+/* ── Thumbnail ── */
+.rfm-img-thumb {
+  width: 100%;
+  height: 80px;
+  object-fit: cover;
+  display: block;
+}
+
+/* ── Primary badge ── */
+.rfm-img-primary-badge {
+  position: absolute;
+  top: 5px;
+  left: 5px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: #01000D;
+  color: #FFFFFF;
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+
+/* ── Delete button ── */
+.rfm-img-delete-btn {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1.5px solid rgba(220, 38, 38, 0.3);
+  border-radius: 5px;
+  color: #DC2626;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 150ms, background 150ms;
+  padding: 0;
+}
+
+.rfm-img-card:hover .rfm-img-delete-btn {
+  opacity: 1;
+}
+
+.rfm-img-delete-btn:hover {
+  background: rgba(220, 38, 38, 0.08);
+}
+
+.rfm-img-delete-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ── Caption ── */
+.rfm-img-caption {
+  padding: 4px 8px;
+  font-size: 10px;
+  color: #7A7987;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: #FFFFFF;
+  border-top: 1px solid #F2F3F7;
+}

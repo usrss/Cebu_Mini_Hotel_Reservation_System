@@ -13,13 +13,12 @@ import {
   adminDeleteRoom,
   adminUpdateRoomStatus,
   adminUploadRoomImages,
+  adminDeleteRoomImage,
   adminGetPriceHistory,
 } from "../../services/roomService";
+import api from "../../services/api";
 
 // ─── useRooms ─────────────────────────────────────────────────────────────────
-// Fetches the public room list with optional filters.
-// Used in RoomListPage.
-
 export function useRooms(initialFilters = {}) {
   const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -47,9 +46,6 @@ export function useRooms(initialFilters = {}) {
 }
 
 // ─── useRoomDetail ────────────────────────────────────────────────────────────
-// Fetches full room data for the detail page.
-// Redirects to /login on 401 — same pattern as Dashboard.jsx.
-
 export function useRoomDetail(id) {
   const navigate = useNavigate();
   const [room, setRoom] = useState(null);
@@ -86,9 +82,6 @@ export function useRoomDetail(id) {
 }
 
 // ─── useAvailability ──────────────────────────────────────────────────────────
-// Checks available rooms for a given date range.
-// Used in RoomListPage when guest enters check-in/check-out dates.
-
 export function useAvailability() {
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -124,9 +117,6 @@ export function useAvailability() {
 }
 
 // ─── useRoomLock ──────────────────────────────────────────────────────────────
-// Temporarily locks a room during checkout to prevent double booking.
-// Uses sessionStorage (tab-scoped) so each tab has its own lock session.
-
 export function useRoomLock() {
   const [locked, setLocked] = useState(false);
   const [lockInfo, setLockInfo] = useState(null);
@@ -194,25 +184,40 @@ export function useRoomLock() {
   };
 }
 
-// ─── useAdminRooms ────────────────────────────────────────────────────────────
-// Full CRUD for admin/staff room management.
-// Used in AdminRoomsPage.
+// ─── Amenity / Inclusion API helpers ─────────────────────────────────────────
+const amenityApi = {
+  list:   ()         => api.get("/rooms/amenities/"),
+  create: (data)     => api.post("/rooms/amenities/", data),
+  update: (id, data) => api.put("/rooms/amenities/" + id + "/", data),
+  delete: (id)       => api.delete("/rooms/amenities/" + id + "/"),
+};
 
+const inclusionApi = {
+  list:   ()         => api.get("/rooms/inclusions/"),
+  create: (data)     => api.post("/rooms/inclusions/", data),
+  update: (id, data) => api.put("/rooms/inclusions/" + id + "/", data),
+  delete: (id)       => api.delete("/rooms/inclusions/" + id + "/"),
+};
+
+// ─── useAdminRooms ────────────────────────────────────────────────────────────
 export function useAdminRooms() {
   const navigate = useNavigate();
-  const [rooms, setRooms] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [submitting, setSubmitting] = useState(false);
 
-  const fetchRooms = useCallback(async (params = {}) => {
+  const [rooms,      setRooms]      = useState([]);
+  const [loading,    setLoading]    = useState(false);
+  const [error,      setError]      = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [amenities,  setAmenities]  = useState([]);
+  const [inclusions, setInclusions] = useState([]);
+
+  const fetchRooms = useCallback(async (params) => {
     setLoading(true);
     setError(null);
     try {
-      const { data } = await adminGetRooms(params);
+      const { data } = await adminGetRooms(params || {});
       setRooms(data.results || data);
     } catch (err) {
-      if (err.response?.status === 401) {
+      if (err.response && err.response.status === 401) {
         navigate("/login");
         return;
       }
@@ -222,31 +227,56 @@ export function useAdminRooms() {
     }
   }, []);
 
-  useEffect(() => { fetchRooms(); }, []);
+  const fetchAmenities = useCallback(async () => {
+    try {
+      const { data } = await amenityApi.list();
+      setAmenities(data.results || data);
+    } catch (_) {
+      // non-fatal
+    }
+  }, []);
 
+  const fetchInclusions = useCallback(async () => {
+    try {
+      const { data } = await inclusionApi.list();
+      setInclusions(data.results || data);
+    } catch (_) {
+      // non-fatal
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchRooms();
+    fetchAmenities();
+    fetchInclusions();
+  }, []);
+
+  // ── Room CRUD ────────────────────────────────────────────────────────────
   const createRoom = useCallback(async (formData) => {
     setSubmitting(true);
     try {
       const res = await adminCreateRoom(formData);
-      setRooms((prev) => [res.data, ...prev]);
+      setRooms(function(prev) { return [res.data].concat(prev); });
       return { success: true, data: res.data };
     } catch (err) {
-      return { success: false, errors: err.response?.data || {} };
+      return { success: false, errors: err.response ? err.response.data : {} };
     } finally {
       setSubmitting(false);
     }
   }, []);
 
-  const updateRoom = useCallback(async (id, formData, partial = false) => {
+  const updateRoom = useCallback(async (id, formData, partial) => {
     setSubmitting(true);
     try {
       const res = partial
         ? await adminPatchRoom(id, formData)
         : await adminUpdateRoom(id, formData);
-      setRooms((prev) => prev.map((r) => (r.id === id ? res.data : r)));
+      setRooms(function(prev) {
+        return prev.map(function(r) { return r.id === id ? res.data : r; });
+      });
       return { success: true, data: res.data };
     } catch (err) {
-      return { success: false, errors: err.response?.data || {} };
+      return { success: false, errors: err.response ? err.response.data : {} };
     } finally {
       setSubmitting(false);
     }
@@ -255,11 +285,13 @@ export function useAdminRooms() {
   const updateStatus = useCallback(async (id, newStatus) => {
     try {
       const res = await adminUpdateRoomStatus(id, newStatus);
-      setRooms((prev) =>
-        prev.map((r) => (r.id === id ? { ...r, status: res.data.status } : r))
-      );
+      setRooms(function(prev) {
+        return prev.map(function(r) {
+          return r.id === id ? Object.assign({}, r, { status: res.data.status }) : r;
+        });
+      });
       return { success: true };
-    } catch {
+    } catch (_) {
       return { success: false };
     }
   }, []);
@@ -267,33 +299,126 @@ export function useAdminRooms() {
   const deleteRoom = useCallback(async (id) => {
     try {
       await adminDeleteRoom(id);
-      setRooms((prev) => prev.filter((r) => r.id !== id));
+      setRooms(function(prev) { return prev.filter(function(r) { return r.id !== id; }); });
       return { success: true };
-    } catch {
+    } catch (_) {
       return { success: false };
     }
   }, []);
 
   const uploadImages = useCallback(async (roomId, files) => {
     const formData = new FormData();
-    files.forEach((file) => formData.append("images", file));
+    files.forEach(function(file) { formData.append("images", file); });
     try {
       const res = await adminUploadRoomImages(roomId, formData);
+      const uploaded = Array.isArray(res.data) ? res.data : [];
+      setRooms(function(prev) {
+        return prev.map(function(r) {
+          if (r.id !== roomId) return r;
+          return Object.assign({}, r, { images: (r.images || []).concat(uploaded) });
+        });
+      });
       return { success: true, images: res.data };
-    } catch {
+    } catch (_) {
+      return { success: false };
+    }
+  }, []);
+
+  const deleteImage = useCallback(async (roomId, imageId) => {
+    try {
+      await adminDeleteRoomImage(roomId, imageId);
+      setRooms(function(prev) {
+        return prev.map(function(r) {
+          if (r.id !== roomId) return r;
+          return Object.assign({}, r, {
+            images: (r.images || []).filter(function(img) { return img.id !== imageId; })
+          });
+        });
+      });
+      return { success: true };
+    } catch (_) {
+      return { success: false };
+    }
+  }, []);
+
+  // ── Amenity CRUD ─────────────────────────────────────────────────────────
+  const createAmenity = useCallback(async (item) => {
+    try {
+      const { data } = await amenityApi.create(item);
+      setAmenities(function(prev) { return prev.concat([data]); });
+      return { success: true, data: data };
+    } catch (err) {
+      return { success: false, errors: err.response ? err.response.data : {} };
+    }
+  }, []);
+
+  const updateAmenity = useCallback(async (item) => {
+    try {
+      const { data } = await amenityApi.update(item.id, item);
+      setAmenities(function(prev) {
+        return prev.map(function(a) { return a.id === item.id ? data : a; });
+      });
+      return { success: true, data: data };
+    } catch (err) {
+      return { success: false, errors: err.response ? err.response.data : {} };
+    }
+  }, []);
+
+  const deleteAmenity = useCallback(async (id) => {
+    try {
+      await amenityApi.delete(id);
+      setAmenities(function(prev) { return prev.filter(function(a) { return a.id !== id; }); });
+      return { success: true };
+    } catch (_) {
+      return { success: false };
+    }
+  }, []);
+
+  // ── Inclusion CRUD ───────────────────────────────────────────────────────
+  const createInclusion = useCallback(async (item) => {
+    try {
+      const { data } = await inclusionApi.create(item);
+      setInclusions(function(prev) { return prev.concat([data]); });
+      return { success: true, data: data };
+    } catch (err) {
+      return { success: false, errors: err.response ? err.response.data : {} };
+    }
+  }, []);
+
+  const updateInclusion = useCallback(async (item) => {
+    try {
+      const { data } = await inclusionApi.update(item.id, item);
+      setInclusions(function(prev) {
+        return prev.map(function(i) { return i.id === item.id ? data : i; });
+      });
+      return { success: true, data: data };
+    } catch (err) {
+      return { success: false, errors: err.response ? err.response.data : {} };
+    }
+  }, []);
+
+  const deleteInclusion = useCallback(async (id) => {
+    try {
+      await inclusionApi.delete(id);
+      setInclusions(function(prev) { return prev.filter(function(i) { return i.id !== id; }); });
+      return { success: true };
+    } catch (_) {
       return { success: false };
     }
   }, []);
 
   return {
     rooms, loading, error, submitting,
-    fetchRooms, createRoom, updateRoom, updateStatus, deleteRoom, uploadImages,
+    fetchRooms, createRoom, updateRoom, updateStatus, deleteRoom,
+    uploadImages, deleteImage,
+    amenities,
+    createAmenity, updateAmenity, deleteAmenity,
+    inclusions,
+    createInclusion, updateInclusion, deleteInclusion,
   };
 }
 
 // ─── usePriceHistory ──────────────────────────────────────────────────────────
-// Fetches price change history for a room. Used in admin panel.
-
 export function usePriceHistory(roomId) {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -302,9 +427,9 @@ export function usePriceHistory(roomId) {
     if (!roomId) return;
     setLoading(true);
     adminGetPriceHistory(roomId)
-      .then(({ data }) => setHistory(data))
-      .catch(() => setHistory([]))
-      .finally(() => setLoading(false));
+      .then(function(res) { setHistory(res.data); })
+      .catch(function() { setHistory([]); })
+      .finally(function() { setLoading(false); });
   }, [roomId]);
 
   return { history, loading };
