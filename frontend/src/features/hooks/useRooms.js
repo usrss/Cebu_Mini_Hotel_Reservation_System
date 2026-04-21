@@ -301,8 +301,11 @@ export function useAdminRooms() {
       await adminDeleteRoom(id);
       setRooms(function(prev) { return prev.filter(function(r) { return r.id !== id; }); });
       return { success: true };
-    } catch (_) {
-      return { success: false };
+    } catch (err) {
+      const detail = err.response?.data?.detail
+        || err.response?.data?.error
+        || 'Failed to delete room.';
+      return { success: false, error: detail };
     }
   }, []);
 
@@ -336,8 +339,11 @@ export function useAdminRooms() {
         });
       });
       return { success: true };
-    } catch (_) {
-      return { success: false };
+    } catch (err) {
+      const detail = err.response?.data?.detail
+        || err.response?.data?.error
+        || 'Failed to delete image.';
+      return { success: false, error: detail };
     }
   }, []);
 

@@ -11,7 +11,7 @@ const STATUS_OPTIONS = ['available', 'occupied', 'maintenance', 'cleaning'];
 export default function AdminRoomsPage() {
   const {
     rooms, loading, error, submitting,
-    createRoom, updateRoom, updateStatus, deleteRoom, uploadImages,
+    fetchRooms, createRoom, updateRoom, updateStatus, deleteRoom, uploadImages,
     amenities       = [],
     inclusions      = [],
     createAmenity,
@@ -62,7 +62,7 @@ export default function AdminRoomsPage() {
     const result = await deleteRoom(id);
     setDeletingId(null);
     if (result.success) showToast('Room deactivated');
-    else showToast('Failed to deactivate room', 'error');
+    else showToast(result.error || 'Failed to deactivate room', 'error');
   };
 
   const handleStatusChange = async (id, newStatus) => {
@@ -301,6 +301,7 @@ export default function AdminRoomsPage() {
           room={imageModal.room}
           onUpload={handleImageUpload}
           onClose={() => setImageModal({ open: false, room: null })}
+          onRoomUpdate={() => fetchRooms()}
         />
       )}
 
