@@ -51,18 +51,19 @@ function hasFile(data) {
  * Converts a plain JS object into a FormData instance.
  *
  * Rules:
- *  - File / Blob  → appended as binary
- *  - Array of objects → JSON-stringified (e.g. seasonal_prices)
- *  - Array of primitives → each item appended individually (e.g. amenity_ids)
- *  - Plain object → JSON-stringified (e.g. inclusion_notes)
- *  - Empty string explicitly sent for panorama_image → appended as "" so the
- *    backend can detect and clear the field
- *  - null / undefined → skipped (unless it's panorama_image which needs clearing)
+ *  - File / Blob          → appended as binary
+ *  - ALL arrays           → JSON-stringified so the backend _parse_json_fields
+ *                           helper always receives a reliable string to parse.
+ *                           This includes empty arrays [] which must reach the
+ *                           backend so it can clear amenities/inclusions.
+ *  - Plain objects        → JSON-stringified (e.g. inclusion_notes)
+ *  - panorama_image=""    → appended as "" so backend can detect and clear field
+ *  - null / undefined     → skipped (except panorama_image — see above)
  */
 function toFormData(data) {
   const fd = new FormData();
   Object.entries(data).forEach(([k, v]) => {
-    // FIX: panorama_image="" means "clear the panorama" — must be sent
+    // panorama_image="" means "clear the panorama" — must be sent even when empty
     if (k === "panorama_image" && (v === "" || v === null)) {
       fd.append(k, "");
       return;
@@ -72,14 +73,10 @@ function toFormData(data) {
     if (v instanceof File || v instanceof Blob) {
       fd.append(k, v);
     } else if (Array.isArray(v)) {
-      const hasObjects = v.some((item) => item !== null && typeof item === "object");
-      if (hasObjects) {
-        // e.g. seasonal_prices — stringify the whole array
-        fd.append(k, JSON.stringify(v));
-      } else {
-        // e.g. amenity_ids: [1, 2, 3] — append each value
-        v.forEach((item) => fd.append(k, item));
-      }
+      // Always JSON-stringify arrays — this handles both empty arrays (to clear
+      // amenities/inclusions) and arrays of objects (seasonal_prices) reliably.
+      // The backend _parse_json_fields() parses this string back to a list.
+      fd.append(k, JSON.stringify(v));
     } else if (typeof v === "object") {
       // e.g. inclusion_notes: { "5": "note" } — stringify
       fd.append(k, JSON.stringify(v));

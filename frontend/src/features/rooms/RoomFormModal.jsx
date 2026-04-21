@@ -672,25 +672,26 @@ export default function RoomFormModal({
 
     const result = await onSave(payload);
 
-    // After a successful CREATE, upload any queued images then trigger a
-    // final re-fetch so the room list reflects the uploaded images immediately
-    // without requiring a page reload.
-    if (result?.success && !isEdit && queuedFiles.length > 0) {
+    if (result?.success && !isEdit) {
+      // After a successful CREATE, upload any queued images.
       const newRoomId = result.data?.id;
-      if (newRoomId) {
+      if (newRoomId && queuedFiles.length > 0) {
         const formData = new FormData();
         queuedFiles.forEach(item => formData.append('images', item.file));
         try {
           await adminUploadRoomImages(newRoomId, formData);
-        } catch {
-          // Images failed silently — room was still created.
-          // Admin can add images via the image modal later.
+        } catch (imgErr) {
+          // Room was created successfully — images failed.
+          // onAfterSave still runs so the room appears in the list.
+          // The admin can add images via the image modal.
+          console.warn('Image upload after room creation failed:', imgErr);
         }
-        // Revoke blob URLs to avoid memory leaks
+        // Revoke blob URLs to free memory
         queuedFiles.forEach(item => URL.revokeObjectURL(item.previewUrl));
-        // Re-fetch the room list so uploaded images appear without a page reload
-        onAfterSave?.();
       }
+      // Always re-fetch after a successful create so the new room
+      // (with or without images) appears in the list immediately.
+      onAfterSave?.();
     }
   };
 

@@ -865,8 +865,8 @@ def _parse_json_fields(data):
     Fields handled:
       - seasonal_prices  (list of dicts)
       - inclusion_notes  (dict)
-      - amenity_ids      (list of ints — may arrive as repeated strings)
-      - inclusion_ids    (list of ints — may arrive as repeated strings)
+      - amenity_ids      (JSON string "[1,2,3]" → list of ints)
+      - inclusion_ids    (JSON string "[1,2,3]" → list of ints)
     """
     import json
     from django.http import QueryDict
@@ -883,13 +883,18 @@ def _parse_json_fields(data):
             except (json.JSONDecodeError, ValueError):
                 pass  # leave as-is; serializer will surface the error
 
-    # amenity_ids / inclusion_ids may come as a single JSON array string
+    # amenity_ids / inclusion_ids arrive as a JSON array string e.g. "[1,2,3]"
+    # Cast each element to int so PrimaryKeyRelatedField validation passes.
     for field in ("amenity_ids", "inclusion_ids"):
         val = data.get(field)
         if isinstance(val, str):
             try:
-                data[field] = json.loads(val)
-            except (json.JSONDecodeError, ValueError):
+                parsed = json.loads(val)
+                if isinstance(parsed, list):
+                    data[field] = [int(x) for x in parsed if x is not None]
+                else:
+                    data[field] = parsed
+            except (json.JSONDecodeError, ValueError, TypeError):
                 pass
 
     return data
