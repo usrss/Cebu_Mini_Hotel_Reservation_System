@@ -63,7 +63,7 @@ export default function AdminRoomsPage() {
     setDeletingId(id);
     const result = await deleteRoom(id);
     setDeletingId(null);
-    if (result.success) showToast('Room deactivated');
+    if (result.success) showToast('Room deleted successfully');
     else showToast(result.error || 'Failed to deactivate room', 'error');
   };
 
