@@ -11,6 +11,7 @@ const STATUS_OPTIONS = ['available', 'occupied', 'maintenance', 'cleaning'];
 export default function AdminRoomsPage() {
   const {
     rooms, loading, error, submitting,
+    // FIX: fetchRooms is now destructured so it can be passed to RoomImageModal
     fetchRooms, createRoom, updateRoom, updateStatus, deleteRoom, uploadImages,
     amenities       = [],
     inclusions      = [],
@@ -56,6 +57,7 @@ export default function AdminRoomsPage() {
     return result;
   };
 
+  // FIX: surface the actual backend error message in the toast
   const handleDelete = async (id) => {
     if (!window.confirm('Deactivate this room? It will be hidden from guests.')) return;
     setDeletingId(id);
@@ -296,6 +298,8 @@ export default function AdminRoomsPage() {
         />
       )}
 
+      {/* FIX: onRoomUpdate calls fetchRooms so the room list re-syncs after
+               an image is deleted or uploaded inside the modal */}
       {imageModal.open && (
         <RoomImageModal
           room={imageModal.room}

@@ -41,13 +41,28 @@ api.interceptors.response.use(
 );
 
 // ─── Helper: build FormData when a File is present ───────────────────────────
+// Only panorama_image ever carries a real File in room payloads.
+// Nested objects (seasonal_prices, inclusion_notes) and arrays of objects
+// must be JSON-stringified so the backend can parse them from multipart.
 function toFormData(data) {
   const fd = new FormData();
   Object.entries(data).forEach(([k, v]) => {
     if (v === null || v === undefined) return;
-    // Arrays (e.g. amenity_ids, inclusion_ids) must be appended individually
-    if (Array.isArray(v)) {
-      v.forEach(item => fd.append(k, item));
+    if (v instanceof File) {
+      // Actual file — append as binary
+      fd.append(k, v);
+    } else if (Array.isArray(v)) {
+      // Arrays of objects (e.g. seasonal_prices) — JSON-stringify the whole array
+      // Arrays of primitives (e.g. amenity_ids: [1,2,3]) — append each item individually
+      const hasObjects = v.some(item => item !== null && typeof item === "object");
+      if (hasObjects) {
+        fd.append(k, JSON.stringify(v));
+      } else {
+        v.forEach(item => fd.append(k, item));
+      }
+    } else if (typeof v === "object") {
+      // Plain objects (e.g. inclusion_notes) — JSON-stringify
+      fd.append(k, JSON.stringify(v));
     } else {
       fd.append(k, v);
     }
@@ -55,14 +70,16 @@ function toFormData(data) {
   return fd;
 }
 
+// Only treat a payload as multipart if it contains an actual File instance.
+// Arrays and plain objects are NOT files.
 function hasFile(data) {
   return Object.values(data).some(v => v instanceof File);
 }
 
 // ─── Public Endpoints ─────────────────────────────────────────────────────────
-export const getRooms       = (params = {}) => api.get("/rooms/", { params });
-export const getRoomDetail  = (id)          => api.get(`/rooms/${id}/`);
-export const checkAvailability = (payload)  => api.post("/rooms/availability/", payload);
+export const getRooms          = (params = {}) => api.get("/rooms/", { params });
+export const getRoomDetail     = (id)          => api.get(`/rooms/${id}/`);
+export const checkAvailability = (payload)     => api.post("/rooms/availability/", payload);
 
 // ─── Booking Lock ─────────────────────────────────────────────────────────────
 export const lockRoom = (payload) =>
@@ -72,8 +89,8 @@ export const releaseRoomLock = (roomId, sessionKey) =>
   api.post("/rooms/lock/release/", { room_id: roomId, session_key: sessionKey });
 
 // ─── Admin Endpoints ──────────────────────────────────────────────────────────
-export const adminGetRooms  = (params = {}) => api.get("/rooms/admin/", { params });
-export const adminGetRoom   = (id)          => api.get(`/rooms/admin/${id}/`);
+export const adminGetRooms = (params = {}) => api.get("/rooms/admin/", { params });
+export const adminGetRoom  = (id)          => api.get(`/rooms/admin/${id}/`);
 
 export const adminCreateRoom = (data) => {
   if (hasFile(data)) {

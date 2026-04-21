@@ -125,9 +125,6 @@ class RoomAvailabilityView(APIView):
         ).values_list("room_id", flat=True)
 
         # ── Exclusion set 3: active cleaning schedule overlap ─────────────────
-        # Only exclude rooms whose cleaning window has NOT yet ended by
-        # the requested check-in date.
-        # Convert check_in date to datetime at start of day for comparison.
         from datetime import datetime, time as dt_time
         tz = timezone.get_current_timezone()
         check_in_dt = datetime.combine(check_in, dt_time.min).replace(tzinfo=tz)
@@ -140,7 +137,7 @@ class RoomAvailabilityView(APIView):
                     CleaningStatus.CLEANING,
                 ],
                 cleaning_end_at__isnull=False,
-                cleaning_end_at__gt=check_in_dt,  # cleaning window overlaps check-in
+                cleaning_end_at__gt=check_in_dt,
             ).values_list("room_id", flat=True)
         except Exception:
             cleaning_blocked_ids = []
@@ -153,8 +150,6 @@ class RoomAvailabilityView(APIView):
         )
 
         # ── Base queryset — exclude MAINTENANCE always ────────────────────────
-        # Do NOT filter by status=AVAILABLE — rooms in CLEANING or RESERVED
-        # may still be available for future dates.
         queryset = Room.objects.filter(
             is_active=True,
         ).exclude(
@@ -185,8 +180,6 @@ class RoomLockView(APIView):
     """
     POST /api/rooms/lock/
     Temporarily locks a room for a session during booking process.
-    Prevents race conditions when two users try to book the same room.
-    Lock expires after LOCK_DURATION_MINUTES if not confirmed.
     """
     permission_classes = [AllowAny]
 
@@ -207,7 +200,6 @@ class RoomLockView(APIView):
         except Room.DoesNotExist:
             return Response({"error": "Room not found or unavailable."}, status=status.HTTP_404_NOT_FOUND)
 
-        # Check for active conflicting locks (not from this session)
         conflict = RoomTemporaryLock.objects.filter(
             room=room,
             check_in__lt=check_out,
@@ -222,7 +214,6 @@ class RoomLockView(APIView):
                 status=status.HTTP_409_CONFLICT
             )
 
-        # Upsert lock for this session
         lock, created = RoomTemporaryLock.objects.update_or_create(
             room=room,
             session_key=session_key,
@@ -246,7 +237,7 @@ class RoomLockView(APIView):
 class RoomLockReleaseView(APIView):
     """
     POST /api/rooms/lock/release/
-    Releases a temporary room lock (called when user cancels booking flow).
+    Releases a temporary room lock.
     """
     permission_classes = [AllowAny]
 
@@ -273,8 +264,8 @@ from rooms.permissions import IsAdminRoomManager, IsAdminOrManagerRoom
 
 class AdminRoomListCreateView(generics.ListCreateAPIView):
     """
-    GET  /api/admin/rooms/  — list all rooms (Admin or Manager)
-    POST /api/admin/rooms/  — create a new room (Admin only)
+    GET  /api/rooms/admin/  — list all rooms (Admin or Manager)
+    POST /api/rooms/admin/  — create a new room (Admin only)
     """
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter, filters.SearchFilter]
@@ -298,11 +289,10 @@ class AdminRoomListCreateView(generics.ListCreateAPIView):
 
 class AdminRoomDetailView(generics.RetrieveUpdateDestroyAPIView):
     """
-    GET    /api/admin/rooms/<id>/  — room detail
-    PUT    /api/admin/rooms/<id>/  — full update
-    PATCH  /api/admin/rooms/<id>/  — partial update (e.g., change status)
-    DELETE /api/admin/rooms/<id>/  — soft delete (sets is_active=False)
-    Staff/Admin only.
+    GET    /api/rooms/admin/<id>/  — room detail
+    PUT    /api/rooms/admin/<id>/  — full update
+    PATCH  /api/rooms/admin/<id>/  — partial update
+    DELETE /api/rooms/admin/<id>/  — soft delete (sets is_active=False)
     """
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     permission_classes = [IsAdminRoomManager]
@@ -326,8 +316,8 @@ class AdminRoomDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 class AdminRoomStatusView(APIView):
     """
-    PATCH /api/admin/rooms/<id>/status/
-    Quick endpoint to update room status (available, maintenance, etc.).
+    PATCH /api/rooms/admin/<id>/status/
+    Quick endpoint to update room status.
     """
     permission_classes = [IsAdminOrManagerRoom]
 
@@ -355,8 +345,8 @@ class AdminRoomStatusView(APIView):
 
 class AdminRoomImageUploadView(APIView):
     """
-    POST /api/admin/rooms/<id>/images/
-    Upload one or more images for a room.
+    POST   /api/rooms/admin/<id>/images/  — upload one or more images
+    DELETE /api/rooms/admin/<id>/images/  — delete an image by image_id
     """
     permission_classes = [IsAdminRoomManager]
     parser_classes = [MultiPartParser, FormParser]
@@ -399,7 +389,7 @@ class AdminRoomImageUploadView(APIView):
 
 class AdminRoomPriceHistoryView(generics.ListAPIView):
     """
-    GET /api/admin/rooms/<id>/price-history/
+    GET /api/rooms/admin/<id>/price-history/
     Returns historical price changes for a specific room.
     """
     permission_classes = [IsAdminOrManagerRoom]
@@ -409,22 +399,13 @@ class AdminRoomPriceHistoryView(generics.ListAPIView):
         return RoomPriceHistory.objects.filter(room_id=self.kwargs["pk"]).select_related("changed_by")
 
 
-# ============================================================================
-# ADD THIS TO THE END OF YOUR backend/rooms/views.py FILE
-# ============================================================================
-
 from .models import RoomReview
 
 
 class RoomReviewCreateView(APIView):
     """
     POST /api/rooms/reviews/
-
-    Legacy endpoint — kept for authenticated (registered) guest reviews.
-    Walk-in guests use POST /api/rooms/reviews/token/<token>/ instead.
-
-    Requires: IsAuthenticated
-    Body: { "booking_id", "rating", "review_text" }
+    Authenticated guest review submission.
     """
     permission_classes = [IsAuthenticated]
 
@@ -491,8 +472,8 @@ class GuestPendingReviewsView(APIView):
 
 class ReviewHelpfulnessVoteView(APIView):
     """
-    POST /api/rooms/reviews/<review_id>/helpful/
-    Allow users to vote if a review was helpful (thumbs up/down).
+    POST   /api/rooms/reviews/<review_id>/helpful/  — cast or update vote
+    DELETE /api/rooms/reviews/<review_id>/helpful/  — remove vote
     """
     permission_classes = [AllowAny]
 
@@ -543,10 +524,6 @@ class ReviewHelpfulnessVoteView(APIView):
         }, status=status.HTTP_200_OK)
 
     def delete(self, request, review_id):
-        """
-        DELETE /api/rooms/reviews/<review_id>/helpful/
-        Remove user's vote on a review.
-        """
         if not request.user.is_authenticated:
             return Response(
                 {"detail": "Authentication required"},
@@ -580,7 +557,6 @@ class RoomPriceCalculationView(APIView):
     """
     POST /api/rooms/<id>/calculate-price/
     Calculate total price for a room across a date range.
-    Uses seasonal pricing, weekend rates, and discounts.
     """
     permission_classes = [AllowAny]
 
@@ -719,15 +695,7 @@ class RoomsByViewTypeView(generics.ListAPIView):
 class ReviewTokenValidateView(APIView):
     """
     GET /api/rooms/reviews/token/<token>/
-
-    Validates a review token and returns booking snapshot data
-    so the frontend can pre-fill the review form (room number,
-    guest name, stay dates) without requiring authentication.
-
-    Returns:
-      200 — token is valid, booking info included
-      400 — token is expired or already used
-      404 — token not found
+    Validates a review token and returns booking snapshot data.
     """
     permission_classes = [AllowAny]
 
@@ -782,32 +750,12 @@ class ReviewTokenValidateView(APIView):
 class ReviewTokenSubmitView(APIView):
     """
     POST /api/rooms/reviews/token/<token>/
-
     Submits a review using a one-time review token.
-    No authentication required — the token is the credential.
-
-    Body:
-      {
-        "rating":      5,             // required, 1–5
-        "review_text": "Great stay!"  // optional
-      }
-
-    On success:
-      - Creates RoomReview linked to booking + room
-      - Marks ReviewToken as used (prevents resubmission)
-      - Returns the created review data
-
-    Returns:
-      201 — review submitted
-      400 — validation error, token expired, or already used
-      404 — token not found
     """
     permission_classes = [AllowAny]
 
     def post(self, request, token):
         from rooms.models import ReviewToken, RoomReview
-        from django.core.validators import MinValueValidator, MaxValueValidator
-        from django.core.exceptions import ValidationError as DjangoValidationError
 
         try:
             rt = ReviewToken.objects.select_related(
@@ -831,7 +779,6 @@ class ReviewTokenSubmitView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Validate rating
         try:
             rating = int(request.data.get("rating", 0))
         except (TypeError, ValueError):
@@ -849,7 +796,6 @@ class ReviewTokenSubmitView(APIView):
         review_text = str(request.data.get("review_text", "")).strip()
         booking = rt.booking
 
-        # Guard: only checked-out bookings
         from bookings.models import BookingStatus
         if booking.status != BookingStatus.CHECKED_OUT:
             return Response(
@@ -857,8 +803,6 @@ class ReviewTokenSubmitView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Guard: no duplicate (should never fire due to OneToOneField on token,
-        # but protects against race conditions)
         if RoomReview.objects.filter(booking=booking).exists():
             rt.mark_used()
             return Response(
@@ -871,8 +815,8 @@ class ReviewTokenSubmitView(APIView):
             review = RoomReview.objects.create(
                 room=booking.room,
                 booking=booking,
-                guest=booking.user,  # None for walk-in guests
-                guest_name=booking.full_name,  # always populated from booking
+                guest=booking.user,
+                guest_name=booking.full_name,
                 guest_email=booking.email,
                 rating=rating,
                 review_text=review_text,
@@ -897,9 +841,6 @@ class ReviewTokenView(APIView):
     """
     GET  /api/rooms/reviews/token/<token>/ — validate token, get booking info
     POST /api/rooms/reviews/token/<token>/ — submit review
-
-    Single view handles both methods for cleaner URL config.
-    No authentication required — token is the credential.
     """
     permission_classes = [AllowAny]
 
@@ -912,7 +853,7 @@ class ReviewTokenView(APIView):
 
 class HotelSettingsView(APIView):
     """
-    GET   /api/rooms/hotel/settings/  — return global check-in/out times
+    GET   /api/rooms/hotel/settings/  — return global hotel settings
     PATCH /api/rooms/hotel/settings/  — update (admin/manager only)
     """
     permission_classes = [IsAuthenticated]
@@ -938,3 +879,57 @@ class HotelSettingsView(APIView):
             s.save()
             return Response(s.data)
         return Response(s.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+# ─── Amenity & Inclusion CRUD Views (FIX: were missing, caused 404) ───────────
+
+from .models import RoomAmenity, Inclusion
+from .serializers import RoomAmenitySerializer, InclusionSerializer
+
+
+class AmenityListCreateView(generics.ListCreateAPIView):
+    """
+    GET  /api/rooms/amenities/  — list all amenities
+    POST /api/rooms/amenities/  — create a new amenity
+    Admin/Manager only.
+    """
+    serializer_class   = RoomAmenitySerializer
+    permission_classes = [IsAuthenticated, IsAdminRoomManager]
+    queryset           = RoomAmenity.objects.all().order_by("category", "name")
+
+
+class AmenityDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """
+    GET    /api/rooms/amenities/<id>/  — retrieve
+    PUT    /api/rooms/amenities/<id>/  — full update
+    PATCH  /api/rooms/amenities/<id>/  — partial update
+    DELETE /api/rooms/amenities/<id>/  — delete
+    Admin/Manager only.
+    """
+    serializer_class   = RoomAmenitySerializer
+    permission_classes = [IsAuthenticated, IsAdminRoomManager]
+    queryset           = RoomAmenity.objects.all()
+
+
+class InclusionListCreateView(generics.ListCreateAPIView):
+    """
+    GET  /api/rooms/inclusions/  — list all inclusions
+    POST /api/rooms/inclusions/  — create a new inclusion
+    Admin/Manager only.
+    """
+    serializer_class   = InclusionSerializer
+    permission_classes = [IsAuthenticated, IsAdminRoomManager]
+    queryset           = Inclusion.objects.all().order_by("category", "name")
+
+
+class InclusionDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """
+    GET    /api/rooms/inclusions/<id>/  — retrieve
+    PUT    /api/rooms/inclusions/<id>/  — full update
+    PATCH  /api/rooms/inclusions/<id>/  — partial update
+    DELETE /api/rooms/inclusions/<id>/  — delete
+    Admin/Manager only.
+    """
+    serializer_class   = InclusionSerializer
+    permission_classes = [IsAuthenticated, IsAdminRoomManager]
+    queryset           = Inclusion.objects.all()

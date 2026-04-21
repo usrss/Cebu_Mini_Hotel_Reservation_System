@@ -296,6 +296,7 @@ export function useAdminRooms() {
     }
   }, []);
 
+  // FIX: capture and return the actual backend error instead of swallowing it
   const deleteRoom = useCallback(async (id) => {
     try {
       await adminDeleteRoom(id);
@@ -304,7 +305,7 @@ export function useAdminRooms() {
     } catch (err) {
       const detail = err.response?.data?.detail
         || err.response?.data?.error
-        || 'Failed to delete room.';
+        || "Failed to delete room.";
       return { success: false, error: detail };
     }
   }, []);
@@ -327,6 +328,7 @@ export function useAdminRooms() {
     }
   }, []);
 
+  // FIX: capture and return the actual backend error instead of swallowing it
   const deleteImage = useCallback(async (roomId, imageId) => {
     try {
       await adminDeleteRoomImage(roomId, imageId);
@@ -342,7 +344,7 @@ export function useAdminRooms() {
     } catch (err) {
       const detail = err.response?.data?.detail
         || err.response?.data?.error
-        || 'Failed to delete image.';
+        || "Failed to delete image.";
       return { success: false, error: detail };
     }
   }, []);
