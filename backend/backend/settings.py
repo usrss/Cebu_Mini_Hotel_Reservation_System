@@ -319,6 +319,3 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 
-# TEMPORARY DEBUG - remove after fixing
-print(f"=== STORAGE: {DEFAULT_FILE_STORAGE} ===")
-print(f"=== CLOUDINARY NAME: '{CLOUDINARY_CLOUD_NAME}' ===")

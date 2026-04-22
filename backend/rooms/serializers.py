@@ -26,13 +26,17 @@ class RoomImageSerializer(serializers.ModelSerializer):
         fields = ["id", "image_url", "caption", "is_primary", "sort_order"]
 
     def get_image_url(self, obj):
+        if not obj.image:
+            return None
+        url = obj.image.url
+        # If already an absolute URL (Cloudinary), return as-is
+        if url.startswith('http'):
+            return url
+        # Only build absolute URI for relative local paths
         request = self.context.get("request")
-        if obj.image and request:
-            return request.build_absolute_uri(obj.image.url)
-        # FIX: fall back to a relative URL when no request in context
-        if obj.image:
-            return obj.image.url
-        return None
+        if request:
+            return request.build_absolute_uri(url)
+        return url
 
 
 class RoomListSerializer(serializers.ModelSerializer):
@@ -80,12 +84,16 @@ class RoomListSerializer(serializers.ModelSerializer):
         )
 
     def get_panorama_image_url(self, obj):
+        if not obj.panorama_image:
+            return None
+        url = obj.panorama_image.url
+        # If already an absolute URL (Cloudinary), return as-is
+        if url.startswith('http'):
+            return url
         request = self.context.get("request")
-        if obj.panorama_image and request:
-            return request.build_absolute_uri(obj.panorama_image.url)
-        if obj.panorama_image:
-            return obj.panorama_image.url
-        return None
+        if request:
+            return request.build_absolute_uri(url)
+        return url
 
 
 class SeasonalPriceSerializer(serializers.ModelSerializer):
@@ -139,12 +147,16 @@ class RoomDetailSerializer(serializers.ModelSerializer):
         ]
 
     def get_panorama_image_url(self, obj):
+        if not obj.panorama_image:
+            return None
+        url = obj.panorama_image.url
+        # If already an absolute URL (Cloudinary), return as-is
+        if url.startswith('http'):
+            return url
         request = self.context.get("request")
-        if obj.panorama_image and request:
-            return request.build_absolute_uri(obj.panorama_image.url)
-        if obj.panorama_image:
-            return obj.panorama_image.url
-        return None
+        if request:
+            return request.build_absolute_uri(url)
+        return url
 
     def get_amenities(self, obj):
         assignments = obj.amenity_assignments.select_related("amenity").all()
