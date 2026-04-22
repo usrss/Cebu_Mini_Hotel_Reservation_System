@@ -1,14 +1,14 @@
 # rooms/models.py
 from django.db import models
 from django.conf import settings
-from django.core.validators import MinValueValidator,MaxValueValidator
+from django.core.validators import MinValueValidator, MaxValueValidator
 from django.utils import timezone
 from django.db.models import Avg
 from bookings.models import Booking, BookingStatus
 from django.core.exceptions import ValidationError
 from datetime import timedelta
 import uuid as _uuid
-
+from cloudinary.models import CloudinaryField
 
 
 class RoomType(models.TextChoices):
@@ -33,6 +33,7 @@ class RoomStatus(models.TextChoices):
     MAINTENANCE = "maintenance", "Under Maintenance"
     RESERVED = "reserved", "Reserved"
     CLEANING = "cleaning", "Cleaning"
+
 
 class RoomViewType(models.TextChoices):
     NONE = "none", "No Specific View"
@@ -82,8 +83,10 @@ class Room(models.Model):
         max_digits=6, decimal_places=2, null=True, blank=True,
         help_text="Room size in square meters"
     )
-    panorama_image = models.ImageField(
-        upload_to='rooms/panoramas/',
+    # FIX: CloudinaryField uses folder= not upload_to=
+    panorama_image = CloudinaryField(
+        'panorama',
+        folder='hotel/rooms/panoramas',
         null=True,
         blank=True,
         help_text="360° panoramic image (equirectangular projection, 2:1 ratio)"
@@ -97,14 +100,14 @@ class Room(models.Model):
         help_text="Display in homepage carousel"
     )
 
-    #  View Type
+    # View Type
     view_type = models.CharField(
         max_length=20,
         choices=RoomViewType.choices,
         default=RoomViewType.NONE,
     )
 
-    #  Adult & Child Capacity
+    # Adult & Child Capacity
     max_adults = models.PositiveIntegerField(
         default=2,
         validators=[MinValueValidator(1)],
@@ -124,7 +127,7 @@ class Room(models.Model):
         help_text="Percentage discount on base price"
     )
 
-    #  Policies
+    # Policies
     cancellation_policy = models.TextField(
         blank=True,
         help_text="Cancellation terms and conditions"
@@ -207,8 +210,8 @@ class Room(models.Model):
 
         cleaning_conflict = self.cleaning_tasks.filter(
             status__in=["dirty", "cleaning"],  # active cleaning tasks
-            cleaning_end_at__isnull=False,  # has a defined end window
-            cleaning_end_at__gt=check_in_dt,  # window extends into check-in time
+            cleaning_end_at__isnull=False,     # has a defined end window
+            cleaning_end_at__gt=check_in_dt,   # window extends into check-in time
         ).exists()
 
         if cleaning_conflict:
@@ -243,7 +246,7 @@ class Room(models.Model):
 
     @property
     def discounted_price(self):
-        '''Calculate price after discount applied to base price.'''
+        """Calculate price after discount applied to base price."""
         if self.discount_percentage > 0:
             discount_amount = self.price_per_night * (self.discount_percentage / 100)
             return self.price_per_night - discount_amount
@@ -251,19 +254,19 @@ class Room(models.Model):
 
     @property
     def is_trending(self):
-        '''Check if room is trending based on ratings.'''
+        """Check if room is trending based on ratings."""
         return self.review_count >= 5 and (self.average_rating or 0) >= 4.5
 
     @property
     def total_capacity(self):
-        '''Total guest capacity (adults + children).'''
+        """Total guest capacity (adults + children)."""
         return self.max_adults + self.max_children
 
     def get_price_for_date(self, date):
-        '''
+        """
         Get the effective price for a specific date.
         Checks seasonal pricing rules with priority.
-        '''
+        """
         is_weekend = date.weekday() in [4, 5]
 
         applicable_prices = self.seasonal_prices.filter(
@@ -280,10 +283,10 @@ class Room(models.Model):
         return self.discounted_price
 
     def calculate_total_price(self, check_in, check_out):
-        '''
+        """
         Calculate total price for a date range.
         Uses get_price_for_date for each night.
-        '''
+        """
         from datetime import timedelta
 
         total = 0
@@ -296,7 +299,7 @@ class Room(models.Model):
         return total
 
     def clean(self):
-        '''Model validation.'''
+        """Model validation."""
         super().clean()
 
         if hasattr(self, 'max_adults') and hasattr(self, 'max_children'):
@@ -349,7 +352,8 @@ class RoomImage(models.Model):
     First image (is_primary=True) is used as the cover photo.
     """
     room = models.ForeignKey(Room, on_delete=models.CASCADE, related_name="images")
-    image = models.ImageField(upload_to="rooms/images/%Y/%m/")
+    # FIX: CloudinaryField uses folder= not upload_to=
+    image = CloudinaryField('image', folder='hotel/rooms/images')
     caption = models.CharField(max_length=255, blank=True)
     is_primary = models.BooleanField(default=False)
     uploaded_at = models.DateTimeField(auto_now_add=True)
@@ -447,7 +451,6 @@ class RoomReview(models.Model):
         related_name="room_reviews",
         help_text="Null for walk-in guests who have no account.",
     )
-
     guest_name = models.CharField(
         max_length=255,
         blank=True,
@@ -457,8 +460,6 @@ class RoomReview(models.Model):
         blank=True,
         help_text="Email of the reviewing guest. Populated from booking.email.",
     )
-
-
     rating = models.PositiveIntegerField(
         validators=[MinValueValidator(1), MaxValueValidator(5)],
         help_text="Star rating from 1 to 5"
@@ -467,7 +468,6 @@ class RoomReview(models.Model):
         blank=True,
         help_text="Optional written review"
     )
-
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     is_verified = models.BooleanField(
@@ -494,7 +494,9 @@ class RoomReview(models.Model):
         ]
 
     def __str__(self):
-        return f"Review by {self.guest.email} for Room {self.room.room_number} - {self.rating}★"
+        # FIX: guest can be null (walk-in guests) — fall back gracefully
+        name = self.guest.email if self.guest else (self.guest_name or "Guest")
+        return f"Review by {name} for Room {self.room.room_number} - {self.rating}★"
 
     @property
     def display_name(self):
@@ -696,15 +698,12 @@ class SeasonalPrice(models.Model):
 
             if overlapping.exists():
                 raise ValidationError(
-                    f"Overlapping seasonal price with same priority already exists for this room."
+                    "Overlapping seasonal price with same priority already exists for this room."
                 )
 
     def save(self, *args, **kwargs):
         self.clean()
         super().save(*args, **kwargs)
-
-
-
 
 
 class ReviewToken(models.Model):
@@ -783,7 +782,6 @@ class ReviewToken(models.Model):
         """Call this after the review is successfully submitted."""
         self.is_used = True
         self.save(update_fields=["is_used"])
-
 
 
 class HotelSettings(models.Model):
