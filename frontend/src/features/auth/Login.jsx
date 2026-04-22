@@ -11,7 +11,7 @@ import axios from 'axios';
 import './AuthModern.css';
 import './LoginCaptcha.css';
 
-const API_BASE = import.meta.env.VITE_API_URL || '/api/auth';
+const API_BASE = import.meta.env.VITE_AUTH_URL  || '/api/auth';
 
 function getPostLoginRoute() {
   const user = getStoredUser();
@@ -122,11 +122,13 @@ export default function Login({ onSwitchToRegister, onForgotPassword, onClose })
 
     setLoading(true);
     try {
-      const payload = { ...formData };
-      if (showChallenge && challenge) {
-        payload.captcha_token  = challenge.token;
-        payload.captcha_answer = mathAnswer;
-      }
+        const payload = { ...formData };
+        if (showChallenge && challenge) {
+          if (challenge.token) {
+            payload.captcha_token  = challenge.token;
+            payload.captcha_answer = mathAnswer;
+          }
+        }
 
       await loginUser(payload);
       onClose?.();

@@ -8,7 +8,7 @@ import { Mail, Lock, Eye, EyeOff, ArrowLeft } from 'lucide-react';
 import axios from 'axios';
 import './AuthModern.css';
 
-const API_BASE = import.meta.env.VITE_API_URL || '/api/auth';
+const API_BASE = import.meta.env.VITE_AUTH_URL  || '/api/auth';
 
 export default function ForgotPassword({ onSwitchToLogin }) {
   const navigate = useNavigate();

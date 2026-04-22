@@ -2,20 +2,6 @@
 Views for user authentication
 Handles registration, verification, login with JWT tokens
 Includes forgot password, account settings, and adaptive CAPTCHA.
-
-New in this version
-───────────────────
-LoginView          — adaptive challenge signal (3 failures / rapid retries)
-CaptchaView        — GET /api/auth/captcha/  →  { question, token }
-                     POST is validated inside LoginView
-
-Install requirements (add to requirements.txt):
-    django-ratelimit>=4.1.0
-    PyJWT>=2.8.0
-
-settings.py additions:
-    CAPTCHA_SECRET = env('CAPTCHA_SECRET', default='change-me-in-production')
-    RATELIMIT_USE_CACHE = 'default'   # uses Django's default cache backend
 """
 
 import hmac, hashlib, time, json, base64, secrets
@@ -54,8 +40,10 @@ from .models import CustomUser
 CAPTCHA_SECRET = getattr(settings, 'CAPTCHA_SECRET', 'change-me-in-production')
 
 # Cache key templates
-_FAIL_KEY  = lambda ip: f'login_fail:{ip}'
-_RATE_KEY  = lambda ip: f'login_rate:{ip}'   # requests per 10 seconds
+# FIX: fail key now scoped to email so shared-IP deployments (Render, Vercel)
+# don't let one user's failures lock out everyone else on the same server IP.
+_FAIL_KEY = lambda ip, email='': f'login_fail:{ip}:{email.lower()}'
+_RATE_KEY = lambda ip: f'login_rate:{ip}'   # requests per 10 seconds
 
 
 def _get_client_ip(request) -> str:
@@ -66,20 +54,21 @@ def _get_client_ip(request) -> str:
     return request.META.get('REMOTE_ADDR', '0.0.0.0')
 
 
-def _captcha_needed(ip: str) -> bool:
+def _captcha_needed(ip: str, email: str = '') -> bool:
     """
     Returns True (show challenge) under any of:
-      1. ≥ 3 failed login attempts from this IP in the last 10 minutes
-      2. > 3 login requests from this IP in the last 10 seconds  (rapid retry)
+      1. ≥ 3 failed login attempts for this email in the last 10 minutes
+      2. > 10 login requests from this IP in the last 10 seconds (rapid retry)
+         — threshold raised from 3 to 10 so shared-IP servers don't false-trigger
     """
-    fail_count = cache.get(_FAIL_KEY(ip), 0)
+    fail_count = cache.get(_FAIL_KEY(ip, email), 0)
     rate_count = cache.get(_RATE_KEY(ip), 0)
-    return fail_count >= 3 or rate_count > 3
+    return fail_count >= 3 or rate_count > 10
 
 
-def _record_failure(ip: str):
-    """Increment failure counter (10-minute window)."""
-    key = _FAIL_KEY(ip)
+def _record_failure(ip: str, email: str = ''):
+    """Increment per-email failure counter (10-minute window)."""
+    key = _FAIL_KEY(ip, email)
     try:
         cache.incr(key)
     except ValueError:
@@ -95,9 +84,9 @@ def _record_request(ip: str):
         cache.set(key, 1, timeout=10)    # 10 seconds
 
 
-def _clear_counters(ip: str):
+def _clear_counters(ip: str, email: str = ''):
     """Reset counters on successful login."""
-    cache.delete(_FAIL_KEY(ip))
+    cache.delete(_FAIL_KEY(ip, email))
     cache.delete(_RATE_KEY(ip))
 
 
@@ -105,8 +94,6 @@ def _make_captcha_token(question: str, answer: int) -> str:
     """
     Create a tamper-proof HMAC token so we can verify the answer server-side
     without storing anything in the database or session.
-
-    Format (base64url):  { question, answer, expires } + HMAC-SHA256
     """
     expires = int(time.time()) + 300    # 5-minute window
     payload = json.dumps({'q': question, 'a': answer, 'exp': expires})
@@ -224,10 +211,10 @@ class LoginView(APIView):
     Adaptive protection layers (no third-party service needed):
     ─────────────────────────────────────────────────────────────
     Layer 1 — IP request-rate tracking (10-second window, Django cache).
-              > 3 requests in 10 s  →  captcha_required: true
+              > 10 requests in 10 s  →  captcha_required: true
 
-    Layer 2 — IP failure tracking (10-minute window, Django cache).
-              ≥ 3 failures          →  captcha_required: true
+    Layer 2 — Per-email failure tracking (10-minute window, Django cache).
+              ≥ 3 failures for same email  →  captcha_required: true
 
     Layer 3 — HMAC-signed math puzzle verification (when captcha is shown).
               Wrong answer          →  captcha_required: true, captcha_wrong: true
@@ -238,10 +225,12 @@ class LoginView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        ip = _get_client_ip(request)
-        _record_request(ip)            # always count the incoming request
+        ip    = _get_client_ip(request)
+        email = request.data.get('email', '').lower()   # FIX: extract email early
 
-        needs_captcha = _captcha_needed(ip)
+        _record_request(ip)   # always count the incoming request
+
+        needs_captcha = _captcha_needed(ip, email)      # FIX: pass email
 
         # ── Validate CAPTCHA when required ────────────────────────────────────
         if needs_captcha:
@@ -249,7 +238,6 @@ class LoginView(APIView):
             answer = request.data.get('captcha_answer', '')
 
             if not token:
-                # Challenge required but not submitted yet — tell the frontend
                 return Response({
                     'captcha_required': True,
                     'detail': 'Too many attempts. Please solve the security challenge.',
@@ -274,10 +262,9 @@ class LoginView(APIView):
         serializer = LoginSerializer(data=request.data)
 
         if not serializer.is_valid():
-            _record_failure(ip)
+            _record_failure(ip, email)                  # FIX: pass email
 
-            # Re-check threshold after this failure
-            if _captcha_needed(ip):
+            if _captcha_needed(ip, email):              # FIX: pass email
                 errors = serializer.errors
                 detail = (
                     list(errors.get('email', []) or
@@ -292,7 +279,7 @@ class LoginView(APIView):
             raise serializers.ValidationError(serializer.errors)
 
         user = serializer.validated_data['user']
-        _clear_counters(ip)
+        _clear_counters(ip, email)                      # FIX: pass email
 
         user.last_login = timezone.now()
         user.save(update_fields=['last_login'])
