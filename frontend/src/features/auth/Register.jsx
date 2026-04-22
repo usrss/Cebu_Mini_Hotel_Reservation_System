@@ -43,41 +43,46 @@ export default function Register({ onSwitchToLogin, onVerify }) {
     }
   }, [formData.password, formData.confirmPassword]);
 
-  const googleLogin = useGoogleLogin({
-    onSuccess: async (tokenResponse) => {
-      setLoading(true);
-      setError('');
-      try {
-        const userInfoResponse = await axios.get(
-          'https://www.googleapis.com/oauth2/v3/userinfo',
-          { headers: { Authorization: `Bearer ${tokenResponse.access_token}` } }
-        );
-        const { email, given_name, family_name, sub } = userInfoResponse.data;
-        await registerUser({
-          email, first_name: given_name || '', last_name: family_name || '',
-          auth_provider: 'google', access_token: tokenResponse.access_token, social_id: sub,
-        });
-        const updatedEmail = email;
-        if (onVerify) {
-          onVerify(updatedEmail);
-        } else {
-          navigate('/verify');
-        }
-      } catch (err) {
-        const errorData = err.response?.data;
-        setError(
-          errorData?.email?.[0] || errorData?.email ||
-          errorData?.detail || 'Google sign-in failed. Please try email registration.'
-        );
-      } finally {
-        setLoading(false);
+const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+const googleLogin = useGoogleLogin({
+  flow: 'implicit',
+  ux_mode: isMobile ? 'redirect' : 'popup',
+  redirect_uri: 'https://cebu-mini-hotel-reservation-system-three.vercel.app/auth/google/callback',
+  onSuccess: async (tokenResponse) => {
+    // Only runs on desktop (popup mode)
+    setLoading(true);
+    setError('');
+    try {
+      const userInfoResponse = await axios.get(
+        'https://www.googleapis.com/oauth2/v3/userinfo',
+        { headers: { Authorization: `Bearer ${tokenResponse.access_token}` } }
+      );
+      const { email, given_name, family_name, sub } = userInfoResponse.data;
+      await registerUser({
+        email, first_name: given_name || '', last_name: family_name || '',
+        auth_provider: 'google', access_token: tokenResponse.access_token, social_id: sub,
+      });
+      if (onVerify) {
+        onVerify(email);
+      } else {
+        navigate('/verify');
       }
-    },
-    onError: () => {
-      setError('Google sign-in was cancelled or failed. Please try again.');
+    } catch (err) {
+      const errorData = err.response?.data;
+      setError(
+        errorData?.email?.[0] || errorData?.email ||
+        errorData?.detail || 'Google sign-in failed. Please try email registration.'
+      );
+    } finally {
       setLoading(false);
-    },
-  });
+    }
+  },
+  onError: () => {
+    setError('Google sign-in was cancelled or failed. Please try again.');
+    setLoading(false);
+  },
+});
 
   const handleChange = (e) => { setFormData({ ...formData, [e.target.name]: e.target.value }); setError(''); };
 

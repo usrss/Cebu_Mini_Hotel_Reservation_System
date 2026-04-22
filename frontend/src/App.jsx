@@ -2,6 +2,7 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Register          from './features/auth/Register';
 import Login             from './features/auth/Login';
+import GoogleCallback from './features/auth/GoogleCallback';
 import Dashboard         from './features/dashboard/Dashboard';
 import ProtectedRoute    from './components/ProtectedRoute';
 import { isAuthenticated, getStoredUser } from './services/api';
@@ -98,6 +99,7 @@ function App() {
 
         {/* ── Default & 404 ────────────────────────────────────────────── */}
         <Route path="/" element={<HotelHomepage />} />
+        <Route path="/auth/google/callback" element={<GoogleCallback />} />
         <Route path="*" element={<Navigate to="/" replace />} />
 
       </Routes>

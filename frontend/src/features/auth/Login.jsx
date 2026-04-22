@@ -87,26 +87,36 @@ export default function Login({ onSwitchToRegister, onForgotPassword, onClose })
   };
 
   // ── Google OAuth ──────────────────────────────────────────────────────────
-  const googleLogin = useGoogleLogin({
-    onSuccess: async (tokenResponse) => {
-      setLoading(true);
-      setError('');
-      try {
-        const { data } = await axios.get('https://www.googleapis.com/oauth2/v3/userinfo', {
-          headers: { Authorization: `Bearer ${tokenResponse.access_token}` },
-        });
-        await loginUser({ email: data.email, auth_provider: 'google', access_token: tokenResponse.access_token });
-        await new Promise(r => setTimeout(r, 50));
-        onClose?.();
-        navigate(getPostLoginRoute());
-      } catch (err) {
-        setError(err.response?.data?.detail || 'Google sign-in failed. Please try again.');
-      } finally {
-        setLoading(false);
-      }
-    },
-    onError: () => { setError('Google sign-in cancelled'); setLoading(false); },
-  });
+const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+const googleLogin = useGoogleLogin({
+  flow: 'implicit',
+  ux_mode: isMobile ? 'redirect' : 'popup',
+  redirect_uri: 'https://cebu-mini-hotel-reservation-system-three.vercel.app/auth/google/callback',
+  onSuccess: async (tokenResponse) => {
+    // Only runs on desktop (popup mode)
+    setLoading(true);
+    setError('');
+    try {
+      const { data } = await axios.get('https://www.googleapis.com/oauth2/v3/userinfo', {
+        headers: { Authorization: `Bearer ${tokenResponse.access_token}` },
+      });
+      await loginUser({
+        email: data.email,
+        auth_provider: 'google',
+        access_token: tokenResponse.access_token,
+      });
+      await new Promise(r => setTimeout(r, 50));
+      onClose?.();
+      navigate(getPostLoginRoute());
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Google sign-in failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  },
+  onError: () => { setError('Google sign-in cancelled'); setLoading(false); },
+});
 
   // ── Email/password submit ─────────────────────────────────────────────────
   const handleSubmit = async (e) => {
