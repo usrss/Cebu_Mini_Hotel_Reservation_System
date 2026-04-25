@@ -456,7 +456,9 @@ class MaintenanceTask(models.Model):
 
     room = models.ForeignKey(
         "rooms.Room",
-        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
         related_name="maintenance_tasks",
     )
     assigned_to = models.ForeignKey(
@@ -562,13 +564,15 @@ class MaintenanceTask(models.Model):
         self.status = new_status
         if new_status == MaintenanceStatus.IN_PROGRESS:
             self.started_at = now
-            from rooms.models import Room, RoomStatus
-            Room.objects.filter(pk=self.room_id).update(status=RoomStatus.MAINTENANCE)
+            if self.room_id:  # ADD THIS CHECK
+                from rooms.models import Room, RoomStatus
+                Room.objects.filter(pk=self.room_id).update(status=RoomStatus.MAINTENANCE)
         elif new_status == MaintenanceStatus.COMPLETED:
-            self.completed_at     = now
+            self.completed_at = now
             self.completion_notes = completion_notes or self.completion_notes
-            from rooms.models import Room, RoomStatus
-            Room.objects.filter(pk=self.room_id).update(status=RoomStatus.AVAILABLE)
+            if self.room_id:  # ADD THIS CHECK
+                from rooms.models import Room, RoomStatus
+                Room.objects.filter(pk=self.room_id).update(status=RoomStatus.AVAILABLE)
         self.save(update_fields=[
             "status", "started_at", "completed_at", "completion_notes", "updated_at"
         ])
@@ -613,6 +617,16 @@ class IncidentLog(models.Model):
         on_delete=models.SET_NULL,
         null=True,
         related_name="incident_logs",
+    )
+
+    assigned_to = models.ForeignKey(
+        StaffProfile,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="assigned_incidents",
+        limit_choices_to={"role": StaffRole.SECURITY},
+        help_text="Security staff member assigned to investigate this incident.",
     )
 
     # Short descriptive title (new)

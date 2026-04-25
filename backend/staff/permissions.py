@@ -10,14 +10,15 @@ Design principles:
   - Strict least-privilege RBAC — no cross-department access.
   - Admin role is never modified and retains full access everywhere.
 
-Role responsibilities (per prompt):
-  admin        — Full access. Never restricted.
-  manager      — Operational oversight. No staff account control.
-  receptionist — Reservation management only. No check-in/out.
-  front_desk   — Check-in / check-out / walk-ins / payments. No reservations.
+Role responsibilities:
+  admin        — Full access. Never restricted. Monitors, audits, manages accounts.
+  manager      — Operational oversight. Assigns tasks, reviews requests, manages
+                 incidents. Cannot control staff accounts.
+  receptionist — Reservation management only.
+  front_desk   — Check-in / check-out / walk-ins / payments.
   housekeeping — Own assigned cleaning tasks only.
   maintenance  — Own assigned maintenance tasks only.
-  security     — Incident logs only.
+  security     — Own assigned incidents only (assigned by manager).
 """
 
 from rest_framework.permissions import BasePermission
@@ -82,7 +83,6 @@ class IsAdminOrManager(BasePermission):
     Used for: view staff list/profiles, manage shifts, manage tasks,
               view incident logs, view reports, view activity logs,
               view monitoring dashboard.
-    Managers have operational oversight but cannot control staff accounts.
     """
     message = "Only Admin or Manager users can perform this action."
 
@@ -96,9 +96,6 @@ class CanManageReservations(BasePermission):
     """
     Roles allowed to create, modify, cancel, and view reservations:
       Admin, Manager, Receptionist.
-
-    Front Desk can handle walk-in bookings (a separate permission).
-    Receptionist is strictly reservation/booking coordination — no check-in/out.
     """
     message = "Only Admin, Manager, or Receptionist users can manage reservations."
 
@@ -117,9 +114,6 @@ class CanHandleCheckInOut(BasePermission):
     """
     Roles allowed to perform guest check-in and check-out:
       Admin, Manager, Front Desk.
-
-    Per the prompt: Receptionist does NOT have check-in/out access.
-    Receptionist handles reservations only; Front Desk handles on-site operations.
     """
     message = "Only Admin, Manager, or Front Desk staff can handle guest check-in or check-out."
 
@@ -138,9 +132,6 @@ class CanManageHousekeeping(BasePermission):
     """
     Roles that can CREATE and ASSIGN cleaning tasks:
       Admin, Manager only.
-
-    Housekeeping staff cannot create or assign tasks — they can only
-    update status on tasks already assigned to them.
     """
     message = "Only Admin or Manager users can create and assign cleaning tasks."
 
@@ -153,9 +144,6 @@ class CanAccessCleaningTasks(BasePermission):
     Roles that can VIEW or UPDATE cleaning tasks:
       Admin, Manager — see all tasks.
       Housekeeping   — see only their own assigned tasks (enforced in get_queryset).
-
-    This permission gates the list/detail/status endpoints.
-    The queryset scoping (own tasks only for housekeeping) is done in the view.
     """
     message = "Only Admin, Manager, or Housekeeping staff can access cleaning tasks."
 
@@ -174,8 +162,6 @@ class CanManageMaintenance(BasePermission):
     """
     Roles that can CREATE and ASSIGN maintenance tasks:
       Admin, Manager only.
-
-    Maintenance staff cannot create or assign tasks.
     """
     message = "Only Admin or Manager users can create and assign maintenance tasks."
 
@@ -204,16 +190,8 @@ class CanAccessMaintenanceTasks(BasePermission):
 
 class CanAccessIncidents(BasePermission):
     """
-    Roles that can view AND create incident logs:
-      Admin, Manager (view only in the prompt), Security (create + view).
-
-    Per the prompt:
-      - Security: create, view, edit, resolve incidents they created.
-      - Manager:  view and monitor incident logs (no create).
-      - Admin:    full access.
-
-    The create restriction for Manager is enforced at the view level
-    via get_permissions() differentiating GET vs POST.
+    Roles that can view incident logs:
+      Admin, Manager, Security.
     """
     message = "Only Admin, Manager, or Security staff can access incident logs."
 
@@ -230,7 +208,8 @@ class CanCreateIncidents(BasePermission):
     """
     Roles that can LOG (create) new incidents:
       Admin, Security only.
-    Manager can VIEW incidents but NOT create them.
+    Manager can VIEW and MANAGE incidents but NOT create them directly.
+    Front Desk / Housekeeping use CanReportIncident instead.
     """
     message = "Only Admin or Security staff can log new incidents."
 
@@ -238,13 +217,35 @@ class CanCreateIncidents(BasePermission):
         return _has_role(request.user, StaffRole.ADMIN, StaffRole.SECURITY)
 
 
+class CanManageIncidents(BasePermission):
+    """
+    NEW — Roles that can UPDATE (review, assign, change status) existing incidents:
+      Admin, Manager.
+
+    This is separate from CanCreateIncidents intentionally:
+      - Manager can review/assign/update status on ANY incident.
+      - Manager cannot CREATE incidents directly (that's security's job).
+      - Used by IncidentLogDetailView for PATCH requests instead of
+        CanCreateIncidents, so manager is not blocked by that class's message.
+
+    Security can also edit their OWN incidents — enforced by
+    IsIncidentOwnerOrAdmin at the object level.
+    """
+    message = "Only Admin or Manager can review and manage incidents."
+
+    def has_permission(self, request, view):
+        return _has_role(
+            request.user,
+            StaffRole.ADMIN,
+            StaffRole.MANAGER,
+            StaffRole.SECURITY,   # security can still edit own — object-level enforces ownership
+        )
+
+
 # ─── Reports & analytics ──────────────────────────────────────────────────────
 
 class CanViewReports(BasePermission):
-    """
-    Only Admin and Manager can access analytics reports and dashboards.
-    All other roles are explicitly excluded.
-    """
+    """Only Admin and Manager can access analytics reports and dashboards."""
     message = "Only Admin or Manager users can access reports and analytics."
 
     def has_permission(self, request, view):
@@ -256,12 +257,8 @@ class CanViewReports(BasePermission):
 class IsAssignedStaffOrAdmin(BasePermission):
     """
     Object-level permission used on task detail/update endpoints.
-
     - Admin / Manager: always allowed on any task.
-    - Housekeeping / Maintenance: only if they are the `assigned_to` on the task.
-
-    Must be used together with CanAccessCleaningTasks or CanAccessMaintenanceTasks
-    so unauthenticated / wrong-role users are rejected at the view level first.
+    - Housekeeping / Maintenance: only if they are the assigned_to on the task.
     """
     message = "You can only modify tasks that are assigned to you."
 
@@ -277,12 +274,8 @@ class IsAssignedStaffOrAdmin(BasePermission):
 
 class CanSubmitMaintenanceRequest(BasePermission):
     """
-    Roles that can CREATE MaintenanceRequests (the reporting layer):
-      Front Desk, Housekeeping — they report issues.
-      Admin, Manager           — also allowed for completeness.
-
-    Maintenance staff CANNOT submit requests — they only execute tasks.
-    Security CANNOT submit maintenance requests.
+    Roles that can CREATE MaintenanceRequests:
+      Front Desk, Housekeeping, Admin, Manager.
     """
     message = "Only Front Desk or Housekeeping staff can submit maintenance requests."
 
@@ -298,11 +291,9 @@ class CanSubmitMaintenanceRequest(BasePermission):
 
 class CanViewMaintenanceRequests(BasePermission):
     """
-    Roles that can VIEW the MaintenanceRequest list:
-      Admin, Manager         — see ALL requests.
+    Roles that can VIEW MaintenanceRequests:
+      Admin, Manager — see ALL.
       Front Desk, Housekeeping — see ONLY their own (filtered in get_queryset).
-
-    Maintenance and Security: no access.
     """
     message = "Only Admin, Manager, Front Desk, or Housekeeping staff can view maintenance requests."
 
@@ -320,8 +311,6 @@ class CanManageMaintenanceRequests(BasePermission):
     """
     Roles that can REVIEW and CONVERT MaintenanceRequests:
       Admin, Manager only.
-
-    Front Desk / Housekeeping can submit but NOT review or convert.
     """
     message = "Only Admin or Manager can review and convert maintenance requests."
 
@@ -329,16 +318,13 @@ class CanManageMaintenanceRequests(BasePermission):
         return _has_role(request.user, StaffRole.ADMIN, StaffRole.MANAGER)
 
 
-# ─── Incident reporting (expanded to FD + HK) ────────────────────────────────
+# ─── Incident reporting ───────────────────────────────────────────────────────
 
 class CanReportIncident(BasePermission):
     """
     Roles that can CREATE incident reports:
-      Admin, Security           — original creators.
-      Front Desk, Housekeeping  — NEW: can now report incidents.
-
-    Manager: view-only (cannot create).
-    Maintenance: no access to incidents.
+      Admin, Security, Front Desk, Housekeeping.
+    Manager: view/manage only — cannot create.
     """
     message = "Only Admin, Security, Front Desk, or Housekeeping staff can report incidents."
 
@@ -354,8 +340,10 @@ class CanReportIncident(BasePermission):
 
 class CanViewOwnIncidents(BasePermission):
     """
-    Allows Front Desk and Housekeeping to see ONLY their own incidents.
-    Admin, Manager, Security see all (handled in get_queryset on the view).
+    Allows viewing incidents. Scoping (own vs all) is enforced in get_queryset:
+      - Admin / Manager: all incidents.
+      - Security: only incidents assigned to them (assigned_to=profile).
+      - Front Desk / Housekeeping: only incidents they logged (logged_by=profile).
     """
     message = "You do not have permission to view incidents."
 
@@ -373,13 +361,11 @@ class CanViewOwnIncidents(BasePermission):
 class IsIncidentOwnerOrAdmin(BasePermission):
     """
     Object-level permission for incident edit/update.
-
     - Admin / Manager: always allowed on any incident.
-    - Security: only if they are logged_by on the incident.
-    - Front Desk / Housekeeping: never allowed to edit (blocked at view level
-      before this check is even reached).
+    - Security: only if they are logged_by OR assigned_to on the incident.
+    - Front Desk / Housekeeping: never allowed to edit (blocked at view level).
     """
-    message = "You can only edit incidents that you created."
+    message = "You can only edit incidents that you created or are assigned to."
 
     def has_object_permission(self, request, view, obj):
         if _has_role(request.user, StaffRole.ADMIN, StaffRole.MANAGER):
@@ -387,4 +373,7 @@ class IsIncidentOwnerOrAdmin(BasePermission):
         profile = getattr(request.user, "staff_profile", None)
         if profile is None:
             return False
-        return obj.logged_by is not None and obj.logged_by.pk == profile.pk
+        # Security can edit if they logged it OR are assigned to it
+        is_logger   = obj.logged_by is not None and obj.logged_by.pk == profile.pk
+        is_assignee = obj.assigned_to is not None and obj.assigned_to.pk == profile.pk
+        return is_logger or is_assignee

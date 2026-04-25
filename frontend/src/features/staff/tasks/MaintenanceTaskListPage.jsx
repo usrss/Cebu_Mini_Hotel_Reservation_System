@@ -46,11 +46,11 @@ export default function MaintenanceTaskListPage() {
 
   // Only admin/manager can create tasks and need the maintenance staff list
   useEffect(() => {
-    if (!perms.canManageMaintenance) return;
+    if (!perms.canAssignMaintenance) return;
     staffMembersApi.list({ role: 'maintenance', is_active: 'true' })
       .then((d) => setMtStaff(Array.isArray(d) ? d : (d.results ?? [])))
       .catch(() => {});
-  }, [perms.canManageMaintenance]);
+  }, [perms.canAssignMaintenance]);
 
   const handleCreate = async (e) => {
     e.preventDefault(); setFormBusy(true); setFormErr(null);
@@ -112,7 +112,7 @@ export default function MaintenanceTaskListPage() {
             <h1>Maintenance Tasks</h1>
             <p>{tasks.filter((t) => ['pending','in_progress'].includes(t.status)).length} active</p>
           </div>
-          {perms.canManageMaintenance && (
+          {perms.canAssignMaintenance && (
             <button className="sf-btn sf-btn-primary" onClick={() => setShowForm(!showForm)}>
               {showForm ? '× Cancel' : <><Plus size={13} /> New Task</>}
             </button>
@@ -124,7 +124,7 @@ export default function MaintenanceTaskListPage() {
         </div>
 
         {/* Create form — Admin/Manager only. Maintenance staff cannot create tasks. */}
-        {showForm && perms.canManageMaintenance && (
+        {showForm && perms.canAssignMaintenance && (
           <div className="sf-card" style={{ marginBottom: 20 }}>
             <div className="sf-card-label">New Maintenance Task</div>
             {formErr && <div className="sf-notice sf-notice-error">{formErr}</div>}

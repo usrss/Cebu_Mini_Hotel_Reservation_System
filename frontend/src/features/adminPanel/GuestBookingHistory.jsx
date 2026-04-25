@@ -73,7 +73,7 @@ export default function GuestBookingHistory() {
   return (
     <div className={styles.page}>
       <button className={styles.back} onClick={() => navigate(`/admin/guests/${id}`)}>
-        ← {guestEmail || 'Guest'}
+        ← Back
       </button>
 
       <div className={styles.header}>

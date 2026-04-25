@@ -91,6 +91,7 @@ CAPTCHA_SECRET = config('CAPTCHA_SECRET', default='change-me-in-production')
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
+    'django_extensions',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',

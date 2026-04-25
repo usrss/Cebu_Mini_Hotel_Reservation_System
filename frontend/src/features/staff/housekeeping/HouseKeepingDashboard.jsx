@@ -436,8 +436,8 @@ export default function HousekeepingDashboard() {
             <h1>Cleaning Dashboard</h1>
           </div>
           <div className="hk-header-actions">
-            {perms.canManageCleaning && (
-              <button className="sf-btn sf-btn-primary" onClick={() => setShowForm(!showForm)}>
+            {perms.canAssignHousekeeping && (
+  <button className="sf-btn sf-btn-primary" onClick={() => setShowForm(!showForm)}>
                 {showForm ? '× Cancel' : <><Plus size={13} /> New Task</>}
               </button>
             )}
@@ -582,7 +582,7 @@ export default function HousekeepingDashboard() {
                 onAssigned={handleAssigned}
                 actionBusy={actionBusy}
                 canAct={perms.canAccessCleaning}
-                canAssign={perms.canManageCleaning}
+                canAssign={perms.canAssignHousekeeping}
                 hkStaff={hkStaff}
               />
             ))}

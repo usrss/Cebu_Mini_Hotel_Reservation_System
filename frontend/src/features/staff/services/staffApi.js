@@ -171,6 +171,13 @@ export const incidentsApi = {
     api.patch(`${BASE}/incidents/${pk}/`, body).then((r) => r.data),
 
   /**
+   * Admin/Manager updates incident status and optionally assigns to security staff.
+   * Body: { status?, assigned_to?, resolution_notes? }
+   */
+  assign: (pk, body) =>
+    api.patch(`${BASE}/incidents/${pk}/`, body).then((r) => r.data),
+
+  /**
    * Cross-module escalation: create a linked MaintenanceTask from an incident.
    * Admin + Security (own incident only).
    * Body: { title, description, room?, priority?, deadline?, assigned_to? }

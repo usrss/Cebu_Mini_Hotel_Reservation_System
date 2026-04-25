@@ -4,17 +4,27 @@ staff/views.py
 All Staff Management API views for the Cebu Mini Hotel System.
 Enforces strict RBAC per role definitions:
 
-  admin        — Full access.
-  manager      — Operational oversight. Cannot control staff accounts.
+  admin        — Full access. Monitors, audits, manages staff accounts.
+  manager      — Operational oversight. Assigns tasks, reviews incidents.
+                 Cannot control staff accounts.
   receptionist — Reservation management + own shifts + own activity log.
   front_desk   — Check-in / check-out / walk-ins. Own shifts.
                  Can report maintenance issues and incidents.
   housekeeping — Own assigned cleaning tasks + own shifts.
                  Can report maintenance issues and incidents.
   maintenance  — Own assigned maintenance tasks + own shifts.
-  security     — ALL incident logs (shared awareness). Can create + edit own.
+  security     — ONLY incidents assigned to them by manager.
+                 Can create new incidents. Can edit own + assigned.
 
 All permission checks use effective_role (respects temp_role overrides).
+
+FIXES applied vs original:
+  1. Imports: added CanManageIncidents.
+  2. IncidentLogListCreateView.get_queryset: security now scoped to
+     assigned_to=profile (was returning all incidents).
+  3. IncidentLogDetailView.get_queryset: same security scoping fix.
+  4. IncidentLogDetailView.get_permissions: PATCH now uses
+     CanManageIncidents (was CanCreateIncidents, which blocked manager).
 """
 
 import csv
@@ -66,6 +76,7 @@ from .permissions import (
     CanAccessMaintenanceTasks,
     CanAccessIncidents,
     CanCreateIncidents,
+    CanManageIncidents,          # FIX 1: new import — allows manager to PATCH incidents
     CanViewReports,
     IsAssignedStaffOrAdmin,
     IsIncidentOwnerOrAdmin,
@@ -203,7 +214,6 @@ class StaffDetailView(APIView):
             return Response({"error": "You cannot delete your own account."},
                             status=status.HTTP_400_BAD_REQUEST)
 
-        # Prevent hard deletion if this staff member has active dependencies.
         active_shifts = Shift.objects.filter(
             staff=profile,
             status=Shift.ShiftStatus.IN_SHIFT,
@@ -355,16 +365,7 @@ class StaffReactivateView(APIView):
 
 
 class StaffDependenciesView(APIView):
-    """
-    GET /api/staff/members/<pk>/dependencies/
-
-    Dependency check for safe staff hard-deletion.
-    Returns counts of:
-      - active_shifts: shifts currently in progress
-      - open_tasks: housekeeping tasks not yet completed
-      - pending_assignments: maintenance tasks not yet completed/cancelled
-    """
-
+    """GET /api/staff/members/<pk>/dependencies/"""
     permission_classes = [IsAdminStaff]
 
     def get(self, request, pk):
@@ -399,19 +400,7 @@ class StaffDependenciesView(APIView):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 class StaffMonitoringView(generics.ListAPIView):
-    """
-    GET /api/staff/monitoring/
-
-    Presence sweep runs on every request:
-      - Clears expired temp roles
-      - Auto-marks offline any staff whose last_seen_at is older than
-        PRESENCE_STALE_SECONDS (180 s = 3 minutes).
-        This is the server-side complement to the frontend heartbeat.
-        If the browser fails to send a clean offline beacon, the server
-        catches it here on the next monitoring poll (every 15 s from admin UI).
-    """
-    # Staff member is considered stale / offline if no heartbeat for this long.
-    # Must be > frontend HEARTBEAT_MS (90 s) + some buffer.
+    """GET /api/staff/monitoring/"""
     PRESENCE_STALE_SECONDS = 180  # 3 minutes
 
     serializer_class   = StaffProfileListSerializer
@@ -425,33 +414,23 @@ class StaffMonitoringView(generics.ListAPIView):
 
     def list(self, request, *args, **kwargs):
         from datetime import timedelta
-        profiles = list(self.filter_queryset(self.get_queryset()))
-        now      = timezone.now()
+        profiles     = list(self.filter_queryset(self.get_queryset()))
+        now          = timezone.now()
         stale_cutoff = now - timedelta(seconds=self.PRESENCE_STALE_SECONDS)
 
         stale_pks = []
         for p in profiles:
-            # ── Clear expired temp roles ──────────────────────────────────
             if p.temp_role and p.temp_role_expires_at and now >= p.temp_role_expires_at:
                 p.temp_role            = None
                 p.temp_role_expires_at = None
                 p.save(update_fields=["temp_role", "temp_role_expires_at", "updated_at"])
 
-            # ── Stale presence sweep ──────────────────────────────────────
-            # Mark offline if:
-            #   - currently online or idle (not already offline)
-            #   - last_seen_at is older than the stale cutoff
-            #     OR last_seen_at is null (never sent a heartbeat)
             if p.online_status != StaffOnlineStatus.OFFLINE:
-                is_stale = (
-                    p.last_seen_at is None
-                    or p.last_seen_at < stale_cutoff
-                )
+                is_stale = (p.last_seen_at is None or p.last_seen_at < stale_cutoff)
                 if is_stale:
                     p.online_status = StaffOnlineStatus.OFFLINE
                     stale_pks.append(p.pk)
 
-        # Bulk update stale profiles in one query
         if stale_pks:
             StaffProfile.objects.filter(pk__in=stale_pks).update(
                 online_status=StaffOnlineStatus.OFFLINE
@@ -468,23 +447,16 @@ class StaffMonitoringView(generics.ListAPIView):
             }
 
         return Response({
-            "total_active": len(profiles),
-            "total_online": sum(1 for p in profiles if p.online_status == StaffOnlineStatus.ONLINE),
-            "by_role":      by_role,
-            "swept_offline": len(stale_pks),   # useful for debugging
+            "total_active":  len(profiles),
+            "total_online":  sum(1 for p in profiles if p.online_status == StaffOnlineStatus.ONLINE),
+            "by_role":       by_role,
+            "swept_offline": len(stale_pks),
             "generated_at":  now,
         })
 
 
 class StaffPresenceUpdateView(APIView):
-    """
-    POST /api/staff/presence/
-
-    Called by usePresenceHeartbeat.js every 90 seconds from every layout.
-    Body: { status: "online" | "idle" | "offline", current_task?: string }
-
-    Always updates last_seen_at so the monitoring sweep can detect stale sessions.
-    """
+    """POST /api/staff/presence/"""
     permission_classes = [IsStaff]
 
     def post(self, request):
@@ -543,8 +515,6 @@ class ShiftDetailView(generics.RetrieveUpdateDestroyAPIView):
 
     def destroy(self, request, *args, **kwargs):
         shift = self.get_object()
-
-        # Fix 12: only allow deletion for scheduled/cancelled shifts.
         if shift.status == Shift.ShiftStatus.IN_SHIFT:
             return Response(
                 {"error": "Cannot delete a shift that is currently in progress."},
@@ -555,13 +525,11 @@ class ShiftDetailView(generics.RetrieveUpdateDestroyAPIView):
                 {"error": "Completed shifts cannot be deleted as they are part of attendance records."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-
         if shift.status not in {Shift.ShiftStatus.SCHEDULED, Shift.ShiftStatus.CANCELLED}:
             return Response(
                 {"error": "Only scheduled or cancelled shifts can be deleted."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-
         return super().destroy(request, *args, **kwargs)
 
 
@@ -691,7 +659,7 @@ class CleaningTaskAssignView(APIView):
         assigned_to_pk = request.data.get("assigned_to")
 
         if assigned_to_pk is None:
-            old          = task.assigned_to
+            old              = task.assigned_to
             task.assigned_to = None
             task.save(update_fields=["assigned_to", "updated_at"])
             _log_action(request, "unassign_cleaning_task",
@@ -793,13 +761,7 @@ class MaintenanceTaskStatusView(APIView):
 
 
 class MaintenanceTaskNotesView(APIView):
-    """
-    PATCH /api/staff/maintenance/<pk>/notes/
-
-    Allows maintenance staff to append progress notes to a task
-    without changing its status. Admin/Manager can also use this.
-    Body: { "staff_notes": "text" }
-    """
+    """PATCH /api/staff/maintenance/<pk>/notes/"""
     permission_classes = [CanAccessMaintenanceTasks]
 
     def patch(self, request, pk):
@@ -834,20 +796,23 @@ class MaintenanceTaskNotesView(APIView):
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # ── INCIDENT LOGS
-# ── Admin/Manager:   view all, edit all.
-# ── Security:        view ALL, create, edit own only.
-# ── Front Desk / HK: create, view own only, read-only after submission.
+# ──
+# ── Admin/Manager:    view all, update/assign any incident.
+# ── Security:         view ONLY incidents assigned to them. Can create new
+# ──                   incidents. Can edit incidents they logged or are assigned to.
+# ── Front Desk / HK:  create, view own only, read-only after submission.
 # ═══════════════════════════════════════════════════════════════════════════════
 
 class IncidentLogListCreateView(generics.ListCreateAPIView):
     """
     GET  /api/staff/incidents/
-      Admin/Manager/Security: ALL incidents.
-      Front Desk/Housekeeping: ONLY incidents they logged.
+      Admin/Manager:           ALL incidents.
+      Security:                ONLY incidents assigned to them (assigned_to=profile).
+      Front Desk/Housekeeping: ONLY incidents they logged (logged_by=profile).
 
     POST /api/staff/incidents/
-      Admin, Security, Front Desk, Housekeeping.
-      Manager: view-only (cannot create).
+      Admin, Security, Front Desk, Housekeeping can create.
+      Manager: cannot create — they review/assign incidents created by others.
     """
     serializer_class = IncidentLogSerializer
     filter_backends  = [DjangoFilterBackend, filters.OrderingFilter, filters.SearchFilter]
@@ -862,16 +827,25 @@ class IncidentLogListCreateView(generics.ListCreateAPIView):
         return [CanViewOwnIncidents()]
 
     def get_queryset(self):
-        qs      = IncidentLog.objects.select_related("logged_by__user")
+        qs      = IncidentLog.objects.select_related("logged_by__user", "assigned_to__user")
         profile = getattr(self.request.user, "staff_profile", None)
         role    = profile.effective_role if profile else None
+
+        # Front Desk / Housekeeping — only incidents they submitted
         if role in (StaffRole.FRONT_DESK, StaffRole.HOUSEKEEPING):
             return qs.filter(logged_by=profile)
+
+        # Security — incidents assigned to them OR that they logged themselves
+        if role == StaffRole.SECURITY:
+            from django.db.models import Q
+            return qs.filter(Q(assigned_to=profile) | Q(logged_by=profile))
+
+        # Admin / Manager — all incidents
         return qs
 
     def perform_create(self, serializer):
         profile  = getattr(self.request.user, "staff_profile", None)
-        incident = serializer.save(logged_by=profile)
+        incident = serializer.save(logged_by=profile, status=IncidentLog.IncidentStatus.REPORTED)
         _log_action(self.request, "log_incident",
                     f"Logged incident: {incident.get_incident_type_display()} "
                     f"at {incident.location or 'unspecified location'}")
@@ -884,22 +858,34 @@ class IncidentLogListCreateView(generics.ListCreateAPIView):
 
 class IncidentLogDetailView(generics.RetrieveUpdateAPIView):
     """
-    GET   /api/staff/incidents/<pk>/  — all roles with access (scoped).
-    PATCH /api/staff/incidents/<pk>/  — Admin: any. Security: own. FD/HK: blocked.
+    GET   /api/staff/incidents/<pk>/  — scoped by role (same as list).
+    PATCH /api/staff/incidents/<pk>/  — Admin/Manager: any incident.
+                                        Security: own (logged_by) or assigned (assigned_to).
+                                        FD/HK: blocked entirely.
     """
     serializer_class = IncidentLogSerializer
 
     def get_queryset(self):
-        qs      = IncidentLog.objects.select_related("logged_by__user")
+        qs      = IncidentLog.objects.select_related("logged_by__user", "assigned_to__user")
         profile = getattr(self.request.user, "staff_profile", None)
         role    = profile.effective_role if profile else None
+
+        # FIX 3: same scoping as list view
         if role in (StaffRole.FRONT_DESK, StaffRole.HOUSEKEEPING):
             return qs.filter(logged_by=profile)
+
+        if role == StaffRole.SECURITY:
+            from django.db.models import Q
+            return qs.filter(Q(assigned_to=profile) | Q(logged_by=profile))
+
         return qs
 
     def get_permissions(self):
         if self.request.method in ("PATCH", "PUT"):
-            return [CanCreateIncidents(), IsIncidentOwnerOrAdmin()]
+            # FIX 4: use CanManageIncidents (admin + manager + security) instead of
+            # CanCreateIncidents (admin + security only) — this was blocking manager.
+            # IsIncidentOwnerOrAdmin enforces object-level ownership for security.
+            return [CanManageIncidents(), IsIncidentOwnerOrAdmin()]
         return [CanViewOwnIncidents()]
 
     def update(self, request, *args, **kwargs):
@@ -908,7 +894,7 @@ class IncidentLogDetailView(generics.RetrieveUpdateAPIView):
         if role in (StaffRole.FRONT_DESK, StaffRole.HOUSEKEEPING):
             return Response(
                 {"error": "Front Desk and Housekeeping staff cannot edit incident reports "
-                           "after submission. Contact Admin or Security."},
+                           "after submission. Contact Security or Manager."},
                 status=status.HTTP_403_FORBIDDEN,
             )
         return super().update(request, *args, **kwargs)
@@ -990,14 +976,14 @@ class AdminDashboardView(APIView):
         recent_activity = StaffActivityLogSerializer(recent_logs, many=True).data
 
         return Response({
-            "rooms":                    room_summary,
-            "bookings":                 booking_summary,
-            "tasks":                    task_summary,
+            "rooms":                        room_summary,
+            "bookings":                     booking_summary,
+            "tasks":                        task_summary,
             "pending_maintenance_requests": pending_requests,
-            "staff":                    staff_summary,
-            "revenue_today":            float(revenue_today),
-            "recent_activity":          recent_activity,
-            "generated_at":             now,
+            "staff":                        staff_summary,
+            "revenue_today":                float(revenue_today),
+            "recent_activity":              recent_activity,
+            "generated_at":                 now,
         })
 
 
@@ -1075,7 +1061,6 @@ class MaintenanceRequestListCreateView(generics.ListCreateAPIView):
 
     POST /api/staff/maintenance-requests/
       Front Desk, Housekeeping, Admin, Manager.
-      Maintenance and Security: no access.
     """
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = MaintenanceRequestFilter
@@ -1199,8 +1184,6 @@ class IncidentEscalateView(APIView):
 
     Cross-module escalation: create a linked MaintenanceTask from an incident.
     Allowed: Admin + Security (own incidents only).
-    Body: { title, description, room?, priority?, deadline?, assigned_to? }
-    Returns the created MaintenanceTask.
     """
     permission_classes = [CanCreateIncidents]
 
@@ -1210,7 +1193,6 @@ class IncidentEscalateView(APIView):
         except IncidentLog.DoesNotExist:
             return Response({"error": "Incident not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        # Security staff can only escalate their own incidents
         profile = getattr(request.user, "staff_profile", None)
         if profile and profile.effective_role == StaffRole.SECURITY:
             if incident.logged_by != profile:

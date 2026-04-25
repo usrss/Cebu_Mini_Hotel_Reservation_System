@@ -102,12 +102,11 @@ const NAV_STRUCTURE = [
     icon: <ClipboardList size={18} />,
     roles: ['admin', 'manager'],
     children: [
-      { key: 'housekeeping',         label: 'Housekeeping',     to: '/staff/cleaning',               roles: ['admin', 'manager'] },
-      { key: 'maintenance',          label: 'Maintenance Tasks', to: '/staff/maintenance',           roles: ['admin', 'manager'] },
-      { key: 'maintenance-requests', label: 'Maint. Requests',  to: '/staff/maintenance-requests',   roles: ['admin', 'manager'] },
-      { key: 'incidents',            label: 'Incidents',        to: '/staff/incidents',              roles: ['admin', 'manager'] }
-
-
+      { key: 'housekeeping',         label: 'Housekeeping',      to: '/staff/cleaning',               roles: ['admin', 'manager'] },
+      { key: 'maintenance',          label: 'Maintenance Tasks',  to: '/staff/maintenance',            roles: ['admin', 'manager'] },
+      { key: 'maintenance-requests', label: 'Maint. Requests',   to: '/staff/maintenance-requests',   roles: ['manager'] },
+      { key: 'incidents',            label: 'Incident Log',      to: '/staff/incidents',              roles: ['admin', 'manager'] },
+      { key: 'incident-review',      label: 'Incident Review',   to: '/staff/incident-review',        roles: ['manager'] },
     ],
   },
   // ── Support Tickets ──────────────────────────────────────────────────────

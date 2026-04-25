@@ -238,7 +238,7 @@ export default function AdminDashboard() {
 
       {/* ── Operational KPIs ───────────────────────────────────────────────── */}
       <div className="ad-section-label">Operations</div>
-      <div className="ad-kpis" style={{ marginBottom: 14 }}>
+      <div className="ad-kpis" style={{ marginBottom: 14, gridTemplateColumns: 'repeat(3, 1fr)' }}>
         <KpiCard
           icon={<BedDouble size={22} />}
           label="Available Rooms"
@@ -263,15 +263,6 @@ export default function AdminDashboard() {
           color={tasksAlert ? 'var(--red)' : 'var(--amber)'}
           alert={tasksAlert}
           onClick={() => navigate('/staff/cleaning')}
-        />
-        <KpiCard
-          icon={<FileText size={22} />}
-          label="Pending Requests"
-          value={val(pendingReqs)}
-          sub={pendingReqs > 0 ? 'Awaiting review' : 'All reviewed'}
-          color={pendingReqAlert ? 'var(--red)' : 'var(--green)'}
-          alert={pendingReqAlert}
-          onClick={() => navigate('/staff/maintenance-requests')}
         />
       </div>
 

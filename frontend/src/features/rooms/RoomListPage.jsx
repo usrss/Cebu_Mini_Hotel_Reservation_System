@@ -2,12 +2,18 @@
 // Auto-search: triggers availability search automatically when check_in + check_out
 // are both filled (debounced 400ms). Guests default to 1 if not set.
 // Initial load: shows all rooms. Once dates filled: shows only available rooms.
+//
+// UPDATED FLOW:
+//   1. Guest clicks "Details" → RoomDetailModal opens (info only, no booking form)
+//   2. Floating "Book Now" button at bottom of modal
+//   3. Clicking "Book Now" closes detail modal → BookingFormModal opens
+//   4. BookingFormModal shows BookingForm → proceed to payment (same flow as before)
 
 import { useState, useEffect, useRef, lazy, Suspense, useCallback } from 'react';
 import {
   SearchX, ChevronDown, X, Search, Calendar, Users,
   Tag, Bed, Maximize2, Star, ArrowRight, CheckCircle2,
-  AlertCircle,
+  AlertCircle, CreditCard,
 } from 'lucide-react';
 import RoomCard from './RoomCard';
 import { useRooms, useAvailability } from '../hooks/useRooms';
@@ -94,9 +100,94 @@ function validateFilters(filters) {
 }
 
 /* ══════════════════════════════════════════════════════
-   ROOM DETAIL MODAL — with full-screen gallery
+   BOOKING FORM MODAL
+   Opens when guest clicks "Book Now" from RoomDetailModal.
+   Shows the BookingForm in a clean overlay.
    ══════════════════════════════════════════════════════ */
-function RoomDetailModal({ room: listRoom, onClose, prefillCheckIn, prefillCheckOut }) {
+function BookingFormModal({ room, prefillCheckIn, prefillCheckOut, onClose }) {
+  const hasDiscount = Number(room.discount_percentage) > 0;
+
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = ''; };
+  }, []);
+
+  const handleBackdrop = (e) => {
+    if (e.target === e.currentTarget) onClose();
+  };
+
+  return (
+    <div className="bfm-backdrop" onClick={handleBackdrop}>
+      <div className="bfm-modal" onClick={e => e.stopPropagation()}>
+        {/* Header */}
+        <div className="bfm-header">
+          <div className="bfm-header-left">
+            <button className="bfm-back-btn" onClick={onClose} aria-label="Back to room details">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M19 12H5M12 5l-7 7 7 7"/>
+              </svg>
+            </button>
+            <div>
+              <p className="bfm-eyebrow">Room #{room.room_number} · {room.room_type_display}</p>
+              <h2 className="bfm-title">Complete Your Booking</h2>
+            </div>
+          </div>
+          <button className="bfm-close-btn" onClick={onClose} aria-label="Close">
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Room summary strip */}
+        <div className="bfm-room-strip">
+          {room.primary_image?.image_url && (
+            <img
+              src={room.primary_image.image_url}
+              alt={room.room_type_display}
+              className="bfm-room-thumb"
+            />
+          )}
+          <div className="bfm-room-info">
+            <span className="bfm-room-name">
+              {room.room_type_display} Room
+              {room.bed_type_display ? ` · ${room.bed_type_display} bed` : ''}
+            </span>
+            <div className="bfm-room-specs">
+              <span><Users size={12} /> {room.capacity} guest{room.capacity !== 1 ? 's' : ''}</span>
+              {room.size_sqm && <span><Maximize2 size={12} /> {room.size_sqm}m²</span>}
+            </div>
+          </div>
+          <div className="bfm-room-price">
+            {hasDiscount && (
+              <span className="bfm-price-original">₱{formatPrice(room.price_per_night)}</span>
+            )}
+            <span className="bfm-price-main">
+              ₱{formatPrice(hasDiscount ? room.discounted_price : room.price_per_night)}
+            </span>
+            <span className="bfm-price-night">/ night</span>
+            {hasDiscount && (
+              <span className="bfm-discount-tag"><Tag size={10} /> {Number(room.discount_percentage)}% off</span>
+            )}
+          </div>
+        </div>
+
+        {/* Booking form */}
+        <div className="bfm-body">
+          <BookingForm
+            room={room}
+            prefillCheckIn={prefillCheckIn}
+            prefillCheckOut={prefillCheckOut}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════
+   ROOM DETAIL MODAL — info only, no booking panel
+   Has a floating "Book Now" button at the bottom
+   ══════════════════════════════════════════════════════ */
+function RoomDetailModal({ room: listRoom, onClose, onBookNow, prefillCheckIn, prefillCheckOut }) {
   const [room,           setRoom]           = useState(null);
   const [fetching,       setFetching]       = useState(true);
   const [activeImg,      setActiveImg]      = useState(0);
@@ -104,6 +195,7 @@ function RoomDetailModal({ room: listRoom, onClose, prefillCheckIn, prefillCheck
   const [showAllReviews, setShowAllReviews] = useState(false);
   const [showGallery,    setShowGallery]    = useState(false);
   const [galleryIndex,   setGalleryIndex]   = useState(0);
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
   const handleHelpfulnessVote = async (reviewId, isHelpful) => {
     try {
@@ -193,11 +285,13 @@ function RoomDetailModal({ room: listRoom, onClose, prefillCheckIn, prefillCheck
   const displayedReviews = showAllReviews ? reviews : reviews.slice(0, 4);
   const hasDiscount = Number(room.discount_percentage) > 0;
   const remainingCount = images.length > 5 ? images.length - 5 : 0;
+  const effectivePrice = hasDiscount ? room.discounted_price : room.price_per_night;
 
   return (
     <>
       <div className="rdm-backdrop" onClick={handleBackdrop}>
-        <div className="rdm-modal">
+        {/* Modal is now full-width info layout — no booking panel */}
+        <div className="rdm-modal rdm-modal--info-only" onClick={e => e.stopPropagation()}>
           <div className="rdm-header">
             <div className="rdm-header-left">
               <p className="rdm-eyebrow">Room #{room.room_number} · Floor {room.floor}</p>
@@ -208,7 +302,7 @@ function RoomDetailModal({ room: listRoom, onClose, prefillCheckIn, prefillCheck
             </button>
           </div>
 
-          <div className="rdm-body">
+          <div className="rdm-body rdm-body--info-only">
             {/* ── Photo grid ── */}
             <div className="rdm-photo-grid">
               {/* Main image */}
@@ -265,7 +359,6 @@ function RoomDetailModal({ room: listRoom, onClose, prefillCheckIn, prefillCheck
                 ))}
               </div>
 
-              {/* All photos button — visible if >1 image */}
               {images.length > 1 && (
                 <button className="rdm-all-photos-btn" onClick={() => openGallery(0)}>
                   <Bed size={13} /> All Photos ({images.length})
@@ -273,144 +366,159 @@ function RoomDetailModal({ room: listRoom, onClose, prefillCheckIn, prefillCheck
               )}
             </div>
 
-            <div className="rdm-content">
-              <div className="rdm-info">
-                <div className="rdm-info-header">
-                  <div>
-                    <h3 className="rdm-info-title">
-                      {room.room_type_display}
-                      {room.bed_type_display ? ` · ${room.bed_type_display} bed` : ''}
-                      {room.size_sqm ? ` · ${room.size_sqm}m²` : ''}
-                    </h3>
-                    <div className="rdm-specs-row">
-                      <span className="rdm-spec"><Users size={14} />{room.capacity} {room.capacity === 1 ? 'guest' : 'guests'}</span>
-                      <span className="rdm-spec-sep">·</span>
-                      <span className="rdm-spec"><Bed size={14} /> {room.bed_type_display}</span>
-                      {room.size_sqm && (<><span className="rdm-spec-sep">·</span><span className="rdm-spec"><Maximize2 size={14} /> {room.size_sqm}m²</span></>)}
-                    </div>
+            {/* ── Room info — now full width ── */}
+            <div className="rdm-info rdm-info--full">
+              <div className="rdm-info-header">
+                <div>
+                  <h3 className="rdm-info-title">
+                    {room.room_type_display}
+                    {room.bed_type_display ? ` · ${room.bed_type_display} bed` : ''}
+                    {room.size_sqm ? ` · ${room.size_sqm}m²` : ''}
+                  </h3>
+                  <div className="rdm-specs-row">
+                    <span className="rdm-spec"><Users size={14} />{room.capacity} {room.capacity === 1 ? 'guest' : 'guests'}</span>
+                    <span className="rdm-spec-sep">·</span>
+                    <span className="rdm-spec"><Bed size={14} /> {room.bed_type_display}</span>
+                    {room.size_sqm && (<><span className="rdm-spec-sep">·</span><span className="rdm-spec"><Maximize2 size={14} /> {room.size_sqm}m²</span></>)}
                   </div>
+                </div>
+                {/* Price shown inline in info header */}
+                <div className="rdm-info-price-block">
+                  {hasDiscount && (
+                    <span className="rdm-info-price-original">₱{formatPrice(room.price_per_night)}</span>
+                  )}
+                  <span className="rdm-info-price-main">₱{formatPrice(effectivePrice)}</span>
+                  <span className="rdm-info-price-night">/ night</span>
+                  {hasDiscount && (
+                    <span className="rdm-info-discount-tag"><Tag size={10} /> {Number(room.discount_percentage)}% off</span>
+                  )}
                   {room.review_count > 0 && (
-                    <div className="rdm-rating-block">
-                      <Star size={16} fill="currentColor" />
+                    <div className="rdm-rating-block rdm-rating-block--inline">
+                      <Star size={14} fill="currentColor" />
                       <span>{Number(room.average_rating).toFixed(1)}</span>
                       <span className="rdm-review-ct">({room.review_count})</span>
                     </div>
                   )}
                 </div>
+              </div>
 
-                <div className="rdm-divider" />
+              <div className="rdm-divider" />
 
-                {room.panorama_image_url && (
-                  <button className="rdm-360-btn" onClick={() => setShow360(true)}>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9 9 4.03 9 9z"/>
-                      <path d="M3.6 9h16.8M3.6 15h16.8M12 3c-1.66 2.49-2.5 4.99-2.5 9S10.34 18.51 12 21M12 3c1.66 2.49 2.5 4.99 2.5 9S13.66 18.51 12 21"/>
-                    </svg>
-                    View 360° Virtual Tour
-                  </button>
-                )}
+              {room.panorama_image_url && (
+                <button className="rdm-360-btn" onClick={() => setShow360(true)}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9 9 4.03 9 9z"/>
+                    <path d="M3.6 9h16.8M3.6 15h16.8M12 3c-1.66 2.49-2.5 4.99-2.5 9S10.34 18.51 12 21M12 3c1.66 2.49 2.5 4.99 2.5 9S13.66 18.51 12 21"/>
+                  </svg>
+                  View 360° Virtual Tour
+                </button>
+              )}
 
-                {room.description && (
-                  <>
-                    <div className="rdm-section-title">About this room</div>
-                    <p className="rdm-description">{room.description}</p>
-                    <div className="rdm-divider" />
-                  </>
-                )}
+              {room.description && (
+                <>
+                  <div className="rdm-section-title">About this room</div>
+                  <p className="rdm-description">{room.description}</p>
+                  <div className="rdm-divider" />
+                </>
+              )}
 
-                {(room.amenities || []).length > 0 && (
-                  <>
-                    <div className="rdm-section-title">What this room offers</div>
-                    <div className="rdm-amenities-grid">
-                      {(room.amenities || []).map((a) => (
-                        <div key={a.id} className="rdm-amenity-item">
-                          <CheckCircle2 size={16} className="rdm-amenity-check" />
-                          <span>{a.name}</span>
+              {(room.amenities || []).length > 0 && (
+                <>
+                  <div className="rdm-section-title">What this room offers</div>
+                  <div className="rdm-amenities-grid">
+                    {(room.amenities || []).map((a) => (
+                      <div key={a.id} className="rdm-amenity-item">
+                        <CheckCircle2 size={16} className="rdm-amenity-check" />
+                        <span>{a.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="rdm-divider" />
+                </>
+              )}
+
+              <div className="rdm-reviews-section">
+                <div className="rdm-section-title">
+                  {room.review_count > 0 ? (
+                    <><Star size={18} fill="currentColor" />{Number(room.average_rating).toFixed(1)} · {room.review_count} review{room.review_count !== 1 ? 's' : ''}</>
+                  ) : 'Reviews'}
+                </div>
+                {room.review_count > 0 && room.rating_breakdown && (
+                  <div className="rdm-reviews-summary">
+                    <div className="rdm-rating-big">
+                      <div className="rdm-rating-big-num">{Number(room.average_rating).toFixed(1)}</div>
+                      <div className="rdm-rating-big-stars"><StarIcons rating={room.average_rating} size={16} /></div>
+                      <div className="rdm-rating-big-label">Overall</div>
+                    </div>
+                    <div className="rdm-rating-bars">
+                      {[5, 4, 3, 2, 1].map((star) => (
+                        <div key={star} className="rdm-bar-row">
+                          <span className="rdm-bar-label">{star}</span>
+                          <div className="rdm-bar-track">
+                            <div className="rdm-bar-fill" style={{ width: room.review_count ? `${((room.rating_breakdown[star] || 0) / room.review_count) * 100}%` : '0%' }} />
+                          </div>
+                          <span className="rdm-bar-count">{room.rating_breakdown[star] || 0}</span>
                         </div>
                       ))}
                     </div>
-                    <div className="rdm-divider" />
+                  </div>
+                )}
+                {reviews.length === 0 ? (
+                  <p style={{ fontSize: 13, color: '#909090', fontStyle: 'italic', margin: 0 }}>No reviews yet for this room.</p>
+                ) : (
+                  <>
+                    <div className="rdm-reviews-list">
+                      {displayedReviews.map((r) => (
+                        <div key={r.id} className="rdm-review-item">
+                          <div className="rdm-reviewer-avatar">{r.guest_name?.charAt(0)?.toUpperCase() || '?'}</div>
+                          <div className="rdm-review-body">
+                            <div className="rdm-reviewer-name">{r.guest_name}</div>
+                            <div className="rdm-review-date">{new Date(r.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</div>
+                            <div className="rdm-review-stars"><StarIcons rating={r.rating} size={12} /></div>
+                            {r.review_text && <p className="rdm-review-text">{r.review_text}</p>}
+                            {r.is_verified && <span className="rdm-verified-badge">Verified Stay</span>}
+                            <ReviewHelpfulness
+                              reviewId={r.id}
+                              helpfulCount={r.helpful_count || 0}
+                              notHelpfulCount={r.not_helpful_count || 0}
+                              userVote={r.user_vote || null}
+                              onVote={handleHelpfulnessVote}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    {reviews.length > 4 && (
+                      <button className="rdm-show-more-btn" onClick={() => setShowAllReviews(v => !v)}>
+                        {showAllReviews ? 'Show fewer reviews' : `Show all ${reviews.length} reviews`}
+                      </button>
+                    )}
                   </>
                 )}
-
-                <div className="rdm-reviews-section">
-                  <div className="rdm-section-title">
-                    {room.review_count > 0 ? (
-                      <><Star size={18} fill="currentColor" />{Number(room.average_rating).toFixed(1)} · {room.review_count} review{room.review_count !== 1 ? 's' : ''}</>
-                    ) : 'Reviews'}
-                  </div>
-                  {room.review_count > 0 && room.rating_breakdown && (
-                    <div className="rdm-reviews-summary">
-                      <div className="rdm-rating-big">
-                        <div className="rdm-rating-big-num">{Number(room.average_rating).toFixed(1)}</div>
-                        <div className="rdm-rating-big-stars"><StarIcons rating={room.average_rating} size={16} /></div>
-                        <div className="rdm-rating-big-label">Overall</div>
-                      </div>
-                      <div className="rdm-rating-bars">
-                        {[5, 4, 3, 2, 1].map((star) => (
-                          <div key={star} className="rdm-bar-row">
-                            <span className="rdm-bar-label">{star}</span>
-                            <div className="rdm-bar-track">
-                              <div className="rdm-bar-fill" style={{ width: room.review_count ? `${((room.rating_breakdown[star] || 0) / room.review_count) * 100}%` : '0%' }} />
-                            </div>
-                            <span className="rdm-bar-count">{room.rating_breakdown[star] || 0}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {reviews.length === 0 ? (
-                    <p style={{ fontSize: 13, color: '#909090', fontStyle: 'italic', margin: 0 }}>No reviews yet for this room.</p>
-                  ) : (
-                    <>
-                      <div className="rdm-reviews-list">
-                        {displayedReviews.map((r) => (
-                          <div key={r.id} className="rdm-review-item">
-                            <div className="rdm-reviewer-avatar">{r.guest_name?.charAt(0)?.toUpperCase() || '?'}</div>
-                            <div className="rdm-review-body">
-                              <div className="rdm-reviewer-name">{r.guest_name}</div>
-                              <div className="rdm-review-date">{new Date(r.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</div>
-                              <div className="rdm-review-stars"><StarIcons rating={r.rating} size={12} /></div>
-                              {r.review_text && <p className="rdm-review-text">{r.review_text}</p>}
-                              {r.is_verified && <span className="rdm-verified-badge">Verified Stay</span>}
-                              <ReviewHelpfulness
-                                reviewId={r.id}
-                                helpfulCount={r.helpful_count || 0}
-                                notHelpfulCount={r.not_helpful_count || 0}
-                                userVote={r.user_vote || null}
-                                onVote={handleHelpfulnessVote}
-                              />
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                      {reviews.length > 4 && (
-                        <button className="rdm-show-more-btn" onClick={() => setShowAllReviews(v => !v)}>
-                          {showAllReviews ? 'Show fewer reviews' : `Show all ${reviews.length} reviews`}
-                        </button>
-                      )}
-                    </>
-                  )}
-                </div>
               </div>
 
-              <div className="rdm-booking-panel">
-                <div className="rdm-price-display">
-                  {hasDiscount && <span className="rdm-price-original">₱{formatPrice(room.price_per_night)}</span>}
-                  <span className="rdm-price-main">₱{formatPrice(hasDiscount ? room.discounted_price : room.price_per_night)}</span>
-                  <span className="rdm-price-night">/ night</span>
-                </div>
+              {/* Bottom padding so content isn't hidden behind the floating button */}
+              <div style={{ height: 96 }} />
+            </div>
+          </div>
+
+          {/* ── Floating Book Now bar ── */}
+          <div className="rdm-book-bar">
+            <div className="rdm-book-bar-inner">
+              <div className="rdm-book-bar-price">
                 {hasDiscount && (
-                  <div className="rdm-discount-badge"><Tag size={11} /> {Number(room.discount_percentage)}% off</div>
+                  <span className="rdm-book-bar-original">₱{formatPrice(room.price_per_night)}</span>
                 )}
-                <div className="rdm-booking-form-wrap">
-                  <BookingForm
-                    room={room}
-                    prefillCheckIn={prefillCheckIn}
-                    prefillCheckOut={prefillCheckOut}
-                  />
-                </div>
+                <span className="rdm-book-bar-amount">₱{formatPrice(effectivePrice)}</span>
+                <span className="rdm-book-bar-night">/ night</span>
               </div>
+              <button
+                className="rdm-book-now-btn"
+                onClick={() => onBookNow(room)}
+              >
+                <CreditCard size={16} />
+                Book Now
+              </button>
             </div>
           </div>
         </div>
@@ -427,7 +535,6 @@ function RoomDetailModal({ room: listRoom, onClose, prefillCheckIn, prefillCheck
           }}
           onClick={() => setShowGallery(false)}
         >
-          {/* Close */}
           <button
             onClick={() => setShowGallery(false)}
             style={{
@@ -441,16 +548,12 @@ function RoomDetailModal({ room: listRoom, onClose, prefillCheckIn, prefillCheck
           >
             <X size={18} />
           </button>
-
-          {/* Counter */}
           <div style={{
             position: 'absolute', top: 24, left: '50%', transform: 'translateX(-50%)',
             color: 'rgba(255,255,255,0.7)', fontSize: 12, fontWeight: 600, letterSpacing: '0.08em',
           }}>
             {galleryIndex + 1} / {images.length}
           </div>
-
-          {/* Prev button */}
           {galleryIndex > 0 && (
             <button
               onClick={(e) => { e.stopPropagation(); setGalleryIndex(i => i - 1); }}
@@ -463,8 +566,6 @@ function RoomDetailModal({ room: listRoom, onClose, prefillCheckIn, prefillCheck
               }}
             >‹</button>
           )}
-
-          {/* Main image */}
           <img
             src={images[galleryIndex]?.image_url}
             alt={`Room photo ${galleryIndex + 1}`}
@@ -475,8 +576,6 @@ function RoomDetailModal({ room: listRoom, onClose, prefillCheckIn, prefillCheck
               boxShadow: '0 8px 40px rgba(0,0,0,0.5)',
             }}
           />
-
-          {/* Next button */}
           {galleryIndex < images.length - 1 && (
             <button
               onClick={(e) => { e.stopPropagation(); setGalleryIndex(i => i + 1); }}
@@ -489,8 +588,6 @@ function RoomDetailModal({ room: listRoom, onClose, prefillCheckIn, prefillCheck
               }}
             >›</button>
           )}
-
-          {/* Thumbnail strip */}
           <div
             onClick={(e) => e.stopPropagation()}
             style={{
@@ -508,9 +605,7 @@ function RoomDetailModal({ room: listRoom, onClose, prefillCheckIn, prefillCheck
                 style={{
                   width: 60, height: 44, objectFit: 'cover', borderRadius: 4,
                   cursor: 'pointer', flexShrink: 0,
-                  border: i === galleryIndex
-                    ? '2px solid #fff'
-                    : '2px solid rgba(255,255,255,0.2)',
+                  border: i === galleryIndex ? '2px solid #fff' : '2px solid rgba(255,255,255,0.2)',
                   opacity: i === galleryIndex ? 1 : 0.6,
                   transition: 'all 150ms',
                 }}
@@ -918,16 +1013,27 @@ export default function RoomListPage() {
   const [filters,          setFilters]          = useState({});
   const [validationErrors, setValidationErrors] = useState({});
   const [selectedRoom,     setSelectedRoom]     = useState(null);
-  // Dates at the time the modal was opened — used to prefill BookingForm
-  const [modalDates,       setModalDates]       = useState({ checkIn: '', checkOut: '' });
+  const [bookingRoom,      setBookingRoom]       = useState(null); // room for BookingFormModal
+  const [modalDates,       setModalDates]        = useState({ checkIn: '', checkOut: '' });
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
-  const openModal = (room) => {
+  const openDetailModal = (room) => {
     setSelectedRoom(room);
     setModalDates({
       checkIn:  filters.check_in  || '',
       checkOut: filters.check_out || '',
     });
   };
+
+  // Called when guest clicks "Book Now" inside RoomDetailModal
+  const handleBookNow = useCallback((room) => {
+    setSelectedRoom(null);   // close detail modal
+    setBookingRoom(room);    // open booking form modal
+  }, []);
+
+  const handleCloseBookingModal = useCallback(() => {
+    setBookingRoom(null);
+  }, []);
 
   const hasDates = Boolean(filters.check_in && filters.check_out);
 
@@ -1093,7 +1199,7 @@ export default function RoomListPage() {
               <RoomCardItem
                 key={room.id}
                 room={room}
-                onViewDetails={openModal}
+                onViewDetails={openDetailModal}
                 availabilityDates={hasDates ? { check_in: filters.check_in, check_out: filters.check_out } : null}
               />
             ))}
@@ -1103,12 +1209,24 @@ export default function RoomListPage() {
 
       <Footer />
 
+      {/* Room Detail Modal — info only */}
       {selectedRoom && (
         <RoomDetailModal
           room={selectedRoom}
           onClose={() => setSelectedRoom(null)}
+          onBookNow={handleBookNow}
           prefillCheckIn={modalDates.checkIn}
           prefillCheckOut={modalDates.checkOut}
+        />
+      )}
+
+      {/* Booking Form Modal — opens after "Book Now" */}
+      {bookingRoom && (
+        <BookingFormModal
+          room={bookingRoom}
+          prefillCheckIn={modalDates.checkIn}
+          prefillCheckOut={modalDates.checkOut}
+          onClose={handleCloseBookingModal}
         />
       )}
     </div>

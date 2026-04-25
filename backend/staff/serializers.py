@@ -447,6 +447,7 @@ class IncidentLogSerializer(serializers.ModelSerializer):
         model  = IncidentLog
         fields = [
             "id", "logged_by", "logged_by_name",
+            "assigned_to", "assigned_to_name",
             "title",
             "incident_type", "incident_type_display",
             "severity", "severity_display",
@@ -456,7 +457,7 @@ class IncidentLogSerializer(serializers.ModelSerializer):
             "created_at", "updated_at",
         ]
         read_only_fields = [
-            "id", "logged_by_name",
+            "id", "logged_by_name", "assigned_to_name",
             "incident_type_display", "severity_display", "status_display",
             "resolved_at",
             "created_at", "updated_at",
@@ -464,6 +465,11 @@ class IncidentLogSerializer(serializers.ModelSerializer):
 
     def get_logged_by_name(self, obj):
         return str(obj.logged_by) if obj.logged_by else "Unknown"
+
+    assigned_to_name = serializers.SerializerMethodField()
+
+    def get_assigned_to_name(self, obj):
+        return str(obj.assigned_to) if obj.assigned_to else None
 
     def validate(self, data):
         # Keep resolved boolean in sync with status

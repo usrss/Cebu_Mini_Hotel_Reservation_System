@@ -13,7 +13,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, CheckCircle2, Wrench } from 'lucide-react';
 import { maintenanceRequestsApi } from '../services/staffApi';
-import { adminGetRooms } from '../../../services/roomService';
+import { getRooms } from '../../../services/roomService';
 import { useStaffRole } from '../hooks/useStaffRole';
 import '../Staff.css';
 
@@ -27,13 +27,15 @@ export default function ReportMaintenancePage() {
   const [error,   setError]   = useState(null);
   const [success, setSuccess] = useState(false);
 
-  useEffect(() => {
-    adminGetRooms({ is_active: true })
+ useEffect(() => {
+    getRooms({ is_active: true })
       .then((res) => {
         const data = res.data;
         setRooms(Array.isArray(data) ? data : (data.results ?? []));
       })
-      .catch(() => {});
+      .catch((err) => {
+        console.error('Failed to fetch rooms:', err);
+      });
   }, []);
 
   const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }));

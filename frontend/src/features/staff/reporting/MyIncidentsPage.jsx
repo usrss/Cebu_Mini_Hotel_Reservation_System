@@ -10,7 +10,12 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus } from 'lucide-react';
+import { Plus,  Search,
+  Bell,
+  Ban,
+  Hospital,
+  Lock,
+  ClipboardList, } from 'lucide-react';
 import {
   incidentsApi,
   INCIDENT_TYPE_LABELS,
@@ -34,12 +39,12 @@ const STATUS_CLASS = {
 };
 
 const TYPE_ICONS = {
-  lost_item:   '🔍',
-  disturbance: '📢',
-  trespassing: '🚫',
-  medical:     '🏥',
-  theft:       '🔒',
-  other:       '📋',
+  lost_item:    <Search size={11} />,
+  disturbance: <Bell size={11} />,
+  trespassing: <Ban size={11} />,
+  medical:     <Hospital size={11} />,
+  theft:       <Lock size={11} />,
+  other:       <ClipboardList size={11} />,
 };
 
 function formatDate(dt) {
@@ -61,7 +66,7 @@ export default function MyIncidentsPage() {
   const [typeFil,    setTypeFil]    = useState('');
 
   // FD/HK cannot edit — Security/Admin can
-  const canEdit = perms.canCreateIncidents; // admin + security
+  const canEdit = perms.canLogIncident; // admin + security
 
   const load = useCallback(async () => {
     setLoading(true); setError(null);

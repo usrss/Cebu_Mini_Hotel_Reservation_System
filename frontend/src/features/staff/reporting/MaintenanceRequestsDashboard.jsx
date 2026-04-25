@@ -11,11 +11,12 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { CheckCircle2, ArrowRight, Eye, Clock, AlertTriangle } from 'lucide-react';
+import { CheckCircle2, ArrowRight, Eye, Clock, AlertTriangle, MapPin, User, Calendar } from 'lucide-react';
 import {
   maintenanceRequestsApi, staffMembersApi,
   MAINTENANCE_REQUEST_STATUS_LABELS, PRIORITY_LABELS,
 } from '../services/staffApi';
+import { useStaffRole } from '../hooks/useStaffRole';
 import '../Staff.css';
 
 const STATUS_CLASS = {
@@ -38,31 +39,37 @@ function ConvertModal({ request, mtStaff, onClose, onSuccess }) {
   const [form, setForm] = useState({
     title:       request.title,
     description: request.description,
-    priority:    'medium',
+    priority:    2,
     deadline:    '',
     assigned_to: '',
+
   });
   const [busy,  setBusy]  = useState(false);
   const [error, setError] = useState(null);
 
-  const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
 
-  const handleSubmit = async (e) => {
-    e.preventDefault(); setBusy(true); setError(null);
-    try {
-      const payload = { ...form };
-      if (!payload.deadline)    delete payload.deadline;
-      if (!payload.assigned_to) delete payload.assigned_to;
-      else                       payload.assigned_to = Number(payload.assigned_to);
-      const task = await maintenanceRequestsApi.convert(request.id, payload);
-      onSuccess(task);
-    } catch (err) {
-      const d = err.response?.data;
-      setError(d ? Object.values(d).flat().join(' ') : err.message);
-    } finally {
-      setBusy(false);
-    }
-  };
+
+  const set = (field) => (e) => {
+  const value = field === 'priority' ? Number(e.target.value) : e.target.value;
+  setForm((f) => ({ ...f, [field]: value }));
+};
+
+ const handleSubmit = async (e) => {
+  e.preventDefault(); setBusy(true); setError(null);
+  try {
+    const payload = { ...form };
+    if (!payload.deadline)    delete payload.deadline;
+    if (!payload.assigned_to) delete payload.assigned_to;
+    else                       payload.assigned_to = Number(payload.assigned_to);
+    const task = await maintenanceRequestsApi.convert(request.id, payload);
+    onSuccess(task);
+  } catch (err) {
+    const d = err.response?.data;
+    setError(d ? Object.values(d).flat().join(' ') : err.message);
+  } finally {
+    setBusy(false);
+  }
+};
 
   return (
     <div className="sf-modal-overlay">
@@ -87,6 +94,7 @@ function ConvertModal({ request, mtStaff, onClose, onSuccess }) {
               <label className="sf-label sf-label-req">Description</label>
               <textarea className="sf-textarea" rows={3} value={form.description} onChange={set('description')} required />
             </div>
+
             <div className="sf-form-row">
               <div className="sf-form-group">
                 <label className="sf-label">Priority</label>
@@ -190,6 +198,7 @@ export default function MaintenanceRequestsDashboard() {
   const [statusFil, setStatusFil] = useState('');
   const [dateFrom,  setDateFrom]  = useState('');
   const [dateTo,    setDateTo]    = useState('');
+  const perms = useStaffRole();
 
   const [convertTarget, setConvertTarget] = useState(null);
   const [reviewTarget,  setReviewTarget]  = useState(null);
@@ -352,15 +361,16 @@ export default function MaintenanceRequestsDashboard() {
                     </div>
 
                     <p style={{ fontSize: 12, color: 'var(--white-dim)', margin: '0 0 8px' }}>
-                      {req.room_number ? `📍 Room ${req.room_number}` : '📍 No room'}
+                      <span style={{ display:'flex', alignItems:'center', gap:4 }}>
+                        <MapPin size={11} /> {req.room_number ? `Room ${req.room_number}` : 'No room'} </span>
                       {req.reported_by_name && (
-                        <span style={{ marginLeft: 12, color: 'rgba(248,246,240,0.4)' }}>
-                          · Reported by <strong style={{ color: 'var(--white-dim)' }}>{req.reported_by_name}</strong>
+                        <span style={{ marginLeft: 12, color: 'rgba(248,246,240,0.4)', display:'inline-flex', alignItems:'center', gap:4 }}>
+                             <User size={11} /> <strong style={{ color: 'var(--white-dim)' }}>{req.reported_by_name}</strong>
                         </span>
                       )}
-                      <span style={{ marginLeft: 12, color: 'rgba(248,246,240,0.3)', fontSize: 11 }}>
-                        · {formatDate(req.created_at)}
-                      </span>
+                    <span style={{ marginLeft: 12, color: 'rgba(248,246,240,0.3)', fontSize: 11, display:'inline-flex', alignItems:'center', gap:4 }}>
+                         <Calendar size={10} /> {formatDate(req.created_at)}
+                    </span>
                     </p>
 
                     <p style={{ fontSize: 13, color: 'var(--white-dim)', margin: '0 0 10px', lineHeight: 1.6 }}>
@@ -384,7 +394,7 @@ export default function MaintenanceRequestsDashboard() {
                   {/* Right: actions */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0, alignItems: 'flex-end' }}>
                     {/* Mark as reviewed */}
-                    {req.status === 'pending' && (
+                    {req.status === 'pending' && perms.canAssignMaintenance &&  (
                       <button
                         className="sf-btn sf-btn-amber"
                         style={{ fontSize: 9, padding: '7px 14px', whiteSpace: 'nowrap' }}
@@ -395,7 +405,7 @@ export default function MaintenanceRequestsDashboard() {
                     )}
 
                     {/* Convert to task */}
-                    {req.is_convertible && (
+                    {req.is_convertible && perms.canAssignMaintenance && (
                       <button
                         className="sf-btn sf-btn-primary"
                         style={{ fontSize: 9, padding: '7px 14px', whiteSpace: 'nowrap' }}

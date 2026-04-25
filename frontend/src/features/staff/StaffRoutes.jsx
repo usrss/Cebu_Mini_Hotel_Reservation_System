@@ -74,6 +74,7 @@ import MyMaintenanceRequestsPage    from './reporting/MyMaintenanceRequestsPage'
 import ReportIncidentPage           from './reporting/ReportIncidentPage';
 import MyIncidentsPage              from './reporting/MyIncidentsPage';
 import MaintenanceRequestsDashboard from './reporting/MaintenanceRequestsDashboard';
+import IncidentReviewDashboard      from './reporting/IncidentReviewDashboard';
 
 // ── Role groups — mirror permissions.py exactly ───────────────────────────────
 
@@ -83,14 +84,21 @@ const CLEANING_ROLES    = ['admin', 'manager', 'housekeeping'];
 const MAINTENANCE_ROLES = ['admin', 'manager', 'maintenance'];
 const INCIDENT_VIEW     = ['admin', 'manager', 'security'];
 const KITCHEN_ROLES     = ['admin', 'manager', 'kitchen_staff'];
-const INCIDENT_CREATE   = ['admin', 'security'];
+// Security staff log incidents; manager does NOT log — they review via dashboard
+const INCIDENT_CREATE   = ['security'];
 const ALL_STAFF         = ['admin', 'manager', 'receptionist', 'front_desk',
                            'housekeeping', 'maintenance', 'security', 'kitchen_staff'];
 
 // ── Reporting role groups ─────────────────────────────────────────────────────
-const MAINTENANCE_REPORT_ROLES = ['admin', 'manager', 'front_desk', 'housekeeping'];
-const INCIDENT_REPORT_ROLES    = ['admin', 'security', 'front_desk', 'housekeeping'];
-const INCIDENT_VIEW_ROLES      = ['admin', 'manager', 'security', 'front_desk', 'housekeeping'];
+// FD + HK submit maintenance requests. Manager reviews/converts them.
+// Admin excluded — admin monitors but does not submit or action requests.
+const MAINTENANCE_REPORT_ROLES = ['manager', 'front_desk', 'housekeeping'];
+// FD + HK + Security report incidents. Admin excluded — admin monitors only.
+const INCIDENT_REPORT_ROLES    = ['security', 'front_desk', 'housekeeping'];
+// my-incidents: FD/HK (own) + security (all). Admin uses monitoring/reports.
+const INCIDENT_VIEW_ROLES      = ['admin', 'security', 'front_desk', 'housekeeping'];
+// Incident review dashboard: manager only — admin views the log, not the action queue.
+const INCIDENT_REVIEW_ROLES    = ['manager'];
 
 export const staffRoutes = [
 
@@ -504,7 +512,29 @@ export const staffRoutes = [
   />,
 
   // ════════════════════════════════════════════════════════════════════════════
+  // INCIDENT REVIEW DASHBOARD (Admin + Manager — AdminLayout)
+  // Admin/Manager use this to review all incidents, assign to security, bulk-assign
+  // high/critical incidents. They do NOT use /staff/my-incidents.
+  // ════════════════════════════════════════════════════════════════════════════
+
+  <Route
+    key="incident-review-dashboard"
+    path="/staff/incident-review"
+    element={
+      <ProtectedRoute allowedRoles={INCIDENT_REVIEW_ROLES}>
+        <AdminLayout>
+          <IncidentReviewDashboard />
+        </AdminLayout>
+      </ProtectedRoute>
+    }
+  />,
+
+  // ════════════════════════════════════════════════════════════════════════════
   // MY INCIDENTS
+  // FD/HK see only their own (scoped server-side).
+  // Security sees all incidents via /staff/incidents (IncidentLogListPage).
+  // Admin/Manager use /staff/incident-review (IncidentReviewDashboard).
+  // NOTE: manager removed from INCIDENT_VIEW_ROLES — they use the review dashboard.
   // ════════════════════════════════════════════════════════════════════════════
 
   <Route
