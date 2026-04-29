@@ -168,18 +168,78 @@ class CaptchaView(APIView):
 
 # ─── Registration ──────────────────────────────────────────────────────────────
 
+# users/views.py — RegisterRequestView
+
 class RegisterRequestView(generics.CreateAPIView):
     serializer_class = RegisterRequestSerializer
     permission_classes = [AllowAny]
 
     def create(self, request, *args, **kwargs):
+        # ── Google OAuth — skip email verification entirely ──────────────────
+        if request.data.get('auth_provider') == 'google':
+            access_token = request.data.get('access_token')
+            if not access_token:
+                return Response(
+                    {'detail': 'Google access token is required.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Verify token with Google
+            google_resp = http_requests.get(
+                'https://www.googleapis.com/oauth2/v3/userinfo',
+                headers={'Authorization': f'Bearer {access_token}'},
+                timeout=10,
+            )
+            if google_resp.status_code != 200:
+                return Response(
+                    {'detail': 'Invalid Google token.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            google_data = google_resp.json()
+            email       = google_data.get('email', '').lower()
+            first_name  = google_data.get('given_name', '')
+            last_name   = google_data.get('family_name', '')
+
+            # Get or create user — Google users are pre-verified
+            user, created = CustomUser.objects.get_or_create(
+                email=email,
+                defaults={
+                    'first_name': first_name,
+                    'last_name':  last_name,
+                    'auth_provider': 'google',
+                    'is_active': True,
+                    'is_verified': True,   # adjust to your model field name
+                }
+            )
+
+            # If user exists but used email registration before, link Google
+            if not created and user.auth_provider != 'google':
+                user.auth_provider = 'google'
+                user.save(update_fields=['auth_provider'])
+
+            user.last_login = timezone.now()
+            user.save(update_fields=['last_login'])
+
+            refresh = RefreshToken.for_user(user)
+            return Response({
+                'message': 'Google sign-in successful.',
+                'user':    UserSerializer(user).data,
+                'tokens':  {
+                    'refresh': str(refresh),
+                    'access':  str(refresh.access_token),
+                },
+                'is_first_login': created,
+            }, status=status.HTTP_200_OK)
+
+        # ── Email registration — original flow ───────────────────────────────
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         verification = serializer.save()
         return Response({
-            'message': 'Verification code sent to your email',
-            'email': verification.email,
-            'expires_in_seconds': 300
+            'message':          'Verification code sent to your email',
+            'email':            verification.email,
+            'expires_in_seconds': 300,
         }, status=status.HTTP_200_OK)
 
 
