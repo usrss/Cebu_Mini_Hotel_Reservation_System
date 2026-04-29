@@ -45,7 +45,15 @@ AUTH_USER_MODEL = 'users.CustomUser'
 CORS_ALLOWED_ORIGINS = [
     'http://localhost:5173',
     'http://localhost:5174',
+    'https://cebu-mini-hotel-reservation-system-three.vercel.app',
 ]
+
+
+CSRF_TRUSTED_ORIGINS = [
+    "https://cebu-mini-hotel-reservation-system-three.vercel.app",
+    "https://cebu-hotel-backend.onrender.com",
+]
+
 if config("FRONTEND_URL", default=""):
     CORS_ALLOWED_ORIGINS.append(config("FRONTEND_URL"))
 CORS_ALLOW_CREDENTIALS = True
@@ -116,9 +124,9 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
-    'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
