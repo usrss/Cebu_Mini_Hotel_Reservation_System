@@ -73,7 +73,44 @@ export const registerUser = async (data) => {
     ...data,
     auth_provider: data.auth_provider || 'email',
   });
+
+  // Only store tokens for social auth (Google, etc.) - skip OTP verification
+  if (data.auth_provider && data.auth_provider !== 'email' && response.data.tokens) {
+    localStorage.setItem('accessToken', response.data.tokens.access);
+    localStorage.setItem('refreshToken', response.data.tokens.refresh);
+    localStorage.setItem('user', JSON.stringify(response.data.user));
+  }
+
   return response.data;
+};
+
+// Add a new function specifically for Google authentication that handles both login and registration
+export const googleAuthenticate = async (accessToken, userInfo) => {
+  const { email, given_name, family_name, sub } = userInfo;
+
+  try {
+    // First try to login with Google credentials
+    const loginResponse = await loginUser({
+      email,
+      auth_provider: 'google',
+      access_token: accessToken,
+    });
+    return loginResponse;
+  } catch (loginError) {
+    // If login fails (user doesn't exist), try to register
+    if (loginError.response?.status === 400 || loginError.response?.status === 404) {
+      const registerResponse = await registerUser({
+        email,
+        first_name: given_name || '',
+        last_name: family_name || '',
+        auth_provider: 'google',
+        access_token: accessToken,
+        social_id: sub,
+      });
+      return registerResponse;
+    }
+    throw loginError;
+  }
 };
 
 export const verifyCode = async (data) => {

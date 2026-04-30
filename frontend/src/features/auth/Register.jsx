@@ -1,7 +1,7 @@
 // src/features/auth/Register.jsx
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { registerUser, loginUser  } from '../../services/api';
+import { registerUser, googleAuthenticate } from '../../services/api';
 import { Eye, EyeOff, Mail, Lock, User, Check, X } from 'lucide-react';
 import { useGoogleLogin } from '@react-oauth/google';
 import axios from 'axios';
@@ -49,62 +49,39 @@ export default function Register({ onSwitchToLogin, onVerify, onSuccess }) {
     flow: 'implicit',
     ux_mode: isMobile ? 'redirect' : 'popup',
     redirect_uri: 'https://cebu-mini-hotel-reservation-system-three.vercel.app/auth/google/callback',
- // In Register.jsx, update the googleLogin onSuccess callback:
-onSuccess: async (tokenResponse) => {
-  console.log('Google login success:', tokenResponse);
-  setLoading(true);
-  setError('');
-  try {
-    // Get user info from Google
-    const userInfoResponse = await axios.get(
-      'https://www.googleapis.com/oauth2/v3/userinfo',
-      { headers: { Authorization: `Bearer ${tokenResponse.access_token}` } }
-    );
-    console.log('User info:', userInfoResponse.data);
+    onSuccess: async (tokenResponse) => {
+      console.log('Google login success:', tokenResponse);
+      setLoading(true);
+      setError('');
+      try {
+        // Get user info from Google
+        const userInfoResponse = await axios.get(
+          'https://www.googleapis.com/oauth2/v3/userinfo',
+          { headers: { Authorization: `Bearer ${tokenResponse.access_token}` } }
+        );
+        console.log('User info:', userInfoResponse.data);
 
-    const { email, given_name, family_name, sub } = userInfoResponse.data;
+        // Use googleAuthenticate function
+        await googleAuthenticate(tokenResponse.access_token, userInfoResponse.data);
 
-    try {
-      // First try to login
-      await loginUser({
-        email,
-        auth_provider: 'google',
-        access_token: tokenResponse.access_token,
-      });
-    } catch (loginError) {
-      // If login fails, register the user
-      if (loginError.response?.status === 400 || loginError.response?.status === 404) {
-        await registerUser({
-          email,
-          first_name: given_name || '',
-          last_name: family_name || '',
-          auth_provider: 'google',
-          access_token: tokenResponse.access_token,
-          social_id: sub,
-        });
-      } else {
-        throw loginError;
+        // Use onSuccess if provided (modal context), otherwise navigate directly
+        if (onSuccess) {
+          onSuccess();
+        } else {
+          navigate('/');
+        }
+      } catch (err) {
+        console.error('Google authentication error:', err);
+
+        const errorData = err.response?.data;
+        setError(
+          errorData?.email?.[0] || errorData?.email ||
+          errorData?.detail || 'Google sign-in failed. Please try email registration.'
+        );
+      } finally {
+        setLoading(false);
       }
-    }
-
-    // Use onSuccess if provided (modal context), otherwise navigate directly
-    if (onSuccess) {
-      onSuccess();
-    } else {
-      navigate('/');
-    }
-  } catch (err) {
-    console.error('Google authentication error:', err);
-
-    const errorData = err.response?.data;
-    setError(
-      errorData?.email?.[0] || errorData?.email ||
-      errorData?.detail || 'Google sign-in failed. Please try email registration.'
-    );
-  } finally {
-    setLoading(false);
-  }
-},
+    },
     onError: (error) => {
       console.error('Google login error:', error);
       setError('Google sign-in was cancelled or failed. Please try again.');
@@ -213,6 +190,7 @@ onSuccess: async (tokenResponse) => {
           <div className="auth-modern-divider"><span>or register with email</span></div>
 
           <form onSubmit={handleSubmit} className="auth-modern-form">
+            {/* ... rest of the form is exactly the same as before ... */}
             <div className="form-row">
               <div className="form-group-modern">
                 <label htmlFor="reg-first_name"><User size={16} /> First Name</label>

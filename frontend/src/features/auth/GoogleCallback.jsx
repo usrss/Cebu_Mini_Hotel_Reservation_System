@@ -1,11 +1,12 @@
 // src/features/auth/GoogleCallback.jsx
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { loginUser, registerUser, getStoredUser } from '../../services/api';
+import { googleAuthenticate, getStoredUser } from '../../services/api';
 import axios from 'axios';
 
 function getPostLoginRoute() {
   const user = getStoredUser();
+  if (!user) return '/';
   if (!user?.is_staff) return '/dashboard';
   const role =
     user?.staff_profile?.effective_role ??
@@ -41,32 +42,14 @@ export default function GoogleCallback() {
       headers: { Authorization: `Bearer ${accessToken}` },
     })
       .then(({ data }) => {
-        const { email, given_name, family_name, sub } = data;
-
-        // First try to login
-        return loginUser({
-          email,
-          auth_provider: 'google',
-          access_token: accessToken,
-        }).catch((loginError) => {
-          // If login fails because user doesn't exist, register them
-          if (loginError.response?.status === 400 || loginError.response?.status === 404) {
-            return registerUser({
-              email,
-              first_name: given_name || '',
-              last_name: family_name || '',
-              auth_provider: 'google',
-              access_token: accessToken,
-              social_id: sub,
-            });
-          }
-          throw loginError;
-        });
+        // Use the googleAuthenticate function from api.js
+        return googleAuthenticate(accessToken, data);
       })
       .then(() => {
         navigate(getPostLoginRoute(), { replace: true });
       })
-      .catch(() => {
+      .catch((err) => {
+        console.error('Google callback error:', err);
         navigate('/login?error=google_failed', { replace: true });
       });
   }, [navigate]);
