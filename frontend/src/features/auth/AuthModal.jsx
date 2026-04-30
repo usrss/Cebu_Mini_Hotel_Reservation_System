@@ -3,10 +3,12 @@
 // All auth logic (mode switching, email passing, slide rotation) preserved exactly.
 
 import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Login from './Login';
 import Register from './Register';
 import VerifyCode from './VerifyCode';
 import ForgotPassword from './ForgotPassword';
+import { getStoredUser } from '../../services/api';
 import './AuthModal.css';
 
 const SLIDES = [
@@ -36,7 +38,24 @@ const SLIDES = [
   },
 ];
 
+function getPostLoginRoute() {
+  const user = getStoredUser();
+  if (!user) return '/';
+  if (!user?.is_staff) return '/dashboard';
+  const role =
+    user?.staff_profile?.effective_role ??
+    (user?.is_staff ? 'admin' : null);
+  switch (role) {
+    case 'front_desk':   return '/staff/front-desk';
+    case 'housekeeping': return '/staff/cleaning';
+    case 'maintenance':  return '/staff/maintenance';
+    case 'security':     return '/staff/incidents';
+    default:             return '/admin/dashboard';
+  }
+}
+
 export default function AuthModal({ mode: initialMode = 'login', verifyEmail = '', onClose }) {
+  const navigate = useNavigate();
   const [mode, setMode]               = useState(initialMode);
   const [pendingEmail, setPendingEmail] = useState(verifyEmail);
   const [slideIndex, setSlideIndex]   = useState(0);
@@ -98,6 +117,15 @@ export default function AuthModal({ mode: initialMode = 'login', verifyEmail = '
     setMode(m);
   };
 
+  /* ── Handle successful authentication ── */
+  const handleAuthSuccess = () => {
+    if (onClose) {
+      onClose();
+    }
+    // Use the post-login routing logic to send users to the correct page
+    navigate(getPostLoginRoute(), { replace: true });
+  };
+
   const renderPanel = () => {
     switch (mode) {
       case 'register':
@@ -105,6 +133,7 @@ export default function AuthModal({ mode: initialMode = 'login', verifyEmail = '
           <Register
             onSwitchToLogin={() => switchMode('login')}
             onVerify={(email) => switchMode('verify', email)}
+            onSuccess={handleAuthSuccess}
           />
         );
       case 'verify':
@@ -112,6 +141,7 @@ export default function AuthModal({ mode: initialMode = 'login', verifyEmail = '
           <VerifyCode
             email={pendingEmail}
             onSwitchToLogin={() => switchMode('login')}
+            onSuccess={handleAuthSuccess}
           />
         );
       case 'forgot':
@@ -126,6 +156,7 @@ export default function AuthModal({ mode: initialMode = 'login', verifyEmail = '
             onSwitchToRegister={() => switchMode('register')}
             onForgotPassword={() => switchMode('forgot')}
             onClose={onClose}
+            onSuccess={handleAuthSuccess}
           />
         );
     }

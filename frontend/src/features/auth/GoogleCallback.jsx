@@ -1,7 +1,7 @@
 // src/features/auth/GoogleCallback.jsx
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { loginUser, getStoredUser } from '../../services/api';
+import { loginUser, registerUser, getStoredUser } from '../../services/api';
 import axios from 'axios';
 
 function getPostLoginRoute() {
@@ -40,20 +40,36 @@ export default function GoogleCallback() {
     axios.get('https://www.googleapis.com/oauth2/v3/userinfo', {
       headers: { Authorization: `Bearer ${accessToken}` },
     })
-      .then(({ data }) =>
-        loginUser({
-          email: data.email,
+      .then(({ data }) => {
+        const { email, given_name, family_name, sub } = data;
+
+        // First try to login
+        return loginUser({
+          email,
           auth_provider: 'google',
           access_token: accessToken,
-        })
-      )
+        }).catch((loginError) => {
+          // If login fails because user doesn't exist, register them
+          if (loginError.response?.status === 400 || loginError.response?.status === 404) {
+            return registerUser({
+              email,
+              first_name: given_name || '',
+              last_name: family_name || '',
+              auth_provider: 'google',
+              access_token: accessToken,
+              social_id: sub,
+            });
+          }
+          throw loginError;
+        });
+      })
       .then(() => {
         navigate(getPostLoginRoute(), { replace: true });
       })
       .catch(() => {
         navigate('/login?error=google_failed', { replace: true });
       });
-  }, []);
+  }, [navigate]);
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>

@@ -196,7 +196,7 @@ const googleLogin = useGoogleLogin({
           </div>
           <div className="auth-modern-quote">
             <h2>Welcome Back!</h2>
-            <p>Sign in to access your bookings and reservations</p>
+            <p>Login to access your bookings and reservations</p>
           </div>
         </div>
       </div>
@@ -204,8 +204,8 @@ const googleLogin = useGoogleLogin({
       <div className="auth-modern-form-section">
         <div className="auth-modern-form-container">
           <div className="auth-modern-header">
-            <h2>Sign In</h2>
-            <p>Welcome back! Please sign in to continue</p>
+            <h2>Login</h2>
+            <p>Welcome back! Please login to continue</p>
           </div>
 
           {error && <div className="alert-modern alert-error"><span>{error}</span></div>}
@@ -219,11 +219,11 @@ const googleLogin = useGoogleLogin({
                 <path fill="#FBBC05" d="M3.99 10c0-.69.12-1.35.32-1.97V5.51H1.07A9.973 9.973 0 000 10c0 1.61.39 3.14 1.07 4.49l3.24-2.52c-.2-.62-.32-1.28-.32-1.97z"/>
                 <path fill="#EA4335" d="M10 3.88c1.88 0 3.13.81 3.85 1.48l2.84-2.76C14.96.99 12.7 0 10 0 6.09 0 2.72 2.25 1.07 5.51l3.24 2.52C5.12 5.62 7.36 3.88 10 3.88z"/>
               </svg>
-              {loading ? 'Connecting...' : 'Sign in with Google'}
+              {loading ? 'Connecting...' : 'Login with Google'}
             </button>
           </div>
 
-          <div className="auth-modern-divider"><span>or sign in with email</span></div>
+          <div className="auth-modern-divider"><span>or login with email</span></div>
 
           <form onSubmit={handleSubmit} className="auth-modern-form">
             <div className="form-group-modern">
@@ -267,7 +267,7 @@ const googleLogin = useGoogleLogin({
 
             <button type="submit" className="btn-modern btn-primary"
               disabled={loading || (showChallenge && !mathAnswer)}>
-              {loading ? <><span className="spinner-modern" />Signing In...</> : 'Sign In'}
+              {loading ? <><span className="spinner-modern" />Loging In...</> : 'Login'}
             </button>
           </form>
 

@@ -1,7 +1,7 @@
 // src/features/auth/Register.jsx
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { registerUser } from '../../services/api';
+import { registerUser, loginUser  } from '../../services/api';
 import { Eye, EyeOff, Mail, Lock, User, Check, X } from 'lucide-react';
 import { useGoogleLogin } from '@react-oauth/google';
 import axios from 'axios';
@@ -18,8 +18,8 @@ function validatePassword(password) {
   return PASSWORD_RULES.every(rule => rule.test(password));
 }
 
-// onSwitchToLogin, onVerify — provided when used inside AuthModal
-export default function Register({ onSwitchToLogin, onVerify }) {
+// onSwitchToLogin, onVerify, onSuccess — provided when used inside AuthModal
+export default function Register({ onSwitchToLogin, onVerify, onSuccess }) {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
     email: '', password: '', confirmPassword: '',
@@ -43,46 +43,85 @@ export default function Register({ onSwitchToLogin, onVerify }) {
     }
   }, [formData.password, formData.confirmPassword]);
 
-const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
-const googleLogin = useGoogleLogin({
-  flow: 'implicit',
-  ux_mode: isMobile ? 'redirect' : 'popup',
-  redirect_uri: 'https://cebu-mini-hotel-reservation-system-three.vercel.app/auth/google/callback',
-  onSuccess: async (tokenResponse) => {
-    // Only runs on desktop (popup mode)
-    setLoading(true);
-    setError('');
+  const googleLogin = useGoogleLogin({
+    flow: 'implicit',
+    ux_mode: isMobile ? 'redirect' : 'popup',
+    redirect_uri: 'https://cebu-mini-hotel-reservation-system-three.vercel.app/auth/google/callback',
+ // In Register.jsx, update the googleLogin onSuccess callback:
+onSuccess: async (tokenResponse) => {
+  console.log('Google login success:', tokenResponse);
+  setLoading(true);
+  setError('');
+  try {
+    // Get user info from Google
+    const userInfoResponse = await axios.get(
+      'https://www.googleapis.com/oauth2/v3/userinfo',
+      { headers: { Authorization: `Bearer ${tokenResponse.access_token}` } }
+    );
+    console.log('User info:', userInfoResponse.data);
+
+    const { email, given_name, family_name, sub } = userInfoResponse.data;
+
     try {
-      const userInfoResponse = await axios.get(
-        'https://www.googleapis.com/oauth2/v3/userinfo',
-        { headers: { Authorization: `Bearer ${tokenResponse.access_token}` } }
-      );
-      const { email, given_name, family_name, sub } = userInfoResponse.data;
-      await registerUser({
-        email, first_name: given_name || '', last_name: family_name || '',
-        auth_provider: 'google', access_token: tokenResponse.access_token, social_id: sub,
+      // First try to login
+      await loginUser({
+        email,
+        auth_provider: 'google',
+        access_token: tokenResponse.access_token,
       });
-      if (onVerify) {
-        onVerify(email);
+    } catch (loginError) {
+      // If login fails, register the user
+      if (loginError.response?.status === 400 || loginError.response?.status === 404) {
+        await registerUser({
+          email,
+          first_name: given_name || '',
+          last_name: family_name || '',
+          auth_provider: 'google',
+          access_token: tokenResponse.access_token,
+          social_id: sub,
+        });
       } else {
-        navigate('/verify');
+        throw loginError;
       }
-    } catch (err) {
-      const errorData = err.response?.data;
-      setError(
-        errorData?.email?.[0] || errorData?.email ||
-        errorData?.detail || 'Google sign-in failed. Please try email registration.'
-      );
-    } finally {
-      setLoading(false);
     }
-  },
-  onError: () => {
-    setError('Google sign-in was cancelled or failed. Please try again.');
+
+    // Use onSuccess if provided (modal context), otherwise navigate directly
+    if (onSuccess) {
+      onSuccess();
+    } else {
+      navigate('/');
+    }
+  } catch (err) {
+    console.error('Google authentication error:', err);
+
+    const errorData = err.response?.data;
+    setError(
+      errorData?.email?.[0] || errorData?.email ||
+      errorData?.detail || 'Google sign-in failed. Please try email registration.'
+    );
+  } finally {
     setLoading(false);
-  },
-});
+  }
+},
+    onError: (error) => {
+      console.error('Google login error:', error);
+      setError('Google sign-in was cancelled or failed. Please try again.');
+      setLoading(false);
+    },
+  });
+
+  const handleGoogleLogin = () => {
+    // Check if legal agreements are accepted before proceeding with Google sign-in
+    if (!agreedTerms || !agreedPrivacy) {
+      setLegalError('You must agree to both the Terms & Conditions and Privacy Policy to create an account.');
+      return;
+    }
+    setError('');
+    setLegalError('');
+    googleLogin();
+  };
 
   const handleChange = (e) => { setFormData({ ...formData, [e.target.name]: e.target.value }); setError(''); };
 
@@ -126,6 +165,7 @@ const googleLogin = useGoogleLogin({
   };
 
   const isPasswordValid = validatePassword(formData.password);
+  const canUseGoogleAuth = agreedTerms && agreedPrivacy;
 
   return (
     <div className="auth-modern-container">
@@ -154,7 +194,12 @@ const googleLogin = useGoogleLogin({
           )}
 
           <div className="auth-modern-social">
-            <button type="button" onClick={() => { setError(''); googleLogin(); }} className="btn-social btn-google" disabled={loading}>
+            <button
+              type="button"
+              onClick={handleGoogleLogin}
+              className="btn-social btn-google"
+              disabled={loading || !canUseGoogleAuth}
+            >
               <svg width="20" height="20" viewBox="0 0 20 20">
                 <path fill="#4285F4" d="M19.6 10.23c0-.82-.1-1.42-.25-2.05H10v3.72h5.5c-.15.96-.74 2.31-2.04 3.22v2.45h3.16c1.89-1.73 2.98-4.3 2.98-7.34z"/>
                 <path fill="#34A853" d="M13.46 15.13c-.83.59-1.96 1-3.46 1-2.64 0-4.88-1.74-5.68-4.15H1.07v2.52C2.72 17.75 6.09 20 10 20c2.7 0 4.96-.89 6.62-2.42l-3.16-2.45z"/>

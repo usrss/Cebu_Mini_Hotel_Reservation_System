@@ -315,7 +315,7 @@ export default function Dashboard() {
       <div className="db-hero">
         <div className="db-hero-inner">
           <span className="db-hero-eyebrow">Guest Dashboard</span>
-          <h1 className="db-hero-name">Good to have you back, {displayName}</h1>
+          <h1 className="db-hero-name">Good to have you, {displayName}</h1>
           <p className="db-hero-sub">Explore our rooms and manage your reservations.</p>
         </div>
       </div>
