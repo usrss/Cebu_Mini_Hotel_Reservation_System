@@ -6,6 +6,7 @@ FoodOrder — guest order linked to booking, with payment type + status tracking
 """
 from django.db import models
 from django.conf import settings
+from cloudinary.models import CloudinaryField
 
 
 class FoodCategory(models.TextChoices):
@@ -27,7 +28,12 @@ class FoodItem(models.Model):
         db_index=True,
     )
     price        = models.DecimalField(max_digits=8, decimal_places=2)
-    image        = models.ImageField(upload_to="food/", blank=True, null=True)
+    image        = CloudinaryField(
+        'image',
+        folder='hotel/food/images',
+        null=True,
+        blank=True,
+    )
     is_available = models.BooleanField(default=True, db_index=True)
     created_at   = models.DateTimeField(auto_now_add=True)
     updated_at   = models.DateTimeField(auto_now=True)
@@ -101,7 +107,7 @@ class FoodOrder(models.Model):
         db_index=True,
     )
     order_status = models.CharField(
-        max_length=20,                      # widened from 15 → 20 for 'awaiting_payment'
+        max_length=20,
         choices=OrderStatus.choices,
         default=OrderStatus.PENDING,
         db_index=True,
@@ -117,7 +123,6 @@ class FoodOrder(models.Model):
     completed_at = models.DateTimeField(null=True, blank=True)
 
     # PayMongo checkout session ID (for pay_now orders)
-    # Field was previously named paymongo_payment_id in some versions — unified here.
     paymongo_session_id = models.CharField(max_length=100, blank=True)
 
     notes      = models.TextField(blank=True, help_text="Guest notes for this order.")
@@ -157,6 +162,6 @@ class FoodOrder(models.Model):
         Does nothing if the order is already in a terminal or kitchen state.
         """
         if self.order_status == OrderStatus.AWAITING_PAYMENT:
-            self.order_status  = OrderStatus.PENDING
+            self.order_status   = OrderStatus.PENDING
             self.payment_status = PaymentStatus.PAID
             self.save(update_fields=["order_status", "payment_status", "updated_at"])
