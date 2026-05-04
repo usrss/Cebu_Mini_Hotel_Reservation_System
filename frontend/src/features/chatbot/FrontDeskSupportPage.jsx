@@ -257,9 +257,21 @@ export default function FrontDeskSupportPage() {
 
   useEffect(() => { loadTickets(); }, [loadTickets]);
   useEffect(() => {
-    const iv = setInterval(loadTickets, 20_000);
+    const iv = setInterval(loadTickets, 5_000);
     return () => clearInterval(iv);
   }, [loadTickets]);
+
+useEffect(() => {
+  if (!activeTicket) return;
+  const iv = setInterval(async () => {
+    try {
+      const data = await getSupportTicketDetail(activeTicket.id);
+      setActiveTicket(data.ticket);
+      setConversation(data.conversation);
+    } catch {}
+  }, 5_000);
+  return () => clearInterval(iv);
+}, [activeTicket?.id]);
 
   const openTicket = useCallback(async (ticket) => {
     setActiveTicket(ticket);

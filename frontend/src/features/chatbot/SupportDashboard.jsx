@@ -308,9 +308,26 @@ export default function SupportDashboard() {
 
   useEffect(() => { loadTickets(); }, [loadTickets]);
   useEffect(() => {
-    const iv = setInterval(loadTickets, 15_000);
+    const iv = setInterval(loadTickets, 5_000);
     return () => clearInterval(iv);
   }, [loadTickets]);
+
+  // Auto-poll active conversation every 10s
+useEffect(() => {
+  if (!activeTicket) return;
+
+  const iv = setInterval(async () => {
+    try {
+      const data = await getSupportTicketDetail(activeTicket.id);
+      setActiveTicket(data.ticket);
+      setConversation(data.conversation);
+    } catch {
+      // silently fail — don't show error on background poll
+    }
+  }, 5_000);
+
+  return () => clearInterval(iv);
+}, [activeTicket?.id]); // re-run when a different ticket is opened
 
   const openTicket = useCallback(async (ticket) => {
     setActiveTicket(ticket);

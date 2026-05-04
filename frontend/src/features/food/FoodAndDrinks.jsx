@@ -172,7 +172,7 @@ export default function FoodAndDrinks() {
               {filtered.map(item => (
                 <div key={item.id} className="fd-card">
                   {item.image
-                    ? <img src={item.image} alt={item.name} className="fd-card__image" />
+                    ? <img src={item.image_url || item.image}  alt={item.name} className="fd-card__image" />
                     : <div className="fd-card__image fd-card__image--placeholder">
                         <span className="fd-card__placeholder-icon">🍽</span>
                       </div>
