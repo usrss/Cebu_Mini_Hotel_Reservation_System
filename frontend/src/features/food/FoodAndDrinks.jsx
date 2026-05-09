@@ -262,7 +262,7 @@ export default function FoodAndDrinks() {
 
             <div className="fd-modal__body">
               {modal.image && (
-                <img src={modal.image} alt={modal.name} className="fd-modal__image" />
+                <img src={modal.image_url || modal.image} alt={modal.name} className="fd-modal__image" />
               )}
               <p className="fd-modal__desc">{modal.description}</p>
               <p className="fd-modal__price">
