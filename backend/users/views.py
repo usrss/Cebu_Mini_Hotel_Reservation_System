@@ -209,7 +209,7 @@ class RegisterRequestView(generics.CreateAPIView):
                     'last_name':  last_name,
                     'auth_provider': 'google',
                     'is_active': True,
-                    'is_verified': True,   # adjust to your model field name
+                    'is_verified': True,
                 }
             )
 
@@ -235,10 +235,19 @@ class RegisterRequestView(generics.CreateAPIView):
         # ── Email registration — original flow ───────────────────────────────
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        verification = serializer.save()
+
+        try:
+            verification = serializer.save()
+        except Exception as e:
+            print(f"[RegisterRequestView] Email send failed: {e}")
+            return Response(
+                {'detail': 'Failed to send verification email. Please try again later.'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
         return Response({
-            'message':          'Verification code sent to your email',
-            'email':            verification.email,
+            'message':            'Verification code sent to your email',
+            'email':              verification.email,
             'expires_in_seconds': 300,
         }, status=status.HTTP_200_OK)
 

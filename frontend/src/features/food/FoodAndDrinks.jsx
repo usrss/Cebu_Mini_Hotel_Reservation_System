@@ -6,7 +6,6 @@ import './FoodAndDrinks.css';
 
 const CATEGORIES = ["all", "food", "drinks", "snacks", "desserts"];
 
-// FIX: Updated class names to use the fd-badge--* prefix that matches FoodAndDrinks.css
 const STATUS_BADGE = {
   pending:   { label: "Pending",   className: "fd-badge fd-badge--pending"   },
   completed: { label: "Completed", className: "fd-badge fd-badge--completed" },
@@ -18,6 +17,80 @@ const PAYMENT_BADGE = {
   paid:   { label: "Paid",   className: "fd-badge fd-badge--paid"   },
 };
 
+// ── Notification Modal ────────────────────────────────────────────────────────
+function NotifModal({ type, message, onClose }) {
+  if (!message) return null;
+  return (
+    <div
+      style={{
+        position: "fixed", inset: 0,
+        background: "rgba(0,0,0,0.45)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        zIndex: 9999,
+      }}
+      onClick={onClose}
+    >
+      <div
+        style={{
+          background: "#fff",
+          borderRadius: "12px",
+          padding: "36px 32px 28px",
+          maxWidth: "380px",
+          width: "90%",
+          boxShadow: "0 8px 40px rgba(0,0,0,0.18)",
+          textAlign: "center",
+          position: "relative",
+        }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Icon */}
+        <div style={{ marginBottom: "14px", fontSize: "36px" }}>
+          {type === "success" ? "✓" : "✕"}
+        </div>
+
+        {/* Title */}
+        <p style={{
+          fontSize: "17px",
+          fontWeight: "700",
+          color: "#111",
+          marginBottom: "8px",
+        }}>
+          {type === "success" ? "Order Placed" : "Unable to Order"}
+        </p>
+
+        {/* Message */}
+        <p style={{
+          fontSize: "14px",
+          color: "#444",
+          lineHeight: "1.6",
+          marginBottom: "24px",
+        }}>
+          {message}
+        </p>
+
+        {/* Button */}
+        <button
+          onClick={onClose}
+          style={{
+            padding: "10px 32px",
+            background: "#111",
+            color: "#fff",
+            border: "none",
+            borderRadius: "8px",
+            fontSize: "14px",
+            fontWeight: "600",
+            cursor: "pointer",
+          }}
+        >
+          OK
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export default function FoodAndDrinks() {
   const [menuItems,     setMenuItems]     = useState([]);
   const [myOrders,      setMyOrders]      = useState([]);
@@ -28,8 +101,16 @@ export default function FoodAndDrinks() {
   const [notes,         setNotes]         = useState("");
   const [loading,       setLoading]       = useState(false);
   const [submitting,    setSubmitting]    = useState(false);
-  const [error,         setError]         = useState("");
-  const [success,       setSuccess]       = useState("");
+
+  // Notification modal state
+  const [notif, setNotif] = useState({ type: "", message: "" });
+
+  function showNotif(type, message) {
+    setNotif({ type, message });
+  }
+  function closeNotif() {
+    setNotif({ type: "", message: "" });
+  }
 
   useEffect(() => { fetchMenu(); fetchMyOrders(); }, []);
 
@@ -39,7 +120,7 @@ export default function FoodAndDrinks() {
       const res = await api.get("/food/menu/");
       setMenuItems(res.data.results ?? res.data);
     } catch {
-      setError("Failed to load menu.");
+      showNotif("error", "Failed to load menu. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -56,31 +137,31 @@ export default function FoodAndDrinks() {
     setModal(item);
     setQuantity(1);
     setNotes("");
-    setError("");
   }
 
   function closeModal() {
     setModal(null);
-    setError("");
   }
 
   async function handleOrder() {
     setSubmitting(true);
-    setError("");
     try {
-      const res = await api.post("/food/orders/", {
+      await api.post("/food/orders/", {
         food_item_id: modal.id,
         quantity,
         payment_type: "pay_checkout",
         notes,
       });
-
-      setSuccess(`Order placed for ${modal.name}!`);
       closeModal();
       fetchMyOrders();
-      setTimeout(() => setSuccess(""), 4000);
+      showNotif("success", `Your order for ${modal.name} has been placed! It will be delivered to your room shortly.`);
     } catch (err) {
-      setError(err.response?.data?.error || "Failed to place order. Are you checked in?");
+      const msg = err.response?.data?.error || err.response?.data?.detail;
+      closeModal();
+      showNotif(
+        "error",
+        msg || "You need to be checked in to place a room service order."
+      );
     } finally {
       setSubmitting(false);
     }
@@ -88,14 +169,12 @@ export default function FoodAndDrinks() {
 
   async function handleCancelOrder(orderId) {
     if (!confirm("Are you sure you want to cancel this order?")) return;
-    
     try {
       await api.post(`/food/orders/${orderId}/cancel/`);
-      setSuccess("Order cancelled successfully.");
       fetchMyOrders();
-      setTimeout(() => setSuccess(""), 4000);
+      showNotif("success", "Your order has been cancelled.");
     } catch (err) {
-      setError(err.response?.data?.error || "Failed to cancel order.");
+      showNotif("error", err.response?.data?.error || "Failed to cancel order.");
     }
   }
 
@@ -109,6 +188,13 @@ export default function FoodAndDrinks() {
     <div className="fd-page">
       <Navbar />
 
+      {/* Notification Modal */}
+      <NotifModal
+        type={notif.type}
+        message={notif.message}
+        onClose={closeNotif}
+      />
+
       <div className="fd-header">
         <p className="fd-eyebrow">Room Service</p>
         <h1 className="fd-page-title">Food &amp; Drinks</h1>
@@ -116,10 +202,6 @@ export default function FoodAndDrinks() {
       </div>
 
       <div className="fd-container">
-
-        {success && (
-          <div className="fd-alert fd-alert--success">{success}</div>
-        )}
 
         {/* Tabs */}
         <div className="fd-tabs">
@@ -172,7 +254,7 @@ export default function FoodAndDrinks() {
               {filtered.map(item => (
                 <div key={item.id} className="fd-card">
                   {item.image
-                    ? <img src={item.image_url || item.image}  alt={item.name} className="fd-card__image" />
+                    ? <img src={item.image_url || item.image} alt={item.name} className="fd-card__image" />
                     : <div className="fd-card__image fd-card__image--placeholder">
                         <span className="fd-card__placeholder-icon">🍽</span>
                       </div>
@@ -221,7 +303,6 @@ export default function FoodAndDrinks() {
                   </p>
                 </div>
                 <div className="fd-order-card__right">
-                  {/* FIX: Use the corrected className from STATUS_BADGE / PAYMENT_BADGE */}
                   {STATUS_BADGE[order.order_status] && (
                     <span className={STATUS_BADGE[order.order_status].className}>
                       {STATUS_BADGE[order.order_status].label}
@@ -302,8 +383,6 @@ export default function FoodAndDrinks() {
                 <span>Total</span>
                 <strong>₱{(parseFloat(modal.price) * quantity).toFixed(2)}</strong>
               </div>
-
-              {error && <p className="fd-error">{error}</p>}
             </div>
 
             <div className="fd-modal__footer">
