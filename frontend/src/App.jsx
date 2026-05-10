@@ -19,6 +19,7 @@ import { staffRoutes }        from './features/staff/StaffRoutes';
 import ChatWidgetWrapper from './features/chatbot/ChatWidgetWrapper';
 import StaffActivatePage      from './features/adminPanel/staff/StaffActivatePage';
 import { legalRoutes } from './components/legalRoutes';
+import VerifyCode from './features/auth/VerifyCode';
 // ── at the top with other imports ─────────────────────────────────────────────
 import FoodAndDrinks         from './features/food/FoodAndDrinks';
 import FoodPaymentSuccessPage from './features/food/FoodPaymentSuccessPage';
@@ -48,6 +49,11 @@ function App() {
         <Route
           path="/register"
           element={isAuthenticated() ? <Navigate to={getHomeRoute()} replace /> : <Register />}
+        />
+
+        <Route
+          path="/verify"
+          element={isAuthenticated() ? <Navigate to={getHomeRoute()} replace /> : <VerifyCode />}
         />
         <Route path="/forgot-password" element={<ForgotPassword />} />
 

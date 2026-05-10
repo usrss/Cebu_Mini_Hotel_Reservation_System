@@ -4,10 +4,11 @@
  * Floating chat widget for hotel guests.
  * Mount via ChatWidgetWrapper.
  *
- * Header buttons:  [History]  [New Chat]  [✕]
- *
- * History button slides in HistoryPanel over the message area.
- * Guest can resume any past conversation; closed tickets are read-only.
+ * Changes:
+ *  - Widget and toggle button are now draggable. Click and drag either one
+ *    to reposition. A short movement (<= 5px) is treated as a click so the
+ *    toggle still works normally. Position is clamped to the viewport and
+ *    persisted to localStorage so it survives page reloads.
  */
 
 import { useState, useRef, useEffect, useCallback } from 'react';
@@ -20,6 +21,158 @@ import MessageBubble from './MessageBubble';
 import QuickReplies from './QuickReplies';
 import HistoryPanel from './HistoryPanel';
 import './ChatWidget.css';
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+const WIDGET_WIDTH   = 380;
+const WIDGET_HEIGHT  = 580;
+const TOGGLE_SIZE    = 56;
+const EDGE_PADDING   = 16;
+const STORAGE_KEY    = 'cmh_widget_pos';
+const DRAG_THRESHOLD = 5; // px — movement below this is treated as a click
+
+// ─── Persist / restore position ───────────────────────────────────────────────
+function loadPosition() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return null;
+}
+
+function savePosition(pos) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(pos));
+  } catch {}
+}
+
+// Clamp so the toggle button never leaves the viewport
+function clampPos(x, y) {
+  const maxX = window.innerWidth  - TOGGLE_SIZE - EDGE_PADDING;
+  const maxY = window.innerHeight - TOGGLE_SIZE - EDGE_PADDING;
+  return {
+    x: Math.max(EDGE_PADDING, Math.min(x, maxX)),
+    y: Math.max(EDGE_PADDING, Math.min(y, maxY)),
+  };
+}
+
+// Default: bottom-right corner (mirrors original CSS position)
+function defaultPosition() {
+  return clampPos(
+    window.innerWidth  - TOGGLE_SIZE - EDGE_PADDING - 4,
+    window.innerHeight - TOGGLE_SIZE - EDGE_PADDING - 4,
+  );
+}
+
+// Work out where to open the widget so it stays inside the viewport.
+// Prefers opening above-left of the toggle, falls back to other quadrants.
+function widgetPosition(togglePos) {
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+
+  let left = togglePos.x - WIDGET_WIDTH  + TOGGLE_SIZE;
+  let top  = togglePos.y - WIDGET_HEIGHT - EDGE_PADDING;
+
+  // Flip right if going off left edge
+  if (left < EDGE_PADDING) left = togglePos.x;
+  // Flip below if going off top edge
+  if (top  < EDGE_PADDING) top  = togglePos.y + TOGGLE_SIZE + EDGE_PADDING;
+
+  // Final clamp
+  left = Math.max(EDGE_PADDING, Math.min(left, vw - WIDGET_WIDTH  - EDGE_PADDING));
+  top  = Math.max(EDGE_PADDING, Math.min(top,  vh - WIDGET_HEIGHT - EDGE_PADDING));
+
+  return { left, top };
+}
+
+// ─── useDraggable ─────────────────────────────────────────────────────────────
+/**
+ * Returns { pos, dragHandlers, wasDragged }
+ *
+ * dragHandlers — spread onto the draggable element's onMouseDown / onTouchStart.
+ * wasDragged   — ref; read in the click handler to suppress toggle when dragging.
+ */
+function useDraggable(onDragEnd) {
+  const saved  = loadPosition();
+  const [pos, setPos] = useState(saved || defaultPosition());
+
+  const dragging    = useRef(false);
+  const startMouse  = useRef({ x: 0, y: 0 });
+  const startPos    = useRef({ x: 0, y: 0 });
+  const wasDragged  = useRef(false);
+
+  const onMove = useCallback((clientX, clientY) => {
+    const dx = clientX - startMouse.current.x;
+    const dy = clientY - startMouse.current.y;
+
+    if (!dragging.current && Math.hypot(dx, dy) > DRAG_THRESHOLD) {
+      dragging.current = true;
+      wasDragged.current = true;
+    }
+    if (!dragging.current) return;
+
+    const next = clampPos(startPos.current.x + dx, startPos.current.y + dy);
+    setPos(next);
+  }, []);
+
+  const onEnd = useCallback((clientX, clientY) => {
+    if (dragging.current) {
+      const dx   = clientX - startMouse.current.x;
+      const dy   = clientY - startMouse.current.y;
+      const next = clampPos(startPos.current.x + dx, startPos.current.y + dy);
+      savePosition(next);
+      onDragEnd?.(next);
+    }
+    dragging.current = false;
+
+    window.removeEventListener('mousemove', handleMouseMove);
+    window.removeEventListener('mouseup',   handleMouseUp);
+    window.removeEventListener('touchmove', handleTouchMove);
+    window.removeEventListener('touchend',  handleTouchEnd);
+  }, [onDragEnd]);
+
+  // Keep stable references for removeEventListener
+  const handleMouseMove = useCallback((e) => onMove(e.clientX, e.clientY), [onMove]);
+  const handleMouseUp   = useCallback((e) => onEnd(e.clientX, e.clientY),  [onEnd]);
+  const handleTouchMove = useCallback((e) => {
+    e.preventDefault();
+    onMove(e.touches[0].clientX, e.touches[0].clientY);
+  }, [onMove]);
+  const handleTouchEnd  = useCallback((e) => {
+    const t = e.changedTouches[0];
+    onEnd(t.clientX, t.clientY);
+  }, [onEnd]);
+
+  const onStart = useCallback((clientX, clientY) => {
+    wasDragged.current = false;
+    startMouse.current = { x: clientX, y: clientY };
+    startPos.current   = pos;
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup',   handleMouseUp);
+    window.addEventListener('touchmove', handleTouchMove, { passive: false });
+    window.addEventListener('touchend',  handleTouchEnd);
+  }, [pos, handleMouseMove, handleMouseUp, handleTouchMove, handleTouchEnd]);
+
+  const dragHandlers = {
+    onMouseDown: (e) => { e.preventDefault(); onStart(e.clientX, e.clientY); },
+    onTouchStart: (e) => { onStart(e.touches[0].clientX, e.touches[0].clientY); },
+  };
+
+  // Re-clamp on window resize so the widget doesn't go off-screen
+  useEffect(() => {
+    const onResize = () => {
+      setPos(prev => {
+        const next = clampPos(prev.x, prev.y);
+        savePosition(next);
+        return next;
+      });
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  return { pos, setPos, dragHandlers, wasDragged };
+}
 
 // ─── Typing indicator ─────────────────────────────────────────────────────────
 function TypingIndicator() {
@@ -58,12 +211,33 @@ export default function ChatWidget() {
   const [inputValue, setInputValue] = useState('');
   const inputRef = useRef(null);
 
-  // Focus input when chat opens and history panel is not showing
+  // Track toggle position; when drag ends, widget position re-derives from it
+  const [widgetPos, setWidgetPos] = useState(null);
+
+  const { pos, setPos, dragHandlers, wasDragged } = useDraggable((newTogglePos) => {
+    if (isOpen) setWidgetPos(widgetPosition(newTogglePos));
+  });
+
+  // Recompute widget position whenever the toggle moves or the widget opens
+  useEffect(() => {
+    if (isOpen) setWidgetPos(widgetPosition(pos));
+  }, [isOpen, pos]);
+
+  // Focus input when chat opens
   useEffect(() => {
     if (isOpen && !showHistory) {
       setTimeout(() => inputRef.current?.focus(), 150);
     }
   }, [isOpen, showHistory]);
+
+  const handleToggleClick = useCallback(() => {
+    // Suppress click if the pointer actually dragged
+    if (wasDragged.current) {
+      wasDragged.current = false;
+      return;
+    }
+    toggleChat();
+  }, [toggleChat, wasDragged]);
 
   const handleSend = useCallback(() => {
     const text = inputValue.trim();
@@ -85,11 +259,31 @@ export default function ChatWidget() {
 
   return (
     <>
-      {isOpen && (
-        <div className="cmh-widget" role="dialog" aria-label="Hotel chat assistant">
-
-          {/* ── Header ── */}
-          <div className="cmh-header">
+      {/* ── Widget panel ── */}
+      {isOpen && widgetPos && (
+        <div
+          className="cmh-widget"
+          role="dialog"
+          aria-label="Hotel chat assistant"
+          style={{
+            position:  'fixed',
+            left:      widgetPos.left,
+            top:       widgetPos.top,
+            width:     WIDGET_WIDTH,
+            height:    WIDGET_HEIGHT,
+            // Remove any bottom/right defaults your CSS may set
+            bottom:    'unset',
+            right:     'unset',
+            zIndex:    1000,
+          }}
+        >
+          {/* ── Header — also acts as a drag handle ── */}
+          <div
+            className="cmh-header"
+            {...dragHandlers}
+            style={{ cursor: 'grab' }}
+            title="Drag to move"
+          >
             <div className="cmh-header-left">
               <div className="cmh-header-avatar">
                 <Hotel size={16} />
@@ -109,10 +303,11 @@ export default function ChatWidget() {
             </div>
 
             <div className="cmh-header-actions">
-              {/* History button — highlights when panel is open */}
               <button
                 className={`cmh-header-btn ${showHistory ? 'cmh-header-btn--active' : ''}`}
                 onClick={toggleHistory}
+                onMouseDown={(e) => e.stopPropagation()}
+                onTouchStart={(e) => e.stopPropagation()}
                 title="View conversation history"
                 aria-label="Conversation history"
               >
@@ -126,6 +321,8 @@ export default function ChatWidget() {
               <button
                 className="cmh-header-btn"
                 onClick={newChat}
+                onMouseDown={(e) => e.stopPropagation()}
+                onTouchStart={(e) => e.stopPropagation()}
                 title="Start new conversation"
                 aria-label="New chat"
               >
@@ -136,6 +333,8 @@ export default function ChatWidget() {
               <button
                 className="cmh-header-btn cmh-header-btn--close"
                 onClick={toggleChat}
+                onMouseDown={(e) => e.stopPropagation()}
+                onTouchStart={(e) => e.stopPropagation()}
                 aria-label="Close chat"
               >
                 <X size={14} />
@@ -151,10 +350,8 @@ export default function ChatWidget() {
             </div>
           )}
 
-          {/* ── Widget body (messages OR history panel) ── */}
+          {/* ── Body ── */}
           <div style={{ flex: 1, overflow: 'hidden', position: 'relative', display: 'flex', flexDirection: 'column' }}>
-
-            {/* History panel slides over the message area */}
             {showHistory && (
               <HistoryPanel
                 conversations={conversations}
@@ -164,7 +361,6 @@ export default function ChatWidget() {
               />
             )}
 
-            {/* Messages */}
             <div className="cmh-messages" role="log" aria-live="polite"
               style={{ display: showHistory ? 'none' : 'flex' }}>
               {messages.length === 0 && !loading && (
@@ -196,7 +392,7 @@ export default function ChatWidget() {
             </div>
           </div>
 
-          {/* ── Bottom: quick replies + input OR closed notice ── */}
+          {/* ── Bottom ── */}
           {!showHistory && (
             <>
               {isClosed ? (
@@ -208,7 +404,6 @@ export default function ChatWidget() {
                     onSelect={handleQuickReply}
                     disabled={loading}
                   />
-
                   <div className="cmh-input-row">
                     <textarea
                       ref={inputRef}
@@ -242,15 +437,27 @@ export default function ChatWidget() {
         </div>
       )}
 
-      {/* ── Floating Toggle — gold ── */}
-      <button
-        className={`cmh-toggle-btn ${isOpen ? 'cmh-toggle-btn--open' : ''}`}
-        onClick={toggleChat}
-        aria-label={isOpen ? 'Close chat' : 'Open chat'}
-      >
-        {isOpen ? <X size={20} /> : <MessageCircle size={22} />}
-        {!isOpen && hasUnread && <span className="cmh-unread-dot" />}
-      </button>
+      {/* ── Floating toggle — hidden while widget is open ── */}
+      {!isOpen && (
+        <button
+          className="cmh-toggle-btn"
+          onClick={handleToggleClick}
+          {...dragHandlers}
+          aria-label="Open chat"
+          style={{
+            position:    'fixed',
+            left:        pos.x,
+            top:         pos.y,
+            bottom:      'unset',
+            right:       'unset',
+            cursor:      'grab',
+            touchAction: 'none',
+          }}
+        >
+          <MessageCircle size={22} />
+          {hasUnread && <span className="cmh-unread-dot" />}
+        </button>
+      )}
     </>
   );
 }

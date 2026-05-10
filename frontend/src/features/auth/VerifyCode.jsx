@@ -1,19 +1,29 @@
 // src/features/auth/VerifyCode.jsx
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { verifyCode, resendCode } from '../../services/api';
 import './AuthModern.css';
 
-// onSwitchToLogin — provided when used inside AuthModal
-export default function VerifyCode({ email, onSwitchToLogin }) {
+// onSwitchToLogin, onSuccess — provided when used inside AuthModal
+export default function VerifyCode({ email: emailProp, onSwitchToLogin, onSuccess }) {
   const navigate = useNavigate();
-  const [code,       setCode]       = useState(['', '', '', '', '', '']);
-  const [loading,    setLoading]    = useState(false);
-  const [error,      setError]      = useState('');
-  const [success,    setSuccess]    = useState(false);
-  const [resending,  setResending]  = useState(false);
-  const [countdown,  setCountdown]  = useState(0);
+  const location = useLocation();
+
+  // Use prop (modal) or navigation state (standalone page)
+  const email = emailProp || location.state?.email || '';
+
+  const [code,      setCode]      = useState(['', '', '', '', '', '']);
+  const [loading,   setLoading]   = useState(false);
+  const [error,     setError]     = useState('');
+  const [success,   setSuccess]   = useState(false);
+  const [resending, setResending] = useState(false);
+  const [countdown, setCountdown] = useState(0);
   const inputRefs = useRef([]);
+
+  // Guard — if no email, send back to register
+  useEffect(() => {
+    if (!email) navigate('/register', { replace: true });
+  }, [email]);
 
   useEffect(() => {
     if (countdown > 0) {
@@ -56,13 +66,15 @@ export default function VerifyCode({ email, onSwitchToLogin }) {
     setError('');
     setLoading(true);
     try {
-      const response = await verifyCode({ email, code: verificationCode });
+      await verifyCode({ email, code: verificationCode });
       setSuccess(true);
-      if (response.is_first_login) {
-        setTimeout(() => navigate('/dashboard'), 1500);
-      } else {
-        setTimeout(() => onSwitchToLogin ? onSwitchToLogin() : navigate('/login'), 1500);
-      }
+      setTimeout(() => {
+        if (onSuccess) {
+          onSuccess();              // AuthModal handles routing
+        } else {
+          navigate('/dashboard');   // standalone page always goes to dashboard
+        }
+      }, 1500);
     } catch (err) {
       console.error('Verification error:', err);
       if (err.response?.data) {
@@ -136,7 +148,7 @@ export default function VerifyCode({ email, onSwitchToLogin }) {
           </p>
           <p className="mt-3">
             <button
-              onClick={() => onSwitchToLogin ? onSwitchToLogin() : window.location.reload()}
+              onClick={() => onSwitchToLogin ? onSwitchToLogin() : navigate('/register')}
               className="link-button"
             >
               ← Use different email

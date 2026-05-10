@@ -1,7 +1,7 @@
 // src/features/auth/Register.jsx
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { registerUser, googleAuthenticate } from '../../services/api';
+import { registerUser, googleAuthenticate, loginUser, getStoredUser  } from '../../services/api';
 import { Eye, EyeOff, Mail, Lock, User, Check, X } from 'lucide-react';
 import { useGoogleLogin } from '@react-oauth/google';
 import axios from 'axios';
@@ -18,6 +18,21 @@ function validatePassword(password) {
   return PASSWORD_RULES.every(rule => rule.test(password));
 }
 
+function getPostLoginRoute() {
+  const user = getStoredUser();
+  if (!user?.is_staff) return '/dashboard';
+  const role =
+    user?.staff_profile?.effective_role ??
+    (user?.is_staff ? 'admin' : null);
+  switch (role) {
+    case 'front_desk':   return '/staff/front-desk';
+    case 'housekeeping': return '/staff/cleaning';
+    case 'maintenance':  return '/staff/maintenance';
+    case 'security':     return '/staff/incidents';
+    default:             return '/admin/dashboard';
+  }
+}
+
 // onSwitchToLogin, onVerify, onSuccess — provided when used inside AuthModal
 export default function Register({ onSwitchToLogin, onVerify, onSuccess }) {
   const navigate = useNavigate();
@@ -29,7 +44,8 @@ export default function Register({ onSwitchToLogin, onVerify, onSuccess }) {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [passwordMatch, setPasswordMatch]           = useState(null);
   const [passwordFocused, setPasswordFocused]       = useState(false);
-  const [loading, setLoading]                       = useState(false);
+  const [loadingEmail, setLoadingEmail] = useState(false);
+  const [loadingGoogle, setLoadingGoogle] = useState(false);
   const [error, setError]                           = useState('');
   const [agreedTerms, setAgreedTerms]               = useState(false);
   const [agreedPrivacy, setAgreedPrivacy]           = useState(false);
@@ -45,50 +61,55 @@ export default function Register({ onSwitchToLogin, onVerify, onSuccess }) {
 
   const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
-  const googleLogin = useGoogleLogin({
-    flow: 'implicit',
-    ux_mode: isMobile ? 'redirect' : 'popup',
-    redirect_uri: 'https://cebu-mini-hotel-reservation-system-three.vercel.app/auth/google/callback',
-    onSuccess: async (tokenResponse) => {
-      console.log('Google login success:', tokenResponse);
-      setLoading(true);
-      setError('');
-      try {
-        // Get user info from Google
-        const userInfoResponse = await axios.get(
-          'https://www.googleapis.com/oauth2/v3/userinfo',
-          { headers: { Authorization: `Bearer ${tokenResponse.access_token}` } }
-        );
-        console.log('User info:', userInfoResponse.data);
+const googleLogin = useGoogleLogin({
+  flow: 'implicit',
+  ux_mode: isMobile ? 'redirect' : 'popup',
+  redirect_uri: 'https://cebu-mini-hotel-reservation-system-three.vercel.app/auth/google/callback',
+  onSuccess: async (tokenResponse) => {
+    setLoadingGoogle(true);
+    setError('');
+    try {
+      const { data: googleUser } = await axios.get(
+        'https://www.googleapis.com/oauth2/v3/userinfo',
+        { headers: { Authorization: `Bearer ${tokenResponse.access_token}` } }
+      );
 
-        // Use googleAuthenticate function
-        await googleAuthenticate(tokenResponse.access_token, userInfoResponse.data);
+                const response = await axios.post(`${import.meta.env.VITE_AUTH_URL || '/api/auth'}/register/request/`, {
+          email: googleUser.email,
+          auth_provider: 'google',
+          access_token: tokenResponse.access_token,
+        });
 
-        // Use onSuccess if provided (modal context), otherwise navigate directly
-        if (onSuccess) {
-          onSuccess();
-        } else {
-          navigate('/');
-        }
-      } catch (err) {
-        console.error('Google authentication error:', err);
+        // store tokens since Google skips verification
+        if (response.data.tokens) {
+          localStorage.setItem('accessToken', response.data.tokens.access);
+          localStorage.setItem('refreshToken', response.data.tokens.refresh);
+          localStorage.setItem('user', JSON.stringify(response.data.user));
+}
 
-        const errorData = err.response?.data;
-        setError(
-          errorData?.email?.[0] || errorData?.email ||
-          errorData?.detail || 'Google sign-in failed. Please try email registration.'
-        );
-      } finally {
-        setLoading(false);
+      // Small settle delay, same as Login.jsx
+      await new Promise(r => setTimeout(r, 50));
+
+      if (onSuccess) {
+        onSuccess();
+      } else {
+        navigate(getPostLoginRoute());  // same routing logic as Login.jsx
       }
-    },
-    onError: (error) => {
-      console.error('Google login error:', error);
-      setError('Google sign-in was cancelled or failed. Please try again.');
-      setLoading(false);
-    },
-  });
-
+    } catch (err) {
+      const errorData = err.response?.data;
+      setError(
+        errorData?.email?.[0] || errorData?.email ||
+        errorData?.detail || 'Google sign-in failed. Please try email registration.'
+      );
+    } finally {
+      setLoadingGoogle(false);
+    }
+  },
+  onError: () => {
+    setError('Google sign-in was cancelled or failed. Please try again.');
+    setLoadingGoogle(false);
+  },
+});
   const handleGoogleLogin = () => {
     // Check if legal agreements are accepted before proceeding with Google sign-in
     if (!agreedTerms || !agreedPrivacy) {
@@ -113,14 +134,14 @@ export default function Register({ onSwitchToLogin, onVerify, onSuccess }) {
       return;
     }
 
-    setLoading(true);
+    setLoadingEmail(true);
     try {
       const { confirmPassword, ...dataToSend } = formData;
       await registerUser(dataToSend);
       if (onVerify) {
         onVerify(formData.email);
       } else {
-        navigate('/verify');
+        navigate('/verify', { state: { email: formData.email } });
       }
     } catch (err) {
       console.error('Registration error:', err);
@@ -137,7 +158,7 @@ export default function Register({ onSwitchToLogin, onVerify, onSuccess }) {
         setError('Network error. Please check your connection.');
       }
     } finally {
-      setLoading(false);
+      setLoadingEmail(false);
     }
   };
 
@@ -175,7 +196,7 @@ export default function Register({ onSwitchToLogin, onVerify, onSuccess }) {
               type="button"
               onClick={handleGoogleLogin}
               className="btn-social btn-google"
-              disabled={loading || !canUseGoogleAuth}
+              disabled={loadingGoogle || loadingEmail || !canUseGoogleAuth}
             >
               <svg width="20" height="20" viewBox="0 0 20 20">
                 <path fill="#4285F4" d="M19.6 10.23c0-.82-.1-1.42-.25-2.05H10v3.72h5.5c-.15.96-.74 2.31-2.04 3.22v2.45h3.16c1.89-1.73 2.98-4.3 2.98-7.34z"/>
@@ -183,14 +204,14 @@ export default function Register({ onSwitchToLogin, onVerify, onSuccess }) {
                 <path fill="#FBBC05" d="M3.99 10c0-.69.12-1.35.32-1.97V5.51H1.07A9.973 9.973 0 000 10c0 1.61.39 3.14 1.07 4.49l3.24-2.52c-.2-.62-.32-1.28-.32-1.97z"/>
                 <path fill="#EA4335" d="M10 3.88c1.88 0 3.13.81 3.85 1.48l2.84-2.76C14.96.99 12.7 0 10 0 6.09 0 2.72 2.25 1.07 5.51l3.24 2.52C5.12 5.62 7.36 3.88 10 3.88z"/>
               </svg>
-              {loading ? 'Connecting...' : 'Continue with Google'}
+              {loadingGoogle  ? 'Connecting...' : 'Continue with Google'}
             </button>
           </div>
 
           <div className="auth-modern-divider"><span>or register with email</span></div>
 
           <form onSubmit={handleSubmit} className="auth-modern-form">
-            {/* ... rest of the form is exactly the same as before ... */}
+
             <div className="form-row">
               <div className="form-group-modern">
                 <label htmlFor="reg-first_name"><User size={16} /> First Name</label>
@@ -271,39 +292,36 @@ export default function Register({ onSwitchToLogin, onVerify, onSuccess }) {
               )}
             </div>
 
-            <div className="legal-agreements">
-              <label className="legal-checkbox-label">
-                <input type="checkbox" checked={agreedTerms}
-                  onChange={e => { setAgreedTerms(e.target.checked); setLegalError(''); }}
-                  className="legal-checkbox-input" />
-                <span className="legal-checkbox-custom" />
-                <span className="legal-checkbox-text">
-                  I agree to the{' '}
-                  <a href="/terms-and-conditions" target="_blank" rel="noopener noreferrer" className="legal-link">
-                    Terms &amp; Conditions
-                  </a>
-                </span>
-              </label>
-              <label className="legal-checkbox-label">
-                <input type="checkbox" checked={agreedPrivacy}
-                  onChange={e => { setAgreedPrivacy(e.target.checked); setLegalError(''); }}
-                  className="legal-checkbox-input" />
-                <span className="legal-checkbox-custom" />
-                <span className="legal-checkbox-text">
-                  I agree to the{' '}
-                  <a href="/privacy-policy" target="_blank" rel="noopener noreferrer" className="legal-link">
-                    Privacy Policy
-                  </a>
-                </span>
-              </label>
-              {legalError && <p className="legal-error"><X size={13} /> {legalError}</p>}
-            </div>
+                <div className="legal-agreements">
+                  <label className="legal-checkbox-label">
+                    <input type="checkbox"
+                      checked={agreedTerms && agreedPrivacy}
+                      onChange={e => {
+                        setAgreedTerms(e.target.checked);
+                        setAgreedPrivacy(e.target.checked);
+                        setLegalError('');
+                      }}
+                      className="legal-checkbox-input" />
+                    <span className="legal-checkbox-custom" />
+                    <span className="legal-checkbox-text">
+                      I agree to the{' '}
+                      <a href="/terms-and-conditions" target="_blank" rel="noopener noreferrer" className="legal-link">
+                        Terms &amp; Conditions
+                      </a>
+                      {' '}and{' '}
+                      <a href="/privacy-policy" target="_blank" rel="noopener noreferrer" className="legal-link">
+                        Privacy Policy
+                      </a>
+                    </span>
+                  </label>
+                  {legalError && <p className="legal-error"><X size={13} /> {legalError}</p>}
+                </div>
 
             <button
-              type="submit" className="btn-modern btn-primary"
-              disabled={loading || passwordMatch === false || !isPasswordValid || !agreedTerms || !agreedPrivacy}
+             type="submit" className="btn-modern btn-primary"
+             disabled={loadingEmail || loadingGoogle || passwordMatch === false || !isPasswordValid || !agreedTerms || !agreedPrivacy}
             >
-              {loading ? <><span className="spinner-modern"></span>Creating Account...</> : 'Create Account'}
+              {loadingEmail ? <><span className="spinner-modern"></span>Creating Account...</> : 'Create Account'}
             </button>
           </form>
 

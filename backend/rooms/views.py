@@ -898,3 +898,40 @@ def _parse_json_fields(data):
                 pass
 
     return data
+
+
+
+class RoomUnavailableDatesView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request, pk):
+        from bookings.models import Booking, BookingStatus
+        from datetime import date, timedelta
+
+        try:
+            room = Room.objects.get(pk=pk, is_active=True)
+        except Room.DoesNotExist:
+            return Response({"error": "Room not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        today  = timezone.now().date()
+        future = today + timedelta(days=365)
+
+        bookings = Booking.objects.filter(
+            room=room,
+            status__in=[
+                BookingStatus.PENDING_PAYMENT,
+                BookingStatus.CONFIRMED,
+                BookingStatus.CHECKED_IN,
+            ],
+            check_out__gte=today,
+            check_in__lte=future,
+        ).values("check_in", "check_out")
+
+        unavailable = set()
+        for b in bookings:
+            current = b["check_in"]
+            while current < b["check_out"]:
+                unavailable.add(str(current))
+                current += timedelta(days=1)
+
+        return Response({"unavailable_dates": sorted(list(unavailable))})

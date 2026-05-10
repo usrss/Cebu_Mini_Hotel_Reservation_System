@@ -1,6 +1,6 @@
 from django.urls import path
 from . import views
-from .views import HotelSettingsView
+from .views import HotelSettingsView, RoomUnavailableDatesView
 
 app_name = "rooms"
 
@@ -9,6 +9,7 @@ urlpatterns = [
     path("", views.RoomListView.as_view(), name="room-list"),
     path("<int:pk>/", views.RoomDetailView.as_view(), name="room-detail"),
     path("availability/", views.RoomAvailabilityView.as_view(), name="room-availability"),
+    path('<int:pk>/unavailable-dates/', RoomUnavailableDatesView.as_view()),
     path("lock/", views.RoomLockView.as_view(), name="room-lock"),
     path("lock/release/", views.RoomLockReleaseView.as_view(), name="room-lock-release"),
     path("featured/", views.FeaturedRoomsView.as_view(), name="featured-rooms"),

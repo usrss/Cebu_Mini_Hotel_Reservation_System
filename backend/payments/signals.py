@@ -28,6 +28,8 @@ from django.conf import settings
 
 from .models import Payment, PaymentStatus
 
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -208,8 +210,10 @@ def _send_confirmation_email(booking) -> None:
     booking_url  = f"{frontend_url}/bookings/my/{booking.pk}"
 
     # ── Room times ─────────────────────────────────────────────────────────
-    checkin_time  = _fmt_time(getattr(booking.room, "checkin_time",  None))
-    checkout_time = _fmt_time(getattr(booking.room, "checkout_time", None))
+    from rooms.models import HotelSettings as _HotelSettings
+    _hs = _HotelSettings.get()
+    checkin_time = _fmt_time(booking.room.checkin_time or _hs.checkin_time)
+    checkout_time = _fmt_time(booking.room.checkout_time or _hs.checkout_time)
 
     # ── Payment summary ────────────────────────────────────────────────────
     amount_paid, amount_due, payment_method = _get_payment_summary(booking)

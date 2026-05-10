@@ -10,13 +10,39 @@ import styles from './PaymentModal.module.css';
 
 const refundInFlight = new Set();
 
-// PayMongo accepted reason codes
 const REFUND_REASONS = [
   { value: 'requested_by_guest', label: 'Requested by guest' },
-  { value: 'duplicate', label: 'Duplicate transaction' },
-  { value: 'fraudulent', label: 'Fraudulent' },
-  { value: 'other', label: 'Other' },
+  { value: 'duplicate',          label: 'Duplicate transaction' },
+  { value: 'fraudulent',         label: 'Fraudulent' },
+  { value: 'other',              label: 'Other' },
 ];
+
+// ─── Friendly error messages ──────────────────────────────────────────────────
+// Maps backend error keywords to plain-language explanations staff will understand.
+function getFriendlyError(raw) {
+  if (!raw) return 'Something went wrong. Please try again.';
+  const msg = typeof raw === 'string' ? raw.toLowerCase() : String(raw).toLowerCase();
+
+  if (msg.includes('exceeds remaining') || msg.includes('remaining refundable'))
+    return "The refund amount is more than what's left to refund. The maximum amount has been updated below — please review and try again.";
+  if (msg.includes('already refunded') || msg.includes('fully refunded'))
+    return "This payment has already been fully refunded.";
+  if (msg.includes('not paid') || msg.includes('invalid status'))
+    return "This payment cannot be refunded because it hasn't been marked as paid yet.";
+  if (msg.includes('paymongo') || msg.includes('payment gateway') || msg.includes('provider'))
+    return "The payment provider was unable to process this refund. Please try again in a few minutes or contact support.";
+  if (msg.includes('network') || msg.includes('timeout') || msg.includes('connection'))
+    return "A connection error occurred. Please check your internet connection and try again.";
+  if (msg.includes('permission') || msg.includes('not allowed') || msg.includes('forbidden'))
+    return "You don't have permission to issue this refund. Please contact an admin.";
+  if (msg.includes('not found'))
+    return "This payment record could not be found. It may have been deleted.";
+  if (msg.includes('invalid') && msg.includes('amount'))
+    return "The refund amount entered is not valid. Please enter a positive number.";
+
+  // Fallback — don't expose raw backend text to staff
+  return "The refund could not be processed. Please try again or contact support if the problem continues.";
+}
 
 export default function PaymentRefundModal({ payment, onClose, onSuccess }) {
   const initialRemaining = Number(payment.amount) - Number(payment.total_refunded ?? 0);
@@ -25,17 +51,16 @@ export default function PaymentRefundModal({ payment, onClose, onSuccess }) {
     ? Number(paymentLive.amount) - Number(paymentLive.total_refunded ?? 0)
     : 0;
 
-  const [amount, setAmount] = useState(initialRemaining.toFixed(2));
-  const [reason, setReason] = useState('requested_by_guest');
-  const [notes, setNotes] = useState('');
+  const [amount, setAmount]       = useState(initialRemaining.toFixed(2));
+  const [reason, setReason]       = useState('requested_by_guest');
+  const [notes, setNotes]         = useState('');
   const [cashRefund, setCashRefund] = useState(
     payment?.provider === 'manual' || payment?.payment_method === 'cash'
   );
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const amountTouchedRef = useRef(false);
+  const [loading, setLoading]     = useState(false);
+  const [error, setError]         = useState(null);
+  const amountTouchedRef          = useRef(false);
 
-  // Check if this is a manual/cash payment (walk-in)
   const isManualPayment = payment?.provider === 'manual' || payment?.payment_method === 'cash';
 
   const refetchPayment = async () => {
@@ -46,18 +71,16 @@ export default function PaymentRefundModal({ payment, onClose, onSuccess }) {
 
   useEffect(() => {
     if (!payment?.id) return;
-
     amountTouchedRef.current = false;
     setError(null);
 
     (async () => {
       try {
         const fresh = await refetchPayment();
-        const latestRemaining =
-          Number(fresh.amount) - Number(fresh.total_refunded ?? 0);
+        const latestRemaining = Number(fresh.amount) - Number(fresh.total_refunded ?? 0);
         if (!amountTouchedRef.current) setAmount(latestRemaining.toFixed(2));
       } catch {
-        // If refresh fails, keep displaying current modal data.
+        // Keep existing modal data if refresh fails
       }
     })();
   }, [payment?.id]);
@@ -66,24 +89,20 @@ export default function PaymentRefundModal({ payment, onClose, onSuccess }) {
     if (!payment?.id) return;
     if (refundInFlight.has(payment.id)) return;
 
-    // Validate amount
     const refundAmount = parseFloat(amount);
     if (isNaN(refundAmount) || refundAmount <= 0) {
-      setError('Please enter a valid refund amount.');
+      setError('Please enter a valid refund amount greater than ₱0.');
       return;
     }
-
     if (refundAmount > remaining) {
-      setError(`Refund amount cannot exceed ₱${remaining.toLocaleString()}.`);
+      setError(`The amount entered (₱${refundAmount.toLocaleString()}) is more than the refundable balance of ₱${remaining.toLocaleString()}.`);
       return;
     }
 
-    // Confirm cash refund for walk-ins
     if (isManualPayment && cashRefund) {
       const confirmed = window.confirm(
         `You are about to issue a cash refund of ₱${refundAmount.toFixed(2)} to ${payment.guest_name}.\n\n` +
-        `Please ensure you have the cash ready at the front desk.\n\n` +
-        `Do you want to proceed?`
+        `Please ensure you have the cash ready at the front desk.\n\nDo you want to proceed?`
       );
       if (!confirmed) return;
     }
@@ -95,21 +114,18 @@ export default function PaymentRefundModal({ payment, onClose, onSuccess }) {
     try {
       await refetchPayment();
 
-      const finalRefundAmount = Math.min(refundAmount, remaining);
+      const finalAmount = Math.min(refundAmount, remaining);
 
-      const body = {
-        reason: reason,
-        notes: notes || undefined,
-        refund_amount: finalRefundAmount.toFixed(2),
-        cash_refund: cashRefund,
-      };
+      const res = await paymentApi.refund(payment.id, {
+        reason,
+        notes:         notes || undefined,
+        refund_amount: finalAmount.toFixed(2),
+        cash_refund:   cashRefund,
+      });
 
-      const res = await paymentApi.refund(payment.id, body);
-
-      // Show success message for cash refunds
       if (isManualPayment && cashRefund) {
         alert(
-          `✅ Cash refund of ₱${finalRefundAmount.toFixed(2)} has been recorded.\n\n` +
+          `✅ Cash refund of ₱${finalAmount.toFixed(2)} recorded.\n\n` +
           `Please give the cash to ${payment.guest_name} at the front desk.`
         );
       }
@@ -119,30 +135,28 @@ export default function PaymentRefundModal({ payment, onClose, onSuccess }) {
     } catch (err) {
       const data = err.response?.data;
 
-      const backendDetail =
+      const rawError =
         data?.non_field_errors?.[0] ??
         data?.refund_amount?.[0] ??
         data?.detail ??
-        'Refund failed.';
+        '';
 
-      const backendDetailStr = typeof backendDetail === 'string' ? backendDetail : String(backendDetail);
-
+      // If the amount exceeded the remaining balance, refresh so staff sees the correct max
+      const rawStr = typeof rawError === 'string' ? rawError : String(rawError);
       if (
-        backendDetailStr.toLowerCase().includes('exceeds remaining') ||
-        backendDetailStr.toLowerCase().includes('remaining refundable')
+        rawStr.toLowerCase().includes('exceeds remaining') ||
+        rawStr.toLowerCase().includes('remaining refundable')
       ) {
-        setError('Refund amount exceeds remaining refundable balance. Updating latest balance…');
         try {
           const fresh = await refetchPayment();
           const latestRemaining = Number(fresh.amount) - Number(fresh.total_refunded ?? 0);
           setAmount(latestRemaining.toFixed(2));
-          setError(`Balance updated. Maximum refundable is now ₱${latestRemaining.toLocaleString()}.`);
         } catch {
-          setError(backendDetailStr);
+          // Ignore — friendly message will still show
         }
-      } else {
-        setError(backendDetailStr);
       }
+
+      setError(getFriendlyError(rawError));
     } finally {
       if (payment?.id) refundInFlight.delete(payment.id);
       setLoading(false);
@@ -165,17 +179,11 @@ export default function PaymentRefundModal({ payment, onClose, onSuccess }) {
           {remaining > 0 && (
             <button
               type="button"
-              className={styles.fullAmountBtn}
               onClick={handleSetFullAmount}
               style={{
-                marginLeft: '12px',
-                padding: '2px 8px',
-                fontSize: '11px',
-                background: 'none',
-                border: '1px solid var(--gold-border, #d4af37)',
-                borderRadius: '4px',
-                color: 'var(--gold, #d4af37)',
-                cursor: 'pointer',
+                marginLeft: 12, padding: '2px 8px', fontSize: 11,
+                background: 'none', border: '1px solid var(--gold-border, #d4af37)',
+                borderRadius: 4, color: 'var(--gold, #d4af37)', cursor: 'pointer',
               }}
             >
               Set Full Amount
@@ -239,13 +247,14 @@ export default function PaymentRefundModal({ payment, onClose, onSuccess }) {
           <textarea
             className={styles.textarea}
             rows={2}
-            placeholder={isManualPayment ? "e.g., Cash given to guest at front desk" : "Internal notes about this refund..."}
+            placeholder={isManualPayment
+              ? 'e.g. Cash given to guest at front desk'
+              : 'Internal notes about this refund…'}
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
           />
         </label>
 
-        {/* Cash refund checkbox for walk-in / manual payments */}
         {isManualPayment && (
           <label className={styles.checkboxLabel}>
             <input
@@ -259,13 +268,13 @@ export default function PaymentRefundModal({ payment, onClose, onSuccess }) {
           </label>
         )}
 
-        {/* Warning for online payment refunds */}
         {!isManualPayment && (
           <div className={styles.infoNote}>
             <span>ℹ️</span>
             <span>
-              This refund will be processed through {payment.provider === 'paymongo' ? 'PayMongo' : 'PayPal'}.
-              The guest will receive the refund in 5-10 business days.
+              This refund will be processed through{' '}
+              {payment.provider === 'paymongo' ? 'PayMongo' : 'PayPal'}.
+              The guest will receive the refund within 5–10 business days.
             </span>
           </div>
         )}

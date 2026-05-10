@@ -81,9 +81,6 @@ export default function ReviewListPage() {
           <h1 className={styles.title}>Reviews</h1>
           <p className={styles.subtitle}>{count} reviews</p>
         </div>
-        <button className={styles.statsBtn} onClick={() => navigate('/admin/reviews/stats')}>
-          View Stats →
-        </button>
       </div>
 
       <div className={styles.toolbar}>

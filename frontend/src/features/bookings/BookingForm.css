@@ -89,6 +89,19 @@
   letter-spacing: 1px;
 }
 
+/* react-datepicker unavailable day styling */
+.bf-calendar .react-datepicker__day--excluded {
+  color: #ccc !important;
+  text-decoration: line-through;
+  cursor: not-allowed !important;
+  background: transparent !important;
+}
+
+.bf-calendar .react-datepicker__day--excluded:hover {
+  background: transparent !important;
+  color: #ccc !important;
+}
+
 /* ── Shared input base ───────────────────────────────── */
 .booking-date-input,
 .booking-guest-input,

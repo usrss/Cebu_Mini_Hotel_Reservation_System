@@ -181,3 +181,6 @@ export const adminGetPriceHistory = (id) =>
   api.get(`/rooms/admin/${id}/price-history/`);
 
 export default api;
+
+export const getRoomUnavailableDates = (roomId) =>
+  axios.get(`${API_BASE}/rooms/${roomId}/unavailable-dates/`);

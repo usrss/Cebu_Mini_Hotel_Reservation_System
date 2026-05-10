@@ -8,7 +8,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { paymentApi } from '../../services/adminApi';
 import { useAdminRole } from '../hooks/useAdminRole';
-import PaymentConfirmModal from './PaymentConfirmModal';
 import PaymentRefundModal from './PaymentRefundModal';
 import styles from './PaymentListPage.module.css';
 
@@ -33,9 +32,6 @@ function StatusBadge({ status, label }) {
   );
 }
 
-// Returns the correct payment detail route based on the current user's role.
-// front_desk has no separate detail page — detail is shown inline via selectedPayment state.
-// admin/manager navigate to the full admin payment detail page.
 export default function PaymentListPage() {
   const navigate = useNavigate();
   const { canManagePayments, canRefund, role } = useAdminRole();
@@ -50,8 +46,7 @@ export default function PaymentListPage() {
   const [statusFilter, setStatusFilter] = useState('');
   const [ordering, setOrdering]         = useState('-created_at');
   const [selectedPayment, setSelectedPayment] = useState(null);
-  const [confirmPayment, setConfirmPayment] = useState(null);
-  const [refundPayment, setRefundPayment]   = useState(null);
+  const [refundPayment, setRefundPayment]     = useState(null);
 
   const fetchPayments = useCallback(async () => {
     setLoading(true);
@@ -74,11 +69,6 @@ export default function PaymentListPage() {
 
   useEffect(() => { fetchPayments(); }, [fetchPayments]);
 
-  const handleConfirmSuccess = (updated) => {
-    setConfirmPayment(null);
-    setPayments((ps) => ps.map((p) => (p.id === updated.id ? updated : p)));
-  };
-
   const handleRefundSuccess = (updated) => {
     setRefundPayment(null);
     setPayments((ps) => ps.map((p) => (p.id === updated.id ? updated : p)));
@@ -93,14 +83,6 @@ export default function PaymentListPage() {
           <h1 className={styles.title}>Payments</h1>
           <p className={styles.subtitle}>{count} transactions</p>
         </div>
-        {['admin', 'manager'].includes(role) && (
-          <button
-            className={styles.revenueBtn}
-            onClick={() => navigate(role === 'front_desk' ? '/staff/front-desk/payments' : '/admin/payments/revenue')}
-          >
-            Revenue Summary →
-          </button>
-        )}
       </div>
 
       <div className={styles.toolbar}>
@@ -152,7 +134,7 @@ export default function PaymentListPage() {
                 <th>Method</th>
                 <th>Status</th>
                 <th>Date</th>
-                <th>Actions</th>
+                {canRefund && <th>Actions</th>}
               </tr>
             </thead>
             <tbody>
@@ -184,17 +166,9 @@ export default function PaymentListPage() {
                   <td className={styles.date}>
                     {new Date(p.created_at).toLocaleDateString()}
                   </td>
-                  <td onClick={(e) => e.stopPropagation()}>
-                    <div className={styles.btnGroup}>
-                      {p.status === 'pending' && (
-                        <button
-                          className={styles.confirmBtn}
-                          onClick={() => setConfirmPayment(p)}
-                        >
-                          Confirm
-                        </button>
-                      )}
-                      {p.status === 'paid' && canRefund && (
+                  {canRefund && (
+                    <td onClick={(e) => e.stopPropagation()}>
+                      {p.status === 'paid' && (
                         <button
                           className={styles.refundBtn}
                           onClick={() => setRefundPayment(p)}
@@ -202,13 +176,15 @@ export default function PaymentListPage() {
                           Refund
                         </button>
                       )}
-                    </div>
-                  </td>
+                    </td>
+                  )}
                 </tr>
               ))}
               {payments.length === 0 && (
                 <tr>
-                  <td colSpan={8} className={styles.empty}>No payments found.</td>
+                  <td colSpan={canRefund ? 8 : 7} className={styles.empty}>
+                    No payments found.
+                  </td>
                 </tr>
               )}
             </tbody>
@@ -264,25 +240,10 @@ export default function PaymentListPage() {
                 </div>
               ))}
             </div>
-            {selectedPayment.status === 'pending' && (
-              <button
-                style={{ marginTop: 20, width: '100%', padding: '10px 0', background: '#16a34a', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 700, cursor: 'pointer', fontSize: 14 }}
-                onClick={() => { setConfirmPayment(selectedPayment); setSelectedPayment(null); }}
-              >
-                Confirm Payment
-              </button>
-            )}
           </div>
         </div>
       )}
 
-      {confirmPayment && (
-        <PaymentConfirmModal
-          payment={confirmPayment}
-          onClose={() => setConfirmPayment(null)}
-          onSuccess={handleConfirmSuccess}
-        />
-      )}
       {refundPayment && (
         <PaymentRefundModal
           payment={refundPayment}

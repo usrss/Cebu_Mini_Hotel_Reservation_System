@@ -680,6 +680,8 @@ class SupportTicketEscalateView(APIView):
 
 # ─── Poll for new messages ────────────────────────────────────────────────────
 
+# ─── Poll for new messages ────────────────────────────────────────────────────
+
 class PollMessagesView(APIView):
     permission_classes     = [AllowAny]
     authentication_classes = []
@@ -703,26 +705,27 @@ class PollMessagesView(APIView):
             id__gt=int(after_id)
         ).order_by("timestamp")
 
-        # Include ticket info if in support mode
+        # FIX: always include ticket info regardless of is_in_support_mode.
+        # Previously this was gated on `conv.is_in_support_mode`, which is
+        # False once a ticket is closed — so the frontend never received
+        # status="closed" and the guest had to send a message to find out.
         ticket_info = None
-        if conv.is_in_support_mode:
-            try:
-                t = conv.support_ticket
-                ticket_info = {
-                    "id":       t.pk,
-                    "tier":     t.tier,
-                    "priority": t.priority,
-                    "status":   t.status,
-                }
-            except Exception:
-                pass
+        try:
+            t = conv.support_ticket
+            ticket_info = {
+                "id":       t.pk,
+                "tier":     t.tier,
+                "priority": t.priority,
+                "status":   t.status,
+            }
+        except Exception:
+            pass
 
         return Response({
-            "messages":    MessageSerializer(new_messages, many=True).data,
+            "messages":     MessageSerializer(new_messages, many=True).data,
             "is_escalated": conv.is_in_support_mode,
-            "ticket":      ticket_info,
+            "ticket":       ticket_info,
         })
-
 
 # ─── Debug ────────────────────────────────────────────────────────────────────
 

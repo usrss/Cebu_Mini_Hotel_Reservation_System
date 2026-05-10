@@ -3,28 +3,15 @@
  *
  * Central state hook for the chatbot widget.
  *
- * History feature:
- *   - Every conversation (id + messages + status + escalated) is saved to
- *     localStorage under `cmh_conversations` as an array.
- *   - Guest can open the History panel to see past conversations.
- *   - Clicking a past conversation loads it back — they can keep messaging
- *     as long as the ticket is not closed (status !== 'closed').
- *   - "New Chat" always creates a brand new conversation.
- *   - On mount the most recent non-closed conversation is auto-resumed if one exists.
- *
- * FIX (staff reply polling):
- *   The polling useEffect was closing over the `messages` state array, which
- *   was always stale inside the interval callback. Every doPoll() call computed
- *   lastId from the snapshot captured when the effect was created (usually 0),
- *   so the backend returned ALL messages on every tick. The deduplication set
- *   then silently dropped them because their ids were already in `prev`.
- *   Staff replies were therefore never rendered.
- *
- *   Fix: track the highest seen message id in a `lastSeenIdRef` (a plain ref,
- *   not state). The closure always reads `.current` which is always up-to-date,
- *   regardless of when the effect was created. The dependency array also no
- *   longer includes `ticketStatus`, which was needlessly restarting the interval
- *   (and losing the cursor) every time the ticket status changed mid-conversation.
+ * Changes from original:
+ *  1. Auth gate for "Talk to support" — unauthenticated guests see a login
+ *     prompt instead of triggering escalation. The quick reply is also hidden
+ *     from the default set for anonymous sessions.
+ *  2. Status-only poll — a lightweight 10-second interval runs whenever
+ *     we have a conversationId but isEscalated is still false. This means
+ *     when staff closes a ticket the guest UI updates within ~10 s even if
+ *     the guest never sent another message. The existing 5-second message
+ *     poll (isEscalated === true) is unchanged.
  */
 
 import { useState, useCallback, useRef, useEffect } from 'react';
@@ -32,14 +19,35 @@ import { sendMessage, pollMessages } from '../../services/chatApi';
 import { getStoredUser } from '../../services/api';
 
 const SESSION_KEY_STORE = 'cmh_chat_session';
-const CONVERSATIONS_KEY = 'cmh_conversations';    // array of conversation records
-const ACTIVE_CONV_KEY   = 'cmh_active_conv_id';   // currently active conversation id
+const CONVERSATIONS_KEY = 'cmh_conversations';
+const ACTIVE_CONV_KEY   = 'cmh_active_conv_id';
 
-const DEFAULT_QUICK_REPLIES = [
+// ─── Quick reply sets ─────────────────────────────────────────────────────────
+
+// Unauthenticated guests never see "Talk to support" — it would be blocked
+// by the auth gate anyway, so hiding it avoids the confusing rejection flow.
+const DEFAULT_QUICK_REPLIES_GUEST = [
   'Check room availability',
   'View room prices',
   'Hotel information',
+];
+
+const DEFAULT_QUICK_REPLIES_USER = [
+  'Check room availability',
+  'View room prices',
+  'My bookings',
   'Talk to support',
+];
+
+// Phrases that signal the guest wants human support.
+// Checked case-insensitively against the full message text.
+const SUPPORT_INTENT_PHRASES = [
+  'talk to support',
+  'contact support',
+  'speak to support',
+  'human support',
+  'speak to agent',
+  'talk to agent',
 ];
 
 // ─── Session key ──────────────────────────────────────────────────────────────
@@ -53,8 +61,6 @@ function getSessionKey() {
 }
 
 // ─── Conversation store helpers ───────────────────────────────────────────────
-// Each record: { id, conversationId, messages, isEscalated, ticketStatus, subject, updatedAt }
-
 function loadConversations() {
   try {
     return JSON.parse(localStorage.getItem(CONVERSATIONS_KEY) || '[]');
@@ -63,7 +69,6 @@ function loadConversations() {
 
 function saveConversations(convs) {
   try {
-    // Keep last 20 conversations
     localStorage.setItem(CONVERSATIONS_KEY, JSON.stringify(convs.slice(-20)));
   } catch {}
 }
@@ -78,10 +83,6 @@ function setActiveId(id) {
   else localStorage.removeItem(ACTIVE_CONV_KEY);
 }
 
-/**
- * Upsert a conversation record in the store.
- * Returns the updated list.
- */
 function upsertConversation(convs, patch) {
   const idx = convs.findIndex(c => c.localId === patch.localId);
   if (idx === -1) return [...convs, patch];
@@ -95,51 +96,42 @@ export function useChatbot() {
   const user       = getStoredUser();
   const sessionKey = useRef(getSessionKey()).current;
 
-  // All saved conversations
-  const [conversations,  setConversations]  = useState(loadConversations);
+  const defaultQuickReplies = user ? DEFAULT_QUICK_REPLIES_USER : DEFAULT_QUICK_REPLIES_GUEST;
 
-  // Active conversation state
-  const [localId,        setLocalId]        = useState(null);       // localStorage record key
-  const [conversationId, setConversationId] = useState(null);       // backend conversation id
+  const [conversations,  setConversations]  = useState(loadConversations);
+  const [localId,        setLocalId]        = useState(null);
+  const [conversationId, setConversationId] = useState(null);
   const [messages,       setMessages]       = useState([]);
   const [isEscalated,    setIsEscalated]    = useState(false);
-  const [ticketStatus,   setTicketStatus]   = useState(null);       // null | 'open' | 'in_progress' | 'escalated' | 'closed'
-  const [quickReplies,   setQuickReplies]   = useState(DEFAULT_QUICK_REPLIES);
+  const [ticketStatus,   setTicketStatus]   = useState(null);
+  const [quickReplies,   setQuickReplies]   = useState(defaultQuickReplies);
 
-  const [loading,   setLoading]   = useState(false);
-  const [error,     setError]     = useState(null);
-  const [isOpen,    setIsOpen]    = useState(false);
-  const [hasUnread, setHasUnread] = useState(false);
+  const [loading,     setLoading]     = useState(false);
+  const [error,       setError]       = useState(null);
+  const [isOpen,      setIsOpen]      = useState(false);
+  const [hasUnread,   setHasUnread]   = useState(false);
   const [showHistory, setShowHistory] = useState(false);
 
-  const pollIntervalRef = useRef(null);
-  const bottomRef       = useRef(null);
-  const greetingShown   = useRef(false);
+  const pollIntervalRef       = useRef(null);
+  const statusPollIntervalRef = useRef(null); // NEW: status-only poll handle
+  const bottomRef             = useRef(null);
+  const greetingShown         = useRef(false);
+  const lastSeenIdRef         = useRef(0);
 
-  // FIX: tracks the highest message id the poll cursor has advanced to.
-  // Using a ref (not state) so the doPoll closure always reads the live value
-  // without the effect needing to re-run (and restart the interval) on each
-  // new message. Reset to 0 whenever a new/resumed conversation is loaded.
-  const lastSeenIdRef = useRef(0);
-
-  // ── Persist conversations on every change ──────────────────────────────────
+  // ── Persist conversations ──────────────────────────────────────────────────
   useEffect(() => {
     saveConversations(conversations);
   }, [conversations]);
 
-  // ── Auto-resume most recent non-closed conversation on mount ───────────────
+  // ── Auto-resume on mount ───────────────────────────────────────────────────
   useEffect(() => {
     const savedId = getActiveId();
     const convs   = loadConversations();
     if (savedId && convs.length > 0) {
       const record = convs.find(c => c.localId === savedId) || convs[convs.length - 1];
-      if (record) {
-        _loadRecord(record);
-        return;
-      }
+      if (record) { _loadRecord(record); return; }
     }
     if (convs.length > 0) {
-      // Resume latest conversation that isn't closed
       const latest = [...convs].reverse().find(c => c.ticketStatus !== 'closed') || convs[convs.length - 1];
       _loadRecord(latest);
     }
@@ -153,7 +145,7 @@ export function useChatbot() {
     }
   }, [messages, isOpen, showHistory]);
 
-  // ── Unread dot when closed ─────────────────────────────────────────────────
+  // ── Unread dot ─────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!isOpen && messages.length > 0) {
       const last = messages[messages.length - 1];
@@ -161,7 +153,7 @@ export function useChatbot() {
     }
   }, [messages]);
 
-  // ── Sync active conversation into store whenever messages/status change ────
+  // ── Sync active conversation into store ────────────────────────────────────
   useEffect(() => {
     if (!localId) return;
     setConversations(prev =>
@@ -176,13 +168,33 @@ export function useChatbot() {
         subject: messages.find(m => m.sender === 'user')?.text?.slice(0, 60) || 'New conversation',
       })
     );
-  // Only sync when these specific values change
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages, isEscalated, ticketStatus]);
 
-  // ── Support polling ────────────────────────────────────────────────────────
+  // ── Helper: inject the "ticket closed" system message ─────────────────────
+  const _injectClosedMessage = useCallback(() => {
+    setMessages(prev => {
+      // Avoid duplicate closed messages if both polls fire close together
+      const alreadyInjected = prev.some(
+        m => m.sender === 'bot' && m._isClosedNotice
+      );
+      if (alreadyInjected) return prev;
+      return [
+        ...prev,
+        {
+          id:             Date.now(),
+          sender:         'bot',
+          text:           '✅ **Your support request has been resolved.**\n\nThis conversation is now closed. If you need further help, please start a new chat.',
+          timestamp:      new Date().toISOString(),
+          data:           null,
+          _isClosedNotice: true,
+        },
+      ];
+    });
+  }, []);
+
+  // ── Support message poll (runs when escalated) ─────────────────────────────
   useEffect(() => {
-    // Stop polling if not yet escalated or no backend conversation id
     if (!isEscalated || !conversationId) {
       if (pollIntervalRef.current) {
         clearInterval(pollIntervalRef.current);
@@ -191,10 +203,6 @@ export function useChatbot() {
       return;
     }
 
-    // Stop polling once the ticket is closed — read ticketStatus via a local
-    // snapshot at effect-creation time. If it closes mid-interval the next
-    // tick will call setTicketStatus('closed') and the effect will re-run,
-    // cleaning up cleanly.
     if (ticketStatus === 'closed') {
       if (pollIntervalRef.current) {
         clearInterval(pollIntervalRef.current);
@@ -205,10 +213,6 @@ export function useChatbot() {
 
     const doPoll = async () => {
       try {
-        // FIX: read from lastSeenIdRef — always the current value, never stale.
-        // Previously this read `messages` from the closure, which was the snapshot
-        // at effect-creation time and never advanced, so every poll sent after=0
-        // and the backend returned every old message. The dedup set swallowed them.
         const data = await pollMessages(conversationId, lastSeenIdRef.current, sessionKey);
 
         if (data.messages && data.messages.length > 0) {
@@ -217,8 +221,8 @@ export function useChatbot() {
             const newMsgs  = data.messages
               .filter(m => !existing.has(m.id))
               .map(m => ({
-                id:        m.id,    // real DB id — safe to use as React key here
-                dbId:      m.id,    // explicit alias for cursor restoration clarity
+                id:        m.id,
+                dbId:      m.id,
                 sender:    m.sender,
                 text:      m.message_text,
                 timestamp: m.timestamp,
@@ -226,8 +230,6 @@ export function useChatbot() {
               }));
 
             if (newMsgs.length) {
-              // Advance the ref cursor so the next poll only fetches messages
-              // that arrived after this batch.
               const maxId = Math.max(...newMsgs.map(m => m.id));
               if (maxId > lastSeenIdRef.current) {
                 lastSeenIdRef.current = maxId;
@@ -240,32 +242,17 @@ export function useChatbot() {
           if (!isOpen) setHasUnread(true);
         }
 
-        // Sync ticket status from poll response.
-        // When staff resolves the ticket, status transitions to 'closed' here.
         if (data.ticket?.status && data.ticket.status !== ticketStatus) {
           setTicketStatus(data.ticket.status);
-
-          // When the ticket just became closed, inject a system message so the
-          // guest sees a clear resolution notice inline without refreshing.
           if (data.ticket.status === 'closed') {
-            setMessages(prev => [
-              ...prev,
-              {
-                id:        Date.now(),
-                sender:    'bot',
-                text:      '✅ **Your support request has been resolved.**\n\nThis conversation is now closed. If you need further help, please start a new chat.',
-                timestamp: new Date().toISOString(),
-                data:      null,
-              },
-            ]);
+            _injectClosedMessage();
           }
         }
-
-      } catch { /* silent — network hiccups should not break the widget */ }
+      } catch { /* silent */ }
     };
 
     pollIntervalRef.current = setInterval(doPoll, 5000);
-    doPoll(); // immediate first tick
+    doPoll();
 
     return () => {
       if (pollIntervalRef.current) {
@@ -273,24 +260,90 @@ export function useChatbot() {
         pollIntervalRef.current = null;
       }
     };
-
-  // `messages` is intentionally excluded — we use lastSeenIdRef instead.
-  // `ticketStatus` is included only so a 'closed' transition stops the poll.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isEscalated, conversationId, ticketStatus, sessionKey, isOpen]);
 
-  // ── Internal: load a conversation record into active state ─────────────────
+  // ── Status-only poll (NEW) ─────────────────────────────────────────────────
+  // Runs whenever we have a conversationId but haven't escalated yet.
+  // Only checks ticket.status — if staff somehow closes the ticket before
+  // the guest escalates (edge case), or if the guest needs to know the
+  // ticket was resolved, this catches it within ~10 seconds.
+  // Also covers the case where the guest has the widget closed: when they
+  // reopen it the status will already be correct from the last poll result
+  // stored in ticketStatus state / localStorage.
+  useEffect(() => {
+    // Don't run alongside the full message poll — that already tracks status
+    if (isEscalated) {
+      if (statusPollIntervalRef.current) {
+        clearInterval(statusPollIntervalRef.current);
+        statusPollIntervalRef.current = null;
+      }
+      return;
+    }
+
+    // Nothing to poll without a backend conversation
+    if (!conversationId) {
+      if (statusPollIntervalRef.current) {
+        clearInterval(statusPollIntervalRef.current);
+        statusPollIntervalRef.current = null;
+      }
+      return;
+    }
+
+    // Already closed — no need to keep polling
+    if (ticketStatus === 'closed') {
+      if (statusPollIntervalRef.current) {
+        clearInterval(statusPollIntervalRef.current);
+        statusPollIntervalRef.current = null;
+      }
+      return;
+    }
+
+    const doStatusPoll = async () => {
+      try {
+        // Reuse pollMessages with after=lastSeenIdRef so we don't re-fetch
+        // old messages; we only care about data.ticket.status here.
+        const data = await pollMessages(conversationId, lastSeenIdRef.current, sessionKey);
+
+        if (data.ticket?.status && data.ticket.status !== ticketStatus) {
+          setTicketStatus(data.ticket.status);
+
+          if (data.ticket.status === 'closed') {
+            _injectClosedMessage();
+            if (!isOpen) setHasUnread(true);
+          }
+
+          // If the ticket got escalated by the backend (e.g. auto-routing),
+          // promote to the full message poll so staff replies come through.
+          if (data.ticket.status === 'escalated' || data.escalated) {
+            setIsEscalated(true);
+          }
+        }
+      } catch { /* silent */ }
+    };
+
+    statusPollIntervalRef.current = setInterval(doStatusPoll, 10000);
+
+    return () => {
+      if (statusPollIntervalRef.current) {
+        clearInterval(statusPollIntervalRef.current);
+        statusPollIntervalRef.current = null;
+      }
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEscalated, conversationId, ticketStatus, sessionKey, isOpen]);
+
+  // ── Internal: load a conversation record ──────────────────────────────────
   function _loadRecord(record) {
     if (pollIntervalRef.current) {
       clearInterval(pollIntervalRef.current);
       pollIntervalRef.current = null;
     }
+    if (statusPollIntervalRef.current) {
+      clearInterval(statusPollIntervalRef.current);
+      statusPollIntervalRef.current = null;
+    }
 
-    // Reset the poll cursor to the highest REAL DB id already in the restored
-    // messages. Messages have two ids: `id` (a Date.now() timestamp used as
-    // React key) and `dbId` (the actual database primary key). We must use
-    // dbId here — using `id` would set the cursor to a ~trillion number,
-    // causing every subsequent poll to return nothing.
     const msgs = record.messages || [];
     lastSeenIdRef.current = msgs.length > 0
       ? Math.max(0, ...msgs.map(m => m.dbId || 0))
@@ -301,7 +354,7 @@ export function useChatbot() {
     setMessages(msgs);
     setIsEscalated(record.isEscalated || false);
     setTicketStatus(record.ticketStatus || null);
-    setQuickReplies(record.quickReplies || DEFAULT_QUICK_REPLIES);
+    setQuickReplies(record.quickReplies || defaultQuickReplies);
     setActiveId(record.localId);
     greetingShown.current = (msgs.length || 0) > 0;
   }
@@ -328,12 +381,7 @@ export function useChatbot() {
       setActiveId(newLocalId);
       _addBotMessage(
         `Hello${user?.first_name ? `, ${user.first_name}` : ''}! Welcome to **Cebu Mini Hotel**.\n\nI'm CMH Bot, your virtual assistant. How can I help you today?`,
-        [
-          'Check room availability',
-          'View room prices',
-          user ? 'My bookings' : 'Hotel information',
-          'Talk to support',
-        ]
+        user ? DEFAULT_QUICK_REPLIES_USER : DEFAULT_QUICK_REPLIES_GUEST
       );
     }
   }, [messages.length, user, _addBotMessage]);
@@ -347,13 +395,45 @@ export function useChatbot() {
   // ── Send ───────────────────────────────────────────────────────────────────
   const send = useCallback(async (text) => {
     if (!text.trim() || loading) return;
-    if (ticketStatus === 'closed') return; // guard — closed tickets can't receive messages
+    if (ticketStatus === 'closed') return;
+
+    // ── Auth gate: block support escalation for unauthenticated guests ──────
+    const isAttemptingSupport = SUPPORT_INTENT_PHRASES.some(p =>
+      text.toLowerCase().includes(p)
+    );
+
+    if (isAttemptingSupport && !user) {
+      // Show the user's message in the bubble so it doesn't feel swallowed,
+      // then reply with a login prompt — never call sendMessage().
+      const currentLocalId = localId || `conv_${Date.now()}`;
+      if (!localId) {
+        setLocalId(currentLocalId);
+        setActiveId(currentLocalId);
+      }
+      setMessages(prev => [
+        ...prev,
+        {
+          id:        Date.now(),
+          sender:    'user',
+          text:      text.trim(),
+          timestamp: new Date().toISOString(),
+        },
+      ]);
+      setQuickReplies([]);
+      setTimeout(() => {
+        _addBotMessage(
+          'To connect with our support team, you need to be **logged in**. Please sign in or create an account and try again.',
+          DEFAULT_QUICK_REPLIES_GUEST
+        );
+      }, 300);
+      return;
+    }
+    // ── End auth gate ────────────────────────────────────────────────────────
 
     setError(null);
     setQuickReplies([]);
     setShowHistory(false);
 
-    // Ensure we have a localId for this conversation
     const currentLocalId = localId || `conv_${Date.now()}`;
     if (!localId) {
       setLocalId(currentLocalId);
@@ -378,26 +458,14 @@ export function useChatbot() {
 
       if (data.conversation_id && data.conversation_id !== conversationId) {
         setConversationId(data.conversation_id);
-        // Patch the local record with backend id
         setConversations(prev =>
           upsertConversation(prev, { localId: currentLocalId, conversationId: data.conversation_id })
         );
       }
 
-      // Backend returned a CLOSED signal — the staff already resolved this
-      // conversation. Lock the UI immediately without waiting for the next poll.
       if (data.intent === 'CLOSED' || data.closed === true) {
         setTicketStatus('closed');
-        setMessages(prev => [
-          ...prev,
-          {
-            id:        Date.now() + 1,
-            sender:    'bot',
-            text:      '✅ **Your support request has been resolved.**\n\nThis conversation is now closed. If you need further help, please start a new chat.',
-            timestamp: new Date().toISOString(),
-            data:      null,
-          },
-        ]);
+        _injectClosedMessage();
         setQuickReplies([]);
         return;
       }
@@ -412,30 +480,20 @@ export function useChatbot() {
         return;
       }
 
-      // Backend rejected the message because the conversation was already closed
-      // by staff. Lock the UI immediately — don't wait for the next poll cycle.
       if (data.intent === 'CONVERSATION_CLOSED') {
         setTicketStatus('closed');
         setQuickReplies([]);
         return;
       }
 
-      // Advance the poll cursor using real DB ids from the server response.
-      // IMPORTANT: local message ids are Date.now() timestamps (~1.7 trillion)
-      // which are astronomically larger than real DB ids (~100s or ~1000s).
-      // If lastSeenIdRef gets set to a timestamp, every subsequent poll sends
-      // after=1710000000000 and the backend returns nothing because no DB row
-      // has an id that large. We must ONLY advance the cursor from server ids.
       if (data.user_message_id && data.user_message_id > lastSeenIdRef.current) {
         lastSeenIdRef.current = data.user_message_id;
       }
 
       if (data.message && data.bot_message_id != null) {
         const botMsg = {
-          // Use a local timestamp as the React key — never feed this back
-          // into lastSeenIdRef because it would corrupt the poll cursor.
           id:        Date.now() + 1,
-          dbId:      data.bot_message_id,   // real DB id — used only for cursor
+          dbId:      data.bot_message_id,
           sender:    'bot',
           text:      data.message,
           intent:    data.intent,
@@ -445,7 +503,6 @@ export function useChatbot() {
         };
         setMessages(prev => [...prev, botMsg]);
 
-        // Advance cursor from the real DB id, not from the local timestamp id.
         if (data.bot_message_id > lastSeenIdRef.current) {
           lastSeenIdRef.current = data.bot_message_id;
         }
@@ -461,16 +518,20 @@ export function useChatbot() {
     } finally {
       setLoading(false);
     }
-  }, [loading, conversationId, sessionKey, localId, ticketStatus]);
+  }, [loading, conversationId, sessionKey, localId, ticketStatus, user, _addBotMessage, _injectClosedMessage]);
 
-  // ── Start a brand new conversation ─────────────────────────────────────────
+  // ── New conversation ───────────────────────────────────────────────────────
   const newChat = useCallback(() => {
     if (pollIntervalRef.current) {
       clearInterval(pollIntervalRef.current);
       pollIntervalRef.current = null;
     }
+    if (statusPollIntervalRef.current) {
+      clearInterval(statusPollIntervalRef.current);
+      statusPollIntervalRef.current = null;
+    }
 
-    lastSeenIdRef.current = 0; // reset cursor for fresh conversation
+    lastSeenIdRef.current = 0;
 
     const newLocalId = `conv_${Date.now()}`;
     setLocalId(newLocalId);
@@ -479,46 +540,37 @@ export function useChatbot() {
     setMessages([]);
     setIsEscalated(false);
     setTicketStatus(null);
-    setQuickReplies(DEFAULT_QUICK_REPLIES);
+    setQuickReplies(defaultQuickReplies);
     setError(null);
     setShowHistory(false);
     greetingShown.current = false;
 
-    // Show greeting immediately
     setTimeout(() => {
       greetingShown.current = true;
       _addBotMessage(
         `Hello${user?.first_name ? `, ${user.first_name}` : ''}! Welcome to **Cebu Mini Hotel**.\n\nI'm CMH Bot, your virtual assistant. How can I help you today?`,
-        [
-          'Check room availability',
-          'View room prices',
-          user ? 'My bookings' : 'Hotel information',
-          'Talk to support',
-        ]
+        user ? DEFAULT_QUICK_REPLIES_USER : DEFAULT_QUICK_REPLIES_GUEST
       );
     }, 50);
-  }, [user, _addBotMessage]);
+  }, [user, _addBotMessage, defaultQuickReplies]);
 
-  // ── Resume a past conversation from history ─────────────────────────────────
+  // ── Resume from history ────────────────────────────────────────────────────
   const resumeConversation = useCallback((record) => {
     _loadRecord(record);
     setShowHistory(false);
   }, []);
 
-  // ── Delete a conversation from history ─────────────────────────────────────
+  // ── Delete from history ────────────────────────────────────────────────────
   const deleteConversation = useCallback((targetLocalId) => {
     setConversations(prev => {
       const updated = prev.filter(c => c.localId !== targetLocalId);
       saveConversations(updated);
       return updated;
     });
-    // If deleting the active one, start fresh
-    if (targetLocalId === localId) {
-      newChat();
-    }
+    if (targetLocalId === localId) newChat();
   }, [localId, newChat]);
 
-  // ── Toggle history panel ────────────────────────────────────────────────────
+  // ── Toggle history panel ───────────────────────────────────────────────────
   const toggleHistory = useCallback(() => {
     setShowHistory(prev => !prev);
   }, []);
