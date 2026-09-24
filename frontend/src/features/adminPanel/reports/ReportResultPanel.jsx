@@ -10,8 +10,10 @@
  *   - Data table with all rows
  *   - Export buttons (CSV, PDF, Excel)
  *
- * FIX: download buttons now show a proper error message instead of a
- * silent failure when the blob response contains an error body.
+ * FIX: download buttons now re-post to /api/reports/run/ with the original
+ * config (reconstructed from result.data.meta) instead of calling the broken
+ * GET /executions/{id}/download/ endpoint. This matches how the Build tab
+ * handles non-JSON export formats and avoids the ownership/404 issue.
  */
 
 import { useState } from 'react';
@@ -24,7 +26,7 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import {
-  reportExecutionApi,
+  reportRunApi,
   triggerBlobDownload,
 } from '../../../services/reportsApi';
 
@@ -162,29 +164,42 @@ function ReportChart({ rows }) {
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 export default function ReportResultPanel({ result, title, onClose }) {
-  const [downloading,  setDownloading]  = useState(null);
+  const [downloading,   setDownloading]   = useState(null);
   const [downloadError, setDownloadError] = useState(null);
 
-  const data        = result?.data || result;
-  const executionId = result?.execution_id;
-  const summary     = data?.summary || {};
-  const rows        = data?.rows    || [];
-  const meta        = data?.meta    || {};
+  const data    = result?.data || result;
+  const summary = data?.summary || {};
+  const rows    = data?.rows    || [];
+  const meta    = data?.meta    || {};
 
   /**
-   * FIX: Properly parse error bodies from blob responses.
-   * When axios uses responseType:'blob', error.response.data is a Blob
-   * object — we need to read it as text to get the actual error message.
+   * FIX: Re-post to /api/reports/run/ with export_format set to the chosen
+   * format. This is identical to what the Build tab does when the user picks
+   * CSV/PDF/Excel before clicking Run, and avoids the GET /executions/{id}/download/
+   * ownership-check 404 that the previous implementation hit.
    */
   const handleDownload = async (format) => {
     setDownloading(format);
     setDownloadError(null);
     try {
-      if (!executionId) {
-        setDownloadError('No execution ID available for download.');
-        return;
-      }
-      const blob = await reportExecutionApi.download(executionId, format);
+      const reportType = meta.report_type || 'report';
+
+      // Reconstruct the original config from what the API echoes back in meta.
+      // The backend accepts any subset — missing keys fall back to its defaults.
+      const config = {
+        period:   meta.period   || 'custom',
+        group_by: meta.group_by || 'day',
+        metrics:  meta.metrics  || [],
+        filters:  meta.filters  || {},
+        ...(meta.start_date ? { start_date: meta.start_date } : {}),
+        ...(meta.end_date   ? { end_date:   meta.end_date   } : {}),
+      };
+
+      const blob = await reportRunApi.download({
+        report_type:   reportType,
+        config,
+        export_format: format,
+      });
 
       if (!blob || blob.size === 0) {
         setDownloadError('Server returned an empty file.');
@@ -192,8 +207,9 @@ export default function ReportResultPanel({ result, title, onClose }) {
       }
 
       const ext      = format === 'excel' ? 'xlsx' : format;
-      const filename = `${meta.report_type || 'report'}_${meta.start_date || 'export'}.${ext}`;
+      const filename = `${reportType}_${meta.start_date || 'export'}.${ext}`;
       triggerBlobDownload(blob, filename);
+
     } catch (err) {
       let msg = err.message || 'Download failed.';
 
@@ -238,23 +254,20 @@ export default function ReportResultPanel({ result, title, onClose }) {
         </div>
 
         <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-          {executionId && (
-            <>
-              {['csv', 'pdf', 'excel'].map(fmt => (
-                <button
-                  key={fmt}
-                  className="sf-btn crp-sm-btn"
-                  onClick={() => handleDownload(fmt)}
-                  disabled={!!downloading}
-                  type="button"
-                  title={`Download as ${fmt.toUpperCase()}`}
-                >
-                  <Download size={11} />
-                  {downloading === fmt ? '…' : fmt.toUpperCase()}
-                </button>
-              ))}
-            </>
-          )}
+          {/* Download buttons are always shown — no longer gated on executionId */}
+          {['csv', 'pdf', 'excel'].map(fmt => (
+            <button
+              key={fmt}
+              className="sf-btn crp-sm-btn"
+              onClick={() => handleDownload(fmt)}
+              disabled={!!downloading}
+              type="button"
+              title={`Download as ${fmt.toUpperCase()}`}
+            >
+              <Download size={11} />
+              {downloading === fmt ? '…' : fmt.toUpperCase()}
+            </button>
+          ))}
           <button className="crp-icon-btn" onClick={onClose} title="Close">
             <X size={15} />
           </button>

@@ -96,11 +96,6 @@ export default function PaymentDetailPage() {
           </span>
         </div>
         <div className={styles.actions}>
-          {payment.status === 'pending' && (
-            <button className={styles.confirmBtn} onClick={() => setShowConfirm(true)}>
-              Confirm Payment
-            </button>
-          )}
           {payment.status === 'paid' && canRefund && (
             <button className={styles.refundBtn} onClick={() => setShowRefund(true)}>
               Issue Refund
