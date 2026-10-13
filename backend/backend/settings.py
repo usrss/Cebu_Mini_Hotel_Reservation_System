@@ -45,12 +45,12 @@ AUTH_USER_MODEL = 'users.CustomUser'
 CORS_ALLOWED_ORIGINS = [
     'http://localhost:5173',
     'http://localhost:5174',
-    'https://cebu-mini-hotel-reservation-system-three.vercel.app',
+    'https://cebu-mini-hotel-reservation-system-peach.vercel.app',
 ]
 
 
 CSRF_TRUSTED_ORIGINS = [
-    "https://cebu-mini-hotel-reservation-system-three.vercel.app",
+    "https://cebu-mini-hotel-reservation-system-peach.vercel.app",
     "https://cebu-hotel-backend.onrender.com",
 ]
 
